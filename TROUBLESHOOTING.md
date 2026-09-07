@@ -1,6 +1,6 @@
 # Troubleshooting
 
-## My repository does not appear in ChatGPT or Codex
+## My repository does not appear in ChatGPT
 
 Check that:
 
@@ -10,11 +10,22 @@ Check that:
 4. an organization administrator approved it if approval is required;
 5. you waited a few minutes after creating or authorizing a new repository.
 
-Installing a GitHub app and granting it access to a specific repository are separate operations.
+Installing/enabling a GitHub app or plugin and granting it access to a specific repository are separate operations.
 
 ## The agent can read GitHub but cannot push changes
 
-The ordinary ChatGPT GitHub app can be read-only depending on product surface. OpenAI's Codex product is intended for code generation/editing/pushing workflows. Confirm Codex has access to the repository and GitHub grants the needed repository permissions.
+Do not assume that successful repository reading implies write capability, and do not assume that every ChatGPT GitHub surface is permanently read-only either.
+
+Check, in order:
+
+1. **Capability:** confirm the GitHub app/plugin available in the ChatGPT surface you are using actually exposes the create/update/comment/branch/PR action you need. OpenAI currently has more than one GitHub-related surface, and their supported actions can differ.
+2. **ChatGPT app/plugin permission:** review the connected GitHub capability's permission/approval setting. Depending on account and app, current controls can include **Always ask**, **Allow read actions**, **Allow low-risk actions**, and **Allow all actions**. Permission settings only authorize actions the app actually supports.
+3. **GitHub authorization:** confirm the connected GitHub account/app installation has access to the exact repository and the required provider permissions.
+4. **Organization policy:** an organization can require app approval or restrict which repositories/actions are available.
+5. **Repository policy:** branch protection, rulesets, required checks, and other repository settings can reject an otherwise supported write or merge.
+6. **Safety/approval:** ChatGPT may still ask for confirmation or deny an action depending on its risk and the active product/workspace policy.
+
+Fleet-Control's beginner setup is ChatGPT-only: configuring a separate GitHub connector in Codex cloud settings can be part of repository-access plumbing when your account exposes that flow, but it does not by itself mean a Fleet-Control run launches a Codex execution session. If your current ChatGPT GitHub capability exposes only reads, use a supported action-enabled connection/surface before expecting the fleet to mutate the repository.
 
 ## Several agents edit the same thing
 
