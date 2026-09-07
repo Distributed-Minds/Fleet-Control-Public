@@ -46,4 +46,8 @@ If GitHub, branches, ChatGPT Projects, or automations are new to you, read [`GET
 
 For the normative machine read order, see [`Phase0/README.md`](Phase0/README.md).
 
+## License
+
+Fleet-Control Public is licensed under the **MIT License**. See [`LICENSE`](LICENSE). You may use, copy, modify, merge, publish, distribute, sublicense, and sell copies subject to the MIT terms and preservation of the copyright/license notice.
+
 This branch is the initial public Phase0 preview. It is intentionally kept off `main` until the maintainer chooses to integrate it.
