@@ -14,8 +14,8 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[publish-preview]')
     runs-on: ubuntu-latest
     env:
-      TAG: v0.1.0-phase0-preview
-      PACKAGE: Fleet-Control-Public-Phase0-Starter-v0.1.0-preview
+      TAG: v0.1.1-phase0-preview
+      PACKAGE: Fleet-Control-Public-Phase0-Starter-v0.1.1-preview
     steps:
       - name: Check out exact release commit
         uses: actions/checkout@v4
@@ -28,6 +28,7 @@ jobs:
           mkdir -p "$PACKAGE/COPY-INTO-CHATGPT"
           mkdir -p "$PACKAGE/COPY-INTO-AUTOMATIONS"
 
+          cp LICENSE "$PACKAGE/"
           cp GETTING-STARTED.md "$PACKAGE/"
           cp GLOSSARY.md "$PACKAGE/"
           cp TROUBLESHOOTING.md "$PACKAGE/"
@@ -67,6 +68,6 @@ jobs:
             "${PACKAGE}.zip.sha256" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Fleet-Control Public — Phase0 Preview v0.1.0" \
-            --notes-file RELEASE-NOTES-v0.1.0-preview.md \
+            --title "Fleet-Control Public — Phase0 Preview v0.1.1" \
+            --notes-file RELEASE-NOTES-v0.1.1-preview.md \
             --prerelease
