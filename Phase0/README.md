@@ -16,10 +16,11 @@ At the start of every persistent-agent run, read in this order:
 6. `40-MODES.md`
 7. `50-AGENT-STATE-MACHINES.md`
 8. `60-HUMAN-REQUESTS.md`
-9. reconstruct this agent's latest valid `AGENT_STATE`
-10. inspect active mission(s), issues, PRs, branches, checks, and relevant repository evidence
-11. execute the behavior mode selected by `50-AGENT-STATE-MACHINES.md`, bounded by human intent and ownership rules
-12. release/handoff ownership and append the deterministic next `AGENT_STATE`
+9. `80-INTEGRATION-CANDIDATES.md` when the run predicts, validates, or executes Git integration candidates
+10. reconstruct this agent's latest valid `AGENT_STATE`
+11. inspect active mission(s), issues, PRs, branches, checks, and relevant repository evidence
+12. execute the behavior mode selected by `50-AGENT-STATE-MACHINES.md`, bounded by human intent and ownership rules
+13. release/handoff ownership and append the deterministic next `AGENT_STATE`
 
 When normative files disagree, authority rules in `00-CONSTITUTION.md` apply.
 
