@@ -1,0 +1,72 @@
+name: Publish Phase0 preview release
+
+on:
+  push:
+    branches:
+      - phase0/public-v0
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[publish-preview]')
+    runs-on: ubuntu-latest
+    env:
+      TAG: v0.1.0-phase0-preview
+      PACKAGE: Fleet-Control-Public-Phase0-Starter-v0.1.0-preview
+    steps:
+      - name: Check out exact release commit
+        uses: actions/checkout@v4
+
+      - name: Build beginner starter package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$PACKAGE/COPY-INTO-CHATGPT"
+          mkdir -p "$PACKAGE/COPY-INTO-AUTOMATIONS"
+
+          cp GETTING-STARTED.md "$PACKAGE/"
+          cp GLOSSARY.md "$PACKAGE/"
+          cp TROUBLESHOOTING.md "$PACKAGE/"
+          cp release-kit/README-FIRST.md "$PACKAGE/README-FIRST.md"
+          cp release-kit/INSTALL-CHECKLIST.md "$PACKAGE/INSTALL-CHECKLIST.md"
+          cp -R Phase0 "$PACKAGE/Phase0"
+
+          cp Phase0/templates/PROJECT-INSTRUCTIONS.md \
+            "$PACKAGE/COPY-INTO-CHATGPT/PROJECT-INSTRUCTIONS.md"
+
+          for agent in A1 A2 A3 A4 A5; do
+            sed "s/<AGENT_ID>/${agent}/g" \
+              Phase0/templates/AUTOMATION-PROMPT.md \
+              > "$PACKAGE/COPY-INTO-AUTOMATIONS/${agent}.md"
+          done
+
+          zip -r -9 "${PACKAGE}.zip" "$PACKAGE"
+          sha256sum "${PACKAGE}.zip" > "${PACKAGE}.zip.sha256"
+
+          echo "Built ${PACKAGE}.zip"
+          unzip -l "${PACKAGE}.zip"
+
+      - name: Create GitHub prerelease and attach starter ZIP
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; refusing to silently move an existing public tag."
+            exit 1
+          fi
+
+          gh release create "$TAG" \
+            "${PACKAGE}.zip" \
+            "${PACKAGE}.zip.sha256" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Fleet-Control Public — Phase0 Preview v0.1.0" \
+            --notes-file RELEASE-NOTES-v0.1.0-preview.md \
+            --prerelease
