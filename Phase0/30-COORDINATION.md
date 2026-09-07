@@ -155,6 +155,29 @@ Read-only research may continue without ownership.
 
 Do not create extra work solely to occupy idle agents.
 
+## Collision backoff
+
+Acquisition loss must reduce repeated contention instead of causing an immediate retry loop.
+
+- After one lost overlap, append `YIELD` and choose the next-best materially independent package when one is available.
+- After two consecutive acquisition losses at the same work tier during one run, stop competing for that tier and switch to useful read-only research, issue/specification preparation, fixture design, or another independent package.
+- Do not reset the loss count merely by emitting another INTENT for the same overlapping scope.
+- Backoff applies to conflicting mutation acquisition only. Independent read-only analysis remains allowed and does not consume ownership.
+
+The purpose is deterministic convergence: agents that repeatedly collide should fan out toward independent useful work rather than livelock on one package.
+
+## Readiness and gate-comment serialization
+
+Analytical agents may independently assess the same issue and unchanged specification read-only.
+
+Before mutating a canonical issue with a readiness/gate record or equivalent shared acceptance decision, acquire a narrow issue-comment mutation scope through this coordination protocol. The election is evaluated against the same unchanged specification identity/version used by the assessment.
+
+After acquisition and immediately before the comment mutation, reread the issue specification and relevant coordination transitions. If the specification changed, or an earlier overlapping winner already mutated that same specification decision surface, do not publish a stale or duplicate record; release/yield and reassess the new state.
+
+This serialization rule does not suppress independent analysis. It serializes only the shared mutation that turns an assessment into durable authority.
+
+Deterministic examples live in `Phase0/fixtures/coordination-convergence.md`.
+
 ## Human branches
 
 Never mutate a branch clearly owned by a human or outside contributor without explicit permission.
