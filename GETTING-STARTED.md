@@ -50,13 +50,17 @@ alice/my-project
 
 You will paste this exact value into the Project instructions and automation prompts.
 
-### 4. Connect GitHub
+### 4. Connect GitHub to ChatGPT
 
-For ChatGPT repository reading/searching, open ChatGPT **Settings → Apps** (or **Plugins**, if that is what your account shows), choose GitHub, sign in, and grant access to **your repository**.
+Fleet-Control's beginner path is **ChatGPT-only**. You do not need to launch a Codex coding session just so the fleet can work with GitHub.
 
-Installing the GitHub app and granting it access to a particular repository are separate steps. If the repository belongs to a GitHub organization, an organization owner may need to approve access.
+Open ChatGPT **Settings → Plugins** (or **Apps**, if that is what your account shows), find the GitHub capability, and connect/authorize the GitHub account that can access **your repository**. Installing or enabling a plugin/app and granting GitHub access to a particular repository are separate permissions. If the repository belongs to an organization, an organization owner may also need to approve the installation or repository access.
 
-For code editing/pushing, use Codex with access to the same repository. The ordinary ChatGPT GitHub app may be read-only in some product surfaces; Codex is the OpenAI product intended for generating, editing, and pushing code to GitHub.
+Then review the GitHub app/plugin's action permissions. Current ChatGPT permission controls can include **Always ask**, **Allow read actions**, **Allow low-risk actions**, and, for eligible individual apps/accounts, **Allow all actions**. Some menus shorten the last two labels to **Allow low-risk** and **Allow all**. Choose the least-permissive setting that still lets the fleet perform the work you intend. A permission choice does not override GitHub permissions, organization policy, repository rules, branch protection/rulesets, or ChatGPT safety controls.
+
+If your ChatGPT setup also exposes the separate GitHub connector flow under Codex cloud settings, connect GitHub there and select the same repository as part of the repository-access setup. Configuring that connector is plumbing: it does **not by itself** mean a Fleet-Control run starts a Codex execution session or consumes Codex coding execution. Product surfaces change over time, so use the controls your account actually shows rather than assuming every account has identical menus.
+
+There are multiple OpenAI GitHub surfaces and their capabilities are not identical. OpenAI's current documentation still describes one ordinary ChatGPT GitHub app surface as read-only, while ChatGPT's plugin/app system also supports provider actions when the installed app exposes them and the relevant permissions allow them. Fleet-Control therefore does not make a universal promise that every GitHub connection can write. Instead, verify the actual GitHub actions exposed in your ChatGPT conversation and the repository permissions they receive. In a supported action-enabled setup, ChatGPT can perform the repository mutations that the connected GitHub capability exposes; if your connection exposes only reads, change the connection/capability rather than assuming the fleet can push.
 
 A newly created or newly authorized repository may take a few minutes to appear.
 
@@ -123,13 +127,13 @@ For each agent you enable:
 
 1. open its file;
 2. replace `<OWNER>/<REPOSITORY>` with your repository;
-3. create a recurring task/automation in the ChatGPT/Codex surface you use;
+3. create a recurring task/automation in ChatGPT;
 4. paste the prompt as the task instruction;
 5. choose a schedule appropriate for your plan and workload.
 
 Do **not** give all automations the same identity. A1 must remain A1, A2 must remain A2, and so on.
 
-In ChatGPT, supported recurring tasks are managed from **Scheduled**. Availability and frequency limits depend on account/plan. Codex automations are separate from ChatGPT scheduled tasks.
+In ChatGPT, supported recurring tasks are managed from **Scheduled** when that surface is available. Availability and frequency limits depend on account, plan, and product surface.
 
 Important: scheduled ChatGPT tasks may not be able to access files uploaded directly to a ChatGPT Project. Fleet-Control therefore keeps the durable fleet operating system in GitHub and tells every persistent run to re-read it there.
 
