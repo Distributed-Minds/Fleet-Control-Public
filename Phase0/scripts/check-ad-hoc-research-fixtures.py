@@ -9,6 +9,7 @@ def publication(case):
         return "BLOCK_INVENTORY_UNKNOWN"
     if not case.get("schema_compatible", False):
         return "BLOCK_SCHEMA_INCOMPATIBLE"
+    # Self-authored metadata is deliberately ignored here; only current external authority counts.
     if not case.get("authority_current", False):
         return "BLOCK_AUTHORITY_STALE"
     count = case.get("matching_packets", 0)
@@ -66,23 +67,74 @@ def recovery(case):
     return "RECONCILE_THEN_CREATE_IF_ABSENT"
 
 
+def concurrent_publication(case):
+    if not case.get("authority_current", False):
+        initial = case.get("initial_packets", 0)
+        return {"disposition":"BLOCK_AUTHORITY_STALE","provider_artifacts":initial,"canonical_lineages":initial}
+    if not case.get("same_semantic_identity", False):
+        initial = case.get("initial_packets", 0)
+        return {"disposition":"DISTINCT_LINEAGES","provider_artifacts":initial,"canonical_lineages":initial}
+
+    strategy = case["strategy"]
+    publishers = int(case.get("publishers", 2))
+    artifacts = int(case.get("initial_packets", 0))
+    lineages = 1 if artifacts else 0
+
+    # Every publisher starts from the same empty/pre-create observation.
+    if strategy in {"atomic_unique", "serialized"}:
+        if artifacts == 0 and publishers:
+            artifacts = 1
+            lineages = 1
+        # Later equivalent attempts lose creation or serialize behind the first and adopt it.
+    elif strategy == "reconcile_after_create":
+        artifacts += publishers
+        if not case.get("inventory_complete", False) or not case.get("semantic_identity_indexed", False):
+            return {"disposition":"BLOCK_INVENTORY_UNKNOWN","provider_artifacts":artifacts,"canonical_lineages":max(lineages, artifacts)}
+        lineages = 1 if artifacts else 0
+    elif strategy == "blind_presearch":
+        artifacts += publishers
+        lineages = artifacts
+    else:
+        raise ValueError(f"unknown concurrency strategy: {strategy}")
+
+    if case.get("lost_ack_retry", False):
+        if strategy in {"atomic_unique", "serialized"}:
+            # Retry of the same semantic operation sees/adopts the existing unique entry.
+            artifacts = max(artifacts, 1)
+            lineages = 1
+        elif strategy == "reconcile_after_create" and not case.get("inventory_complete", True):
+            return {"disposition":"BLOCK_INVENTORY_UNKNOWN","provider_artifacts":artifacts,"canonical_lineages":lineages}
+
+    disposition = "ONE_CANONICAL_LINEAGE" if lineages <= 1 else "BLOCK_UNSAFE_ADAPTER"
+    return {"disposition":disposition,"provider_artifacts":artifacts,"canonical_lineages":lineages}
+
+
+def check_expected(case, actual):
+    expected = case["expected"]
+    if actual != expected:
+        raise AssertionError(f"{case['id']}: expected {expected!r}, got {actual!r}")
+
+
 def main():
     fixture_path = Path(sys.argv[1] if len(sys.argv) > 1 else "Phase0/fixtures/ad-hoc-research-spec1.json")
-    data = json.loads(fixture_path.read_text())
+    data = json.loads(fixture_path.read_text(encoding="utf-8"))
     failures = []
     groups = (
         ("publication_cases", publication),
         ("identity_cases", identity),
         ("source_cases", source),
         ("recovery_cases", recovery),
+        ("concurrency_cases", concurrent_publication),
     )
     total = 0
     for key, reducer in groups:
         for case in data[key]:
             total += 1
-            actual = reducer(case)
-            if actual != case["expected"]:
-                failures.append((case["id"], case["expected"], actual))
+            try:
+                actual = reducer(case)
+                check_expected(case, actual)
+            except Exception as exc:
+                failures.append((case["id"], str(exc)))
     if failures:
         for failure in failures:
             print("FAIL", *failure)
