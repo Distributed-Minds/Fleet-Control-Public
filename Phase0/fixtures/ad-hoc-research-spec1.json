@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "spec_version": 1,
+  "publication_cases": [
+    {"id":"complete-absent-current-authority","inventory_complete":true,"matching_packets":0,"authority_current":true,"schema_compatible":true,"expected":"CREATE"},
+    {"id":"existing-complete","inventory_complete":true,"matching_packets":1,"matching_complete":true,"authority_current":true,"schema_compatible":true,"expected":"ADOPT_EXISTING"},
+    {"id":"existing-incomplete","inventory_complete":true,"matching_packets":1,"matching_complete":false,"authority_current":true,"schema_compatible":true,"expected":"RECONCILE_INCOMPLETE"},
+    {"id":"duplicate-equivalent","inventory_complete":true,"matching_packets":2,"all_semantically_equivalent":true,"authority_current":true,"schema_compatible":true,"expected":"CANONICALIZE_DUPLICATES"},
+    {"id":"inventory-unknown","inventory_complete":false,"matching_packets":0,"authority_current":true,"schema_compatible":true,"expected":"BLOCK_INVENTORY_UNKNOWN"},
+    {"id":"authority-stale","inventory_complete":true,"matching_packets":0,"authority_current":false,"schema_compatible":true,"expected":"BLOCK_AUTHORITY_STALE"},
+    {"id":"schema-incompatible","inventory_complete":true,"matching_packets":0,"authority_current":true,"schema_compatible":false,"expected":"BLOCK_SCHEMA_INCOMPATIBLE"},
+    {"id":"locator-conflict","inventory_complete":true,"matching_packets":1,"matching_complete":true,"content_identity_matches":false,"authority_current":true,"schema_compatible":true,"expected":"BLOCK_LOCATOR_CONFLICT"}
+  ],
+  "identity_cases": [
+    {"id":"same-semantic-retry","packet_identity":"pkt:alpha","retry_packet_identity":"pkt:alpha","expected":"SAME_LINEAGE"},
+    {"id":"changed-content-new-identity","packet_identity":"pkt:alpha","retry_packet_identity":"pkt:beta","expected":"NEW_LINEAGE"},
+    {"id":"temporary-cannot-claim-persistent-state","temporary_worker":true,"claims_persistent_identity":true,"expected":"REJECT_IDENTITY_ESCALATION"},
+    {"id":"packet-storage-not-policy","packet_complete":true,"canonicalized":false,"expected":"EVIDENCE_ONLY"},
+    {"id":"exceptional-existing-surface-without-authority","explicit_existing_surface_authority":false,"expected":"READ_ONLY"}
+  ],
+  "source_cases": [
+    {"id":"default-authority-first","default_head_resolved":true,"nondefault_unique_proven":true,"expected":"CONSUME_UNIQUE_DELTA"},
+    {"id":"branch-name-only","default_head_resolved":true,"nondefault_unique_proven":false,"expected":"UNKNOWN"},
+    {"id":"default-unresolved","default_head_resolved":false,"nondefault_unique_proven":true,"expected":"UNKNOWN"}
+  ]
+}
