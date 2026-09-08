@@ -7,6 +7,7 @@
     {"id":"stale-subject","requested_level":"BLOCK_ACTION","subject_current":false,"expected":{"disposition":"IDENTITY_STALE","level":null}},
     {"id":"stale-dependency","requested_level":"BLOCK_ACTION","dependency_state":"STALE","expected":{"disposition":"DEPENDENCY_STALE","level":null}},
     {"id":"incompatible-dependency","requested_level":"BLOCK_ACTION","dependency_state":"INCOMPATIBLE","expected":{"disposition":"DEPENDENCY_INCOMPATIBLE","level":null}},
+    {"id":"missing-authority-block-action","requested_level":"BLOCK_ACTION","authority_current":false,"expected":{"disposition":"AUTHORITY_MISSING","level":null}},
     {"id":"missing-authority","requested_level":"SUSPEND_CAPABILITY","authority_current":false,"expected":{"disposition":"AUTHORITY_MISSING","level":null}},
     {"id":"single-lineage-high-impact","requested_level":"ISOLATE","authority_current":true,"independent_lineages":1,"required_independent_lineages":2,"expected":{"disposition":"INDEPENDENCE_INSUFFICIENT","level":null}},
     {"id":"correlated-duplicate-does-not-count","requested_level":"TERMINATE","authority_current":true,"independent_lineages":1,"required_independent_lineages":2,"expected":{"disposition":"INDEPENDENCE_INSUFFICIENT","level":null}},
