@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "spec_version": 2,
+  "cases": [
+    {"id":"ordinary-load","authority_current":true,"effect_active":true,"restoration_debt":false,"restoration_capacity":2,"new_arrivals":1,"backlog_only_renewal":false,"duplicate_case":false,"policy_compatible":true,"expected":"OK"},
+    {"id":"backlog-cannot-renew","authority_current":false,"effect_active":true,"restoration_debt":true,"restoration_capacity":1,"new_arrivals":4,"backlog_only_renewal":true,"duplicate_case":false,"policy_compatible":true,"expected":"REJECT_RENEWAL"},
+    {"id":"expired-effect-restoration-debt","authority_current":false,"effect_active":true,"restoration_debt":true,"restoration_capacity":1,"new_arrivals":3,"progress_within_bound":true,"backlog_only_renewal":false,"duplicate_case":false,"policy_compatible":true,"expected":"RESTORE_PROGRESS"},
+    {"id":"sustained-arrivals-starvation","authority_current":false,"effect_active":true,"restoration_debt":true,"restoration_capacity":1,"new_arrivals":100,"progress_within_bound":false,"fail_safe_escalates":true,"backlog_only_renewal":false,"duplicate_case":false,"policy_compatible":true,"expected":"DEGRADED_ESCALATION"},
+    {"id":"zero-restoration-capacity","authority_current":false,"effect_active":true,"restoration_debt":true,"restoration_capacity":0,"new_arrivals":5,"progress_within_bound":false,"fail_safe_escalates":true,"backlog_only_renewal":false,"duplicate_case":false,"policy_compatible":true,"expected":"DEGRADED_ESCALATION"},
+    {"id":"duplicate-semantic-case","authority_current":true,"effect_active":true,"restoration_debt":false,"restoration_capacity":2,"new_arrivals":2,"backlog_only_renewal":false,"duplicate_case":true,"policy_compatible":true,"expected":"RECONCILE_DUPLICATE"},
+    {"id":"policy-generation-move","authority_current":true,"effect_active":true,"restoration_debt":false,"restoration_capacity":2,"new_arrivals":1,"backlog_only_renewal":false,"duplicate_case":false,"policy_compatible":false,"expected":"REQUIRE_MIGRATION"},
+    {"id":"restored-terminal","authority_current":false,"effect_active":false,"restoration_debt":false,"restoration_capacity":0,"new_arrivals":10,"backlog_only_renewal":false,"duplicate_case":false,"policy_compatible":true,"expected":"RESTORED"}
+  ]
+}
