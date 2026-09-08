@@ -30,7 +30,7 @@ def decide(case):
         return {"disposition": "EXPIRED", "level": None}
 
     requested = case["requested_level"]
-    if LEVELS[requested] >= LEVELS["SUSPEND_CAPABILITY"] and not case.get("authority_current", False):
+    if LEVELS[requested] >= LEVELS["BLOCK_ACTION"] and not case.get("authority_current", False):
         return {"disposition": "AUTHORITY_MISSING", "level": None}
     if LEVELS[requested] >= LEVELS["ISOLATE"]:
         if case.get("independent_lineages", 0) < case.get("required_independent_lineages", 2):
