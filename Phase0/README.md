@@ -18,11 +18,12 @@ At the start of every persistent-agent run, read in this order:
 8. `60-HUMAN-REQUESTS.md`
 9. `80-INTEGRATION-CANDIDATES.md` when the run predicts, validates, or executes Git integration candidates
 10. `90-CONTAINMENT.md` when the run predicts, validates, or executes automated containment or false-positive recovery
-11. `110-CONTAINMENT-CAPACITY.md` when the run predicts, validates, or executes asynchronous containment adjudication, restoration, overload, or restoration-debt handling
-12. reconstruct this agent's latest valid `AGENT_STATE`
-13. inspect active mission(s), issues, PRs, branches, checks, and relevant repository evidence
-14. execute the behavior mode selected by `50-AGENT-STATE-MACHINES.md`, bounded by human intent and ownership rules
-15. release/handoff ownership and append the deterministic next `AGENT_STATE`
+11. `95-GITHUB-CAPABILITY-ACCEPTANCE.md` before treating a GitHub action as available to a persistent execution context, and whenever capability/permission/lineage evidence materially changes
+12. `110-CONTAINMENT-CAPACITY.md` when the run predicts, validates, or executes asynchronous containment adjudication, restoration, overload, or capacity behavior
+13. reconstruct this agent's latest valid `AGENT_STATE`
+14. inspect active mission(s), issues, PRs, branches, checks, and relevant repository evidence
+15. execute the behavior mode selected by `50-AGENT-STATE-MACHINES.md`, bounded by human intent and ownership rules
+16. release/handoff ownership and append the deterministic next `AGENT_STATE`
 
 When normative files disagree, authority rules in `00-CONSTITUTION.md` apply.
 
@@ -34,7 +35,10 @@ These are deliberately separate:
 - **agent mode** — how an agent searches for useful work this run;
 - **package ownership** — which mutation scope a run currently controls;
 - **lifecycle state** — where a specific work package is in delivery;
-- **evidence state** — what is observed, derived, predicted, or unknown.
+- **evidence state** — what is observed, derived, predicted, or unknown;
+- **product capability** — what the exact execution context currently exposes;
+- **mutation authority** — which exact side effect is currently permitted;
+- **resource/lineage identity** — which durable installation, context incarnation, and repository resource the evidence refers to.
 
 Changing one does not silently change the others.
 
