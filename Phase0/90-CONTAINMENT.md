@@ -72,7 +72,7 @@ Recovery never rewrites an old restriction as if it did not occur.
 
 ## Deterministic fixtures
 
-`fixtures/containment-spec3.json` and `../scripts/check-containment-fixtures.py` cover:
+`fixtures/containment-spec3.json` and `scripts/check-containment-fixtures.py` cover:
 
 - false positive and exact recovery;
 - compromised/correlated detector lineages;
@@ -93,11 +93,13 @@ Recovery never rewrites an old restriction as if it did not occur.
 
 The fixture runner is pure Python, reads only explicit fixture data, and has no wall-clock or network dependency.
 
-Run:
+Run from the repository root:
 
 ```bash
-python3 scripts/check-containment-fixtures.py
+python3 Phase0/scripts/check-containment-fixtures.py
 ```
+
+The existing starter workflow copies the full `Phase0/` tree, so the contract, fixture, and checker remain together in generated starter packages.
 
 ## Migration
 
@@ -107,7 +109,7 @@ Rollback disables fresh automated high-impact containment first while preserving
 
 ## Package and license invariant
 
-This file, the fixture, and the checker live under repository paths copied by the existing Phase0 starter release workflow. The root MIT `LICENSE` remains authoritative and is copied into the starter package by that workflow.
+This file, the fixture, and the checker live under `Phase0/`, which the existing Phase0 starter release workflow copies recursively. The root MIT `LICENSE` remains authoritative and is copied into the starter package by that workflow.
 
 ## Done condition
 
