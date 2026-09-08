@@ -1,3 +1,11 @@
+# Historical setup notice
+
+> **Superseded for current installation guidance.** This file preserves the v0.1.0 preview as historical evidence. For new/current installations, use `RELEASE-NOTES-v0.1.1-preview.md`, `GETTING-STARTED.md`, and `TROUBLESHOOTING.md`.
+>
+> Product-surface and GitHub-capability wording below describes the v0.1.0-era snapshot. It is not a universal current statement about interactive or scheduled execution. Current mutation-capable setup requires context-specific capability, lineage, authority, and repository-policy evidence under `Phase0/110-GITHUB-SETUP-CAPABILITY.md`.
+>
+> The repository is now MIT-licensed. The v0.1.0 statement below that no public license had been selected is historical only.
+
 # Fleet-Control Public — Phase0 Preview v0.1.0
 
 This is the first public preview of the Markdown-only Fleet-Control coordination/state-machine foundation.

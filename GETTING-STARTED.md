@@ -50,13 +50,15 @@ alice/my-project
 
 You will paste this exact value into the Project instructions and automation prompts.
 
-### 4. Connect GitHub
+### 4. Connect GitHub to ChatGPT
 
-For ChatGPT repository reading/searching, open ChatGPT **Settings → Apps** (or **Plugins**, if that is what your account shows), choose GitHub, sign in, and grant access to **your repository**.
+Fleet-Control does not require a separate execution product merely to connect ChatGPT to GitHub.
 
-Installing the GitHub app and granting it access to a particular repository are separate steps. If the repository belongs to a GitHub organization, an organization owner may need to approve access.
+Open ChatGPT **Settings → Plugins** or **Apps**, depending on what your account shows, locate GitHub, connect the intended GitHub account, and authorize the exact repository the fleet will use. Installing/enabling the app or plugin and granting provider access to a repository are separate steps. An organization administrator may also have to approve access.
 
-For code editing/pushing, use Codex with access to the same repository. The ordinary ChatGPT GitHub app may be read-only in some product surfaces; Codex is the OpenAI product intended for generating, editing, and pushing code to GitHub.
+Current OpenAI product surfaces can expose different GitHub actions and permission controls. Depending on account/workspace/app, permission choices may include **Always ask**, **Allow read actions**, **Allow low-risk actions**, and **Allow all actions** for an eligible individual app/account. Choose the least-permissive setting that supports the work you intend. Those controls do not override GitHub installation scope, provider permissions, organization rules, branch protection/rulesets, workspace restrictions, or safety controls.
+
+Do not assume that because one interactive ChatGPT conversation can read or write GitHub, a scheduled/background run can do the same thing. Capability is tied to the exact execution context and current permissions.
 
 A newly created or newly authorized repository may take a few minutes to appear.
 
@@ -105,7 +107,7 @@ For a first setup, leave:
 DEFAULT_BRANCH_POLICY=HUMAN_MERGE_ONLY
 ```
 
-This means agents may prepare branches and PRs, but a human decides what enters the default branch.
+This means agents may prepare branches and PRs, but a human decides what enters the default branch. Technical merge capability in a connected product does not change this Fleet-Control policy.
 
 ### 7. Create persistent scheduled agents
 
@@ -123,17 +125,37 @@ For each agent you enable:
 
 1. open its file;
 2. replace `<OWNER>/<REPOSITORY>` with your repository;
-3. create a recurring task/automation in the ChatGPT/Codex surface you use;
+3. create a recurring task/automation in the ChatGPT surface you use;
 4. paste the prompt as the task instruction;
 5. choose a schedule appropriate for your plan and workload.
 
 Do **not** give all automations the same identity. A1 must remain A1, A2 must remain A2, and so on.
 
-In ChatGPT, supported recurring tasks are managed from **Scheduled**. Availability and frequency limits depend on account/plan. Codex automations are separate from ChatGPT scheduled tasks.
+In ChatGPT, supported recurring tasks are managed from **Scheduled** when that surface is available. Current availability, models, and frequency limits vary by account, plan, workspace, and task type. Scheduled tasks can use supported connected apps, including GitHub, when those apps are available for the account/workspace; existing app/workspace permissions and approval requirements still apply.
 
-Important: scheduled ChatGPT tasks may not be able to access files uploaded directly to a ChatGPT Project. Fleet-Control therefore keeps the durable fleet operating system in GitHub and tells every persistent run to re-read it there.
+Codex automations are a separate product workflow. Configuring or using a GitHub connection does not by itself prove that a separate Codex execution session is running.
 
-### 8. Give the fleet real work
+Important: do not depend on a scheduled task being able to read arbitrary files uploaded directly to a ChatGPT Project. Fleet-Control keeps the durable operating system in GitHub and tells every persistent run to re-read it there.
+
+### 8. Establish scheduled GitHub capability before mutation-capable work
+
+Before you rely on persistent scheduled agents to change GitHub, establish capability from the **scheduled/background context itself**.
+
+Use `Phase0/110-GITHUB-SETUP-CAPABILITY.md` as the acceptance contract.
+
+1. Prefer a non-destructive check that establishes the required GitHub action class without changing repository state.
+2. Record the exact execution context, connected GitHub/app/plugin surface, repository scope, permission/approval state, observation time, and required action.
+3. Do not reuse an interactive success as scheduled evidence.
+4. If a required action is absent, approval-blocked, permission-blocked, repository-policy-blocked, stale, or unknown, keep the mutation-capable path disabled and use read-only diagnostics where safe.
+5. Do not weaken GitHub protections just to make setup pass.
+
+If no adequate non-destructive check exists, the spec permits a narrowly scoped reversible probe only on a disposable **non-default** surface and only when stable probe identity, stable installation/probe lineage, exact resource incarnation, current compatible mutation authority/fencing, deterministic retry reconciliation, and exact cleanup/recovery evidence are available.
+
+A task/context ID, chat title, branch name, or matching repository access is not sufficient lineage evidence. If a task is recreated or migrated, unresolved probes remain attached to the stable installation lineage and must be reconciled before fresh mutation. A reused opaque context ID must not adopt an older task's resources.
+
+An approval-required external-data action may pause a scheduled task. Treat that as a blocked/paused acceptance state until approval is actually supplied, not as proof of autonomous mutation capability.
+
+### 9. Give the fleet real work
 
 Open a normal chat inside your Fleet Project and ask for the outcome you want.
 
@@ -155,24 +177,19 @@ Fix issue #42. Don't merge into main.
 Build a small recipe-sharing web app.
 ```
 
-```text
-Make a Facebook-like social network prototype. Start by decomposing the problem and creating implementation-ready work packages.
-```
-
 The Project instructions turn substantial requests into durable missions. Scheduled agents then read those missions and use the shared state machine to decide how to contribute without all doing the same thing.
 
-### 9. Expect GitHub artifacts to appear
+### 10. Expect GitHub artifacts to appear
 
 The fleet may create:
 
 - one coordination issue;
-- mission issues;
-- implementation issues;
+- mission and implementation issues;
 - non-default branches;
 - pull requests;
-- machine-ish state comments.
+- machine-readable-ish coordination/state comments.
 
-That is expected. Do not delete the coordination issue just because it looks repetitive; it is the fleet's durable collision/state log.
+That is expected. Do not delete the coordination issue merely because it looks repetitive; it is the fleet's durable collision/state log.
 
 ## What the fleet should not do by default
 
@@ -182,7 +199,9 @@ Unless you explicitly change the rules, it should not:
 - mutate unrelated repositories;
 - turn “think about this” into product code changes;
 - claim tests passed without evidence;
-- claim another executor completed work without observing the resulting repository state;
+- infer scheduled mutation capability from an interactive connection;
+- widen app/provider permissions merely to pass a capability check;
+- blindly retry a reversible probe after cutoff or acknowledgement loss;
 - create duplicate work just to keep every agent busy.
 
 ## If you do not want to fork
@@ -199,4 +218,4 @@ If you already use Git, you can clone the public repository locally, add a remot
 
 Start with a disposable repository or non-critical project. Watch several runs. Read the issues and PRs. Keep `HUMAN_MERGE_ONLY` until you understand the behavior.
 
-The Markdown state machine coordinates work; it does not replace ordinary repository permissions, backups, CI, tests, security review, or human judgment.
+The Markdown state machine coordinates work; it does not replace ordinary repository permissions, backups, CI, tests, security inspection, or human judgment.

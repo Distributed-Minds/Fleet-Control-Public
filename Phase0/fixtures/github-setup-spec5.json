@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "spec_version": 5,
+  "capability_cases": [
+    {"id":"interactive-write-scheduled-read-only","interactive_capability":"WRITE","scheduled_capability":"READ","expected":"CAPABILITY_ABSENT"},
+    {"id":"interactive-action-scheduled-missing","interactive_capability":"WRITE","scheduled_capability":"NONE","expected":"CAPABILITY_ABSENT"},
+    {"id":"scheduled-approval-required","scheduled_capability":"WRITE","approval_required":true,"expected":"ACTION_BLOCKED"},
+    {"id":"repository-scope-differs","scheduled_capability":"WRITE","repository_scope_matches":false,"expected":"REPOSITORY_SCOPE_MISMATCH"},
+    {"id":"stale-acceptance-after-drift","scheduled_capability":"WRITE","evidence_current":false,"expected":"STALE"},
+    {"id":"connector-configured-no-action","scheduled_capability":"NONE","connector_configured":true,"expected":"CAPABILITY_ABSENT"},
+    {"id":"repository-policy-rejects","scheduled_capability":"WRITE","repository_policy_allows":false,"expected":"POLICY_BLOCKED"},
+    {"id":"default-branch-required","scheduled_capability":"WRITE","requires_default_branch_mutation":true,"expected":"DEFAULT_BRANCH_FORBIDDEN"},
+    {"id":"capability-current-authority-expired","scheduled_capability":"WRITE","authority_current":false,"expected":"AUTHORITY_STALE"},
+    {"id":"scheduled-write-current","scheduled_capability":"WRITE","expected":"MUTATION_ELIGIBLE"}
+  ],
+  "probe_cases": [
+    {"id":"cutoff-after-create-before-verify","created":true,"verified":false,"expected":"RECONCILE_EXISTING"},
+    {"id":"cutoff-after-verify-before-cleanup","created":true,"verified":true,"cleaned":false,"expected":"CLEANUP_REQUIRED"},
+    {"id":"duplicate-retry","created":true,"verified":false,"retry":true,"expected":"RECONCILE_EXISTING"},
+    {"id":"cleanup-permission-lost","created":true,"verified":true,"cleaned":false,"authority_current":false,"expected":"RECOVERY_REQUIRED"},
+    {"id":"locator-reused","created":true,"resource_incarnation_matches":false,"expected":"AMBIGUOUS"},
+    {"id":"cleanup-success-lost-ack","created":true,"verified":true,"cleaned":true,"cleanup_receipt":true,"acknowledged":false,"expected":"PASSED_CLEAN"},
+    {"id":"repeated-cutoff-one-resource","created":true,"verified":false,"unresolved_prior_generation":true,"expected":"RECONCILE_EXISTING"},
+    {"id":"concurrent-current-generation","created":false,"authority_current":true,"lineage_current":true,"expected":"MUTATION_ELIGIBLE"},
+    {"id":"concurrent-stale-generation","created":false,"authority_current":false,"lineage_current":true,"expected":"AUTHORITY_STALE"},
+    {"id":"successor-after-create-old-stale","created":true,"authority_current":false,"expected":"READ_ONLY_RECONCILE"},
+    {"id":"exact-resource-stale-authority","created":true,"verified":true,"authority_current":false,"expected":"RECOVERY_REQUIRED"},
+    {"id":"authority-lost-before-cleanup","created":true,"verified":true,"cleaned":false,"authority_current":false,"expected":"RECOVERY_REQUIRED"},
+    {"id":"forged-authority-fields","created":false,"authority_current":false,"self_asserted_authority":true,"expected":"AUTHORITY_STALE"},
+    {"id":"explicit-recovery-transfer","created":true,"verified":true,"cleaned":false,"authority_current":false,"recovery_authority_current":true,"expected":"RECOVERY_AUTHORIZED"},
+    {"id":"incompatible-authority-adapter","created":false,"authority_adapter_compatible":false,"expected":"AUTHORITY_UNAVAILABLE"}
+  ],
+  "lineage_cases": [
+    {"id":"task-recreated-valid-successor","same_installation":true,"successor_evidence_current":true,"unresolved_prior_probe":true,"expected":"RECONCILE_PRIOR"},
+    {"id":"context-id-reused-different-installation","same_installation":false,"context_id_equal":true,"expected":"LINEAGE_UNKNOWN"},
+    {"id":"product-migration-no-successor-evidence","same_installation":true,"surface_changed":true,"successor_evidence_current":false,"expected":"LINEAGE_UNKNOWN"},
+    {"id":"orphan-cleanup-successor-no-recovery-authority","same_installation":true,"successor_evidence_current":true,"unresolved_prior_probe":true,"cleanup_needed":true,"recovery_authority_current":false,"expected":"RECOVERY_REQUIRED"},
+    {"id":"lineage-map-generation-skew","same_installation":true,"lineage_map_conflict":true,"expected":"LINEAGE_UNKNOWN"},
+    {"id":"context-title-match-only","same_installation":true,"title_equal":true,"successor_evidence_current":false,"expected":"LINEAGE_UNKNOWN"},
+    {"id":"same-repository-access-only","same_installation":true,"same_repository_access":true,"successor_evidence_current":false,"expected":"LINEAGE_UNKNOWN"}
+  ]
+}
