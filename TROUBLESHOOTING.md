@@ -1,6 +1,6 @@
 # Troubleshooting
 
-## My repository does not appear in ChatGPT or Codex
+## My repository does not appear in ChatGPT
 
 Check that:
 
@@ -8,13 +8,30 @@ Check that:
 2. the GitHub app/plugin is installed for the correct personal account or organization;
 3. that app has access to the exact repository;
 4. an organization administrator approved it if approval is required;
-5. you waited a few minutes after creating or authorizing a new repository.
+5. the current ChatGPT surface and workspace allow that app/plugin; and
+6. you allowed time for a newly created or newly authorized repository to become visible.
 
-Installing a GitHub app and granting it access to a specific repository are separate operations.
+Installing a GitHub connection and granting it access to a specific repository are separate operations.
 
-## The agent can read GitHub but cannot push changes
+## The agent can read GitHub but cannot mutate it
 
-The ordinary ChatGPT GitHub app can be read-only depending on product surface. OpenAI's Codex product is intended for code generation/editing/pushing workflows. Confirm Codex has access to the repository and GitHub grants the needed repository permissions.
+Treat read/search capability and mutation capability as different action classes. A connected GitHub account does not prove write access, and an interactive success does not prove that a scheduled/background execution context exposes the same action or approval path.
+
+Check the exact execution context, current app/plugin permissions, repository installation scope, organization approval, repository permissions, branch protections/rulesets, and Fleet-Control policy authority. If the action requires approval, a scheduled run may pause rather than complete autonomously.
+
+For persistent-agent setup, follow `Phase0/95-GITHUB-CAPABILITY-ACCEPTANCE.md`. Prefer a non-destructive scheduled-context check. If capability is absent, blocked, approval-paused, or unknown, keep that context read-only or route the action to explicit human handling rather than widening permissions or guessing.
+
+## A capability check created disposable state and then stopped
+
+Do not delete by locator name alone and do not start a fresh probe blindly. Reconcile the exact durable probe identity, stable installation/probe lineage, current execution-context continuity, resource incarnation, and current authority first.
+
+A stale or superseded probe is reconciliation-only. Destructive cleanup after supersession requires an explicit bounded recovery-authority transfer for the exact orphan resource. Unknown lineage, ambiguous ownership, stale authority, or lost cleanup permission is recovery debt, not deletion permission.
+
+## A scheduled context changed identity after recreation or migration
+
+An opaque task/context identifier does not define durable probe lineage. Use current machine-checkable predecessor/successor or alias evidence to attach the replacement context to the same stable installation/probe namespace. Reconcile unresolved older generations before fresh mutation.
+
+If continuity is stale, conflicting, unavailable, or based only on matching names/IDs/repository access, classify it as `LINEAGE_UNKNOWN` and fail closed for reversible mutation until continuity or safe separation is established.
 
 ## Several agents edit the same thing
 
@@ -39,6 +56,8 @@ Possible causes:
 - builder agents are still in analytical bootstrap;
 - no agent has reached BUILD;
 - repository permissions prevent mutation;
+- the scheduled execution context has not established the required GitHub action class;
+- current lineage or mutation authority is unavailable;
 - a dependency is genuinely blocked.
 
 Read the latest `AGENT_STATE` records and the active mission before changing policy.
@@ -61,4 +80,4 @@ Also update the ordered `AGENTS=` list and create/pause automations so real pers
 
 ## I want agents to merge automatically
 
-The starter intentionally uses `DEFAULT_BRANCH_POLICY=HUMAN_MERGE_ONLY`. Autonomous merge authority is a governance decision and should not be enabled casually.
+The starter intentionally uses `DEFAULT_BRANCH_POLICY=HUMAN_MERGE_ONLY`. Technical ability to call a merge action is not authority to merge. Autonomous integration authority is a governance decision and should not be enabled casually.
