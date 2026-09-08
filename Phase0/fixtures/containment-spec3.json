@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "spec_version": 3,
+  "decision_cases": [
+    {"id":"least-harm","requested_level":"ISOLATE","narrowest_effective_level":"BLOCK_ACTION","authority_current":true,"independent_lineages":2,"expected":{"disposition":"AUTHORIZED","level":"BLOCK_ACTION"}},
+    {"id":"explicit-broader","requested_level":"ISOLATE","narrowest_effective_level":"BLOCK_ACTION","broader_action_justified":true,"authority_current":true,"independent_lineages":2,"expected":{"disposition":"AUTHORIZED","level":"ISOLATE"}},
+    {"id":"stale-subject","requested_level":"BLOCK_ACTION","subject_current":false,"expected":{"disposition":"IDENTITY_STALE","level":null}},
+    {"id":"stale-dependency","requested_level":"BLOCK_ACTION","dependency_state":"STALE","expected":{"disposition":"DEPENDENCY_STALE","level":null}},
+    {"id":"incompatible-dependency","requested_level":"BLOCK_ACTION","dependency_state":"INCOMPATIBLE","expected":{"disposition":"DEPENDENCY_INCOMPATIBLE","level":null}},
+    {"id":"missing-authority","requested_level":"SUSPEND_CAPABILITY","authority_current":false,"expected":{"disposition":"AUTHORITY_MISSING","level":null}},
+    {"id":"single-lineage-high-impact","requested_level":"ISOLATE","authority_current":true,"independent_lineages":1,"required_independent_lineages":2,"expected":{"disposition":"INDEPENDENCE_INSUFFICIENT","level":null}},
+    {"id":"correlated-duplicate-does-not-count","requested_level":"TERMINATE","authority_current":true,"independent_lineages":1,"required_independent_lineages":2,"expected":{"disposition":"INDEPENDENCE_INSUFFICIENT","level":null}},
+    {"id":"contradiction-bounds-action","requested_level":"ISOLATE","authority_current":true,"independent_lineages":2,"contradictory_evidence":true,"max_level_with_contradiction":"BLOCK_ACTION","expected":{"disposition":"AUTHORIZED","level":"BLOCK_ACTION"}},
+    {"id":"expired-no-renewal","requested_level":"BLOCK_ACTION","expired":true,"expected":{"disposition":"EXPIRED","level":null}},
+    {"id":"expired-renewed","requested_level":"BLOCK_ACTION","expired":true,"renewal_authorized":true,"expected":{"disposition":"AUTHORIZED","level":"BLOCK_ACTION"}},
+    {"id":"one-agent-human-independent-control","requested_level":"ISOLATE","authority_current":true,"independent_lineages":2,"required_independent_lineages":2,"expected":{"disposition":"AUTHORIZED","level":"ISOLATE"}},
+    {"id":"destructive-needs-authority","requested_level":"DESTRUCTIVE_CLEANUP","authority_current":false,"independent_lineages":2,"expected":{"disposition":"AUTHORITY_MISSING","level":null}}
+  ],
+  "recovery_cases": [
+    {"id":"false-positive-recovery","recovery_authority_current":true,"independent_recovery_evidence":true,"expected":"RECOVERED"},
+    {"id":"recovery-stale-subject","subject_current":false,"recovery_authority_current":true,"independent_recovery_evidence":true,"expected":"IDENTITY_STALE"},
+    {"id":"recovery-dependency-moved","dependency_state":"STALE","recovery_authority_current":true,"independent_recovery_evidence":true,"expected":"DEPENDENCY_STALE"},
+    {"id":"recovery-missing-authority","recovery_authority_current":false,"independent_recovery_evidence":true,"expected":"AUTHORITY_MISSING"},
+    {"id":"recovery-insufficient-evidence","recovery_authority_current":true,"independent_recovery_evidence":false,"expected":"EVIDENCE_INSUFFICIENT"}
+  ],
+  "trace_cases": [
+    {"id":"cutoff-retry","kind":"cutoff_retry","first_operation_id":"contain:subject-7:g3","retry_operation_id":"contain:subject-7:g3","expected":"ONE_SEMANTIC_OPERATION"},
+    {"id":"changed-intent-new-operation","kind":"cutoff_retry","first_operation_id":"contain:subject-7:g3","retry_operation_id":"contain:subject-7:g4","expected":"DUPLICATE_OPERATION"},
+    {"id":"locator-reuse","kind":"locator_reuse","expected_incarnation":"resource:17","current_incarnation":"resource:18","expected":"IDENTITY_STALE"},
+    {"id":"effect-dependency-moved","kind":"dependency_boundary","decision_basis":"side-effect:v6:cfg-a","boundary_basis":"side-effect:v7:cfg-b","expected":"BOUNDARY_BLOCKED"},
+    {"id":"effect-dependency-compatible-upgrade","kind":"dependency_boundary","decision_basis":"side-effect:v6:cfg-a","boundary_basis":"side-effect:v7:cfg-b","compatibility_proven":true,"expected":"BOUNDARY_ALLOWED"},
+    {"id":"closure-dependency-moved","kind":"dependency_boundary","decision_basis":"closure:v2:cfg-a","boundary_basis":"closure:v3:cfg-a","expected":"BOUNDARY_BLOCKED"},
+    {"id":"evidence-assurance-moved","kind":"dependency_boundary","decision_basis":"evidence:v3:trust-4","boundary_basis":"evidence:v3:trust-5","expected":"BOUNDARY_BLOCKED"},
+    {"id":"recovery-dependency-moved-trace","kind":"dependency_boundary","decision_basis":"recovery:v1:deps-a","boundary_basis":"recovery:v1:deps-b","expected":"BOUNDARY_BLOCKED"},
+    {"id":"termination-without-closure-proof","kind":"closure","closure_evidence_current":false,"expected":"CLOSURE_DEBT"},
+    {"id":"termination-with-closure-proof","kind":"closure","closure_evidence_current":true,"expected":"CLOSED"},
+    {"id":"pure-model-no-production-authority","kind":"external_effect","external_authority_current":false,"expected":"EFFECT_BLOCKED"},
+    {"id":"production-authority-present","kind":"external_effect","external_authority_current":true,"expected":"EFFECT_ALLOWED"},
+    {"id":"secondary-harm-preserved","kind":"residual_harm","durable_secondary_effect":true,"expected":"RESIDUAL_HARM"}
+  ]
+}
