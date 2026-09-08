@@ -50,15 +50,19 @@ alice/my-project
 
 You will paste this exact value into the Project instructions and automation prompts.
 
-### 4. Connect GitHub
+### 4. Connect GitHub and establish the capability you actually have
 
-For ChatGPT repository reading/searching, open ChatGPT **Settings → Apps** (or **Plugins**, if that is what your account shows), choose GitHub, sign in, and grant access to **your repository**.
+Open ChatGPT **Settings → Apps** (or **Plugins**, if that is the surface your account shows), choose GitHub, sign in, and authorize **your repository**. Installing the GitHub connection and granting it access to a particular repository are separate steps. An organization owner may need to approve access.
 
-Installing the GitHub app and granting it access to a particular repository are separate steps. If the repository belongs to a GitHub organization, an organization owner may need to approve access.
+Do not assume that every ChatGPT, app/plugin, interactive, and scheduled surface exposes the same GitHub actions. The exact capability can vary with product surface, account/workspace policy, app/plugin permissions, repository installation scope, organization approval, and GitHub repository rules. A connected repository does not by itself prove write capability.
 
-For code editing/pushing, use Codex with access to the same repository. The ordinary ChatGPT GitHub app may be read-only in some product surfaces; Codex is the OpenAI product intended for generating, editing, and pushing code to GitHub.
+Where the current product exposes action-permission controls, use the least privilege compatible with the intended work. An action can still require approval, be denied, or be blocked by GitHub even when a broader product permission is selected.
 
-A newly created or newly authorized repository may take a few minutes to appear.
+Before you rely on scheduled agents to mutate GitHub, use the scheduled/background execution context itself to establish the required capability. Follow `Phase0/95-GITHUB-CAPABILITY-ACCEPTANCE.md`. Prefer a non-destructive check. If only a reversible mutation can prove the capability, use the contract's disposable non-default probe, stable lineage, exact-resource, current-authority, recovery, and cleanup rules. Never use a capability probe on the default branch.
+
+If an interactive chat can perform an action but the scheduled context is read-only, blocked, approval-paused, or unknown, treat the scheduled context accordingly. Do not infer equivalence.
+
+A newly created or newly authorized repository may take some time to appear.
 
 ### 5. Create a ChatGPT Project
 
@@ -105,7 +109,7 @@ For a first setup, leave:
 DEFAULT_BRANCH_POLICY=HUMAN_MERGE_ONLY
 ```
 
-This means agents may prepare branches and PRs, but a human decides what enters the default branch.
+This means agents may prepare branches and PRs, but a human decides what enters the default branch. Technical capability never silently changes this policy authority.
 
 ### 7. Create persistent scheduled agents
 
@@ -123,13 +127,14 @@ For each agent you enable:
 
 1. open its file;
 2. replace `<OWNER>/<REPOSITORY>` with your repository;
-3. create a recurring task/automation in the ChatGPT/Codex surface you use;
+3. create a recurring task/automation in the supported ChatGPT surface you use;
 4. paste the prompt as the task instruction;
-5. choose a schedule appropriate for your plan and workload.
+5. choose a schedule appropriate for your plan and workload;
+6. establish scheduled-context GitHub capability for every action class the fleet is expected to use, following `Phase0/95-GITHUB-CAPABILITY-ACCEPTANCE.md`.
 
 Do **not** give all automations the same identity. A1 must remain A1, A2 must remain A2, and so on.
 
-In ChatGPT, supported recurring tasks are managed from **Scheduled**. Availability and frequency limits depend on account/plan. Codex automations are separate from ChatGPT scheduled tasks.
+In ChatGPT, supported recurring tasks are managed from **Scheduled**. Availability, supported apps/plugins, approval behavior, and frequency limits can vary by account/workspace and current product surface.
 
 Important: scheduled ChatGPT tasks may not be able to access files uploaded directly to a ChatGPT Project. Fleet-Control therefore keeps the durable fleet operating system in GitHub and tells every persistent run to re-read it there.
 
@@ -180,6 +185,9 @@ Unless you explicitly change the rules, it should not:
 
 - merge into your default branch;
 - mutate unrelated repositories;
+- treat connection or product capability as policy authority;
+- treat interactive GitHub capability as proof of scheduled capability;
+- widen permissions or disable protections merely to make a capability check pass;
 - turn “think about this” into product code changes;
 - claim tests passed without evidence;
 - claim another executor completed work without observing the resulting repository state;
@@ -199,4 +207,4 @@ If you already use Git, you can clone the public repository locally, add a remot
 
 Start with a disposable repository or non-critical project. Watch several runs. Read the issues and PRs. Keep `HUMAN_MERGE_ONLY` until you understand the behavior.
 
-The Markdown state machine coordinates work; it does not replace ordinary repository permissions, backups, CI, tests, security review, or human judgment.
+The Markdown state machine coordinates work; it does not replace ordinary repository permissions, backups, CI, tests, security inspection, or human judgment.
