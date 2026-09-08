@@ -13,7 +13,7 @@
     {"id":"correlated-duplicate-does-not-count","requested_level":"TERMINATE","authority_current":true,"independent_lineages":1,"required_independent_lineages":2,"expected":{"disposition":"INDEPENDENCE_INSUFFICIENT","level":null}},
     {"id":"contradiction-bounds-action","requested_level":"ISOLATE","authority_current":true,"independent_lineages":2,"contradictory_evidence":true,"max_level_with_contradiction":"BLOCK_ACTION","expected":{"disposition":"AUTHORIZED","level":"BLOCK_ACTION"}},
     {"id":"expired-no-renewal","requested_level":"BLOCK_ACTION","expired":true,"expected":{"disposition":"EXPIRED","level":null}},
-    {"id":"expired-renewed","requested_level":"BLOCK_ACTION","expired":true,"renewal_authorized":true,"expected":{"disposition":"AUTHORIZED","level":"BLOCK_ACTION"}},
+    {"id":"expired-renewed","requested_level":"BLOCK_ACTION","expired":true,"renewal_authorized":true,"authority_current":true,"expected":{"disposition":"AUTHORIZED","level":"BLOCK_ACTION"}},
     {"id":"one-agent-human-independent-control","requested_level":"ISOLATE","authority_current":true,"independent_lineages":2,"required_independent_lineages":2,"expected":{"disposition":"AUTHORIZED","level":"ISOLATE"}},
     {"id":"destructive-needs-authority","requested_level":"DESTRUCTIVE_CLEANUP","authority_current":false,"independent_lineages":2,"expected":{"disposition":"AUTHORITY_MISSING","level":null}}
   ],
