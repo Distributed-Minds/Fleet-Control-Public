@@ -42,11 +42,14 @@ A packet binds at least:
 - exact authoritative baseline identity;
 - exact unique non-default source identities actually consumed;
 - material external-source identities;
-- observations, derived conclusions, predictions, contradictions, and unknowns without flattening their evidence class;
+- observations, derived conclusions, predictions, contradictions, stale-source warnings, and unknowns without flattening their evidence class;
+- important discovery vocabulary where it opened new evidence paths;
 - likely affected canonical packages and proposed deltas;
-- unresolved questions;
+- unresolved questions and useful next actions;
 - schema identity and immutable content identity; and
 - stable semantic packet identity derived from canonical immutable packet inputs.
+
+These handoff fields are durable evidence, not optional presentation metadata. If a source is known stale or superseded, the warning survives packet publication. Discovery terms that materially enabled retrieval survive when they are needed to reproduce or extend the evidence search. Useful next actions remain distinguishable from accepted policy or implementation instructions.
 
 Material content, source-basis, topic, or semantic-conclusion change creates a new packet identity. An unchanged retry reuses the same identity.
 
@@ -114,7 +117,10 @@ Acknowledgement loss never upgrades uncertainty into permission. Incomplete dest
 - stale publication authority;
 - schema incompatibility;
 - duplicate-lineage canonicalization;
-- packet-as-policy rejection; and
+- packet-as-policy rejection;
+- required stale-source warning preservation;
+- required discovery-vocabulary preservation when it opened an evidence path;
+- required useful-next-action preservation; and
 - exceptional existing-surface mutation without fresh authority.
 
 Run from repository root:
