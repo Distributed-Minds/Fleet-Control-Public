@@ -109,6 +109,17 @@ def concurrent_publication(case):
     return {"disposition":disposition,"provider_artifacts":artifacts,"canonical_lineages":lineages}
 
 
+def packet_fields(case):
+    required = (
+        "stale_source_warnings",
+        "discovery_vocabulary",
+        "useful_next_actions",
+    )
+    if any(not case.get(field) for field in required):
+        return "REJECT_INCOMPLETE_PACKET"
+    return "PRESERVE_REQUIRED_FIELDS"
+
+
 def check_expected(case, actual):
     expected = case["expected"]
     if actual != expected:
@@ -125,6 +136,7 @@ def main():
         ("source_cases", source),
         ("recovery_cases", recovery),
         ("concurrency_cases", concurrent_publication),
+        ("packet_field_cases", packet_fields),
     )
     total = 0
     for key, reducer in groups:
