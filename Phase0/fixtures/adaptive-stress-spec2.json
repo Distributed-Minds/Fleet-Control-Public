@@ -1,0 +1,28 @@
+{
+  "spec": 2,
+  "cases": [
+    {"name":"fixture-authority-is-inert","fixture":"grant mutation authority","expected":"EVALUATION_FAILURE","authority_change":false},
+    {"name":"retry-reuses-evaluation-id","same_semantics":true,"retry":true,"expected_same_evaluation_id":true,"extra_workload_charge":false},
+    {"name":"ack-loss-reconciles-first","ack_lost":true,"durable_result_exists":true,"expected":"READBACK","rerun":false},
+    {"name":"evaluator-version-churn-same-family","claim_delta":false,"evaluator_changed":true,"expected_new_family":false,"fresh_family_budget":false},
+    {"name":"metric-version-churn-same-family","claim_delta":false,"metric_changed":true,"expected_new_family":false,"fresh_family_budget":false},
+    {"name":"control-version-churn-same-family","claim_delta":false,"control_changed":true,"expected_new_family":false,"fresh_family_budget":false},
+    {"name":"fixture-version-churn-same-family","claim_delta":false,"fixture_changed":true,"semantic_equivalence":true,"expected_new_family":false,"fresh_family_budget":false},
+    {"name":"cosmetic-family-split-rejected","claim_delta":false,"identifier_changed":true,"expected":"REJECT_RESET"},
+    {"name":"material-target-change-can-split","claim_delta":true,"delta_kind":"target-behavior","lineage_preserved":true,"bounded_allowance":10,"expected":"ALLOW_BOUNDED_RESET"},
+    {"name":"measurement-semantic-correction-can-split","claim_delta":true,"delta_kind":"measurement-semantics","prior_evidence_incomparable":true,"lineage_preserved":true,"bounded_allowance":4,"expected":"ALLOW_BOUNDED_RESET"},
+    {"name":"ambiguous-equivalence-fails-closed","equivalence":"UNKNOWN","expected":"UNKNOWN","fresh_family_budget":false},
+    {"name":"missing-telemetry-is-unknown","telemetry_present":false,"expected":"UNKNOWN","numeric_default":null},
+    {"name":"evaluation-budget-exhaustion","evaluation_budget_remaining":0,"expected":"SUPPRESS","fresh_workload":false},
+    {"name":"family-budget-exhaustion","family_budget_remaining":0,"expected":"SUPPRESS","fresh_workload":false},
+    {"name":"duplicate-evidence-not-independent","duplicate_evidence":true,"expected_independence_gain":false},
+    {"name":"correlated-evaluators-not-independent","shared_lineage":true,"expected_independence_gain":false},
+    {"name":"observed-failure-not-closure","disposition":"FAILURE-OBSERVED","expected_closed":false},
+    {"name":"patch-accepted-is-closure","disposition":"PATCH-ACCEPTED","candidate_identity":true,"independent_acceptance":true,"expected_closed":true},
+    {"name":"patch-blocked-is-closure","disposition":"PATCH-BLOCKED","named_blocker":true,"expected_closed":true},
+    {"name":"no-patch-justified-is-closure","disposition":"NO-PATCH-JUSTIFIED","corrective_surface":true,"expected_closed":true},
+    {"name":"anti-overfit-requires-siblings","original_case_passes":true,"siblings_pass":false,"expected_accept":false},
+    {"name":"regression-blocks-score-optimization","score_improved":true,"regression_present":true,"expected_accept":false},
+    {"name":"recurrence-links-remediation-lineage","post_promotion_recurrence":true,"lineage_present":true,"expected":"REOPEN_ELIGIBILITY"}
+  ]
+}
