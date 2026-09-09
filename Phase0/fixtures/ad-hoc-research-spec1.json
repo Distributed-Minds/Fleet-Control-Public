@@ -51,8 +51,9 @@
   ],
   "packet_field_cases": [
     {"id":"required-handoff-fields-preserved","stale_source_warnings":["source superseded after basis capture"],"discovery_vocabulary":["native discovery token"],"useful_next_actions":["revalidate the moved source before canonicalization"],"expected":"PRESERVE_REQUIRED_FIELDS"},
-    {"id":"missing-stale-source-warning-rejected","stale_source_warnings":[],"discovery_vocabulary":["native discovery token"],"useful_next_actions":["revalidate source"],"expected":"REJECT_INCOMPLETE_PACKET"},
-    {"id":"missing-discovery-vocabulary-rejected","stale_source_warnings":["source stale"],"discovery_vocabulary":[],"useful_next_actions":["revalidate source"],"expected":"REJECT_INCOMPLETE_PACKET"},
-    {"id":"missing-useful-next-action-rejected","stale_source_warnings":["source stale"],"discovery_vocabulary":["native discovery token"],"useful_next_actions":[],"expected":"REJECT_INCOMPLETE_PACKET"}
+    {"id":"truthfully-empty-handoff-fields-preserved","stale_source_warnings":[],"discovery_vocabulary":[],"useful_next_actions":[],"expected":"PRESERVE_REQUIRED_FIELDS"},
+    {"id":"missing-stale-source-warning-rejected","discovery_vocabulary":["native discovery token"],"useful_next_actions":["revalidate source"],"expected":"REJECT_INCOMPLETE_PACKET"},
+    {"id":"missing-discovery-vocabulary-rejected","stale_source_warnings":["source stale"],"useful_next_actions":["revalidate source"],"expected":"REJECT_INCOMPLETE_PACKET"},
+    {"id":"missing-useful-next-action-rejected","stale_source_warnings":["source stale"],"discovery_vocabulary":["native discovery token"],"expected":"REJECT_INCOMPLETE_PACKET"}
   ]
 }
