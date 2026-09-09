@@ -115,7 +115,7 @@ def packet_fields(case):
         "discovery_vocabulary",
         "useful_next_actions",
     )
-    if any(not case.get(field) for field in required):
+    if any(field not in case for field in required):
         return "REJECT_INCOMPLETE_PACKET"
     return "PRESERVE_REQUIRED_FIELDS"
 
