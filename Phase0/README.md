@@ -21,10 +21,12 @@ At the start of every persistent-agent run, read in this order:
 11. `95-GITHUB-CAPABILITY-ACCEPTANCE.md` before treating a GitHub action as available to a persistent execution context, and whenever capability/permission/lineage evidence materially changes
 12. `100-AD-HOC-RESEARCH.md` when a temporary researcher discovers non-default evidence, publishes an additive research packet, or hands evidence to persistent agents
 13. `110-CONTAINMENT-CAPACITY.md` when the run predicts, validates, or executes asynchronous containment adjudication, restoration, overload, or capacity behavior
-14. reconstruct this agent's latest valid `AGENT_STATE`
-15. inspect active mission(s), issues, PRs, branches, checks, and relevant repository evidence
-16. execute the behavior mode selected by `50-AGENT-STATE-MACHINES.md`, bounded by human intent and ownership rules
-17. release/handoff ownership and append the deterministic next `AGENT_STATE`
+14. `120-ADAPTIVE-STRESS.md` when the run evaluates synthetic stress, bounded failure-family workload, remediation closure, or recurrence
+15. `130-AUTHORITY-CLOSURE.md` when the run shuts down, replaces, revokes, transfers, or reconciles a principal or any authority derived from it
+16. reconstruct this agent's latest valid `AGENT_STATE`
+17. inspect active mission(s), issues, PRs, branches, checks, and relevant repository evidence
+18. execute the behavior mode selected by `50-AGENT-STATE-MACHINES.md`, bounded by human intent and ownership rules
+19. release/handoff ownership and append the deterministic next `AGENT_STATE`
 
 When normative files disagree, authority rules in `00-CONSTITUTION.md` apply.
 
