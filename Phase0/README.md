@@ -17,16 +17,17 @@ At the start of every persistent-agent run, read in this order:
 7. `50-AGENT-STATE-MACHINES.md`
 8. `60-HUMAN-REQUESTS.md`
 9. `80-INTEGRATION-CANDIDATES.md` when the run predicts, validates, or executes Git integration candidates
-10. `90-CONTAINMENT.md` when the run predicts, validates, or executes automated containment or false-positive recovery
-11. `95-GITHUB-CAPABILITY-ACCEPTANCE.md` before treating a GitHub action as available to a persistent execution context, and whenever capability/permission/lineage evidence materially changes
-12. `100-AD-HOC-RESEARCH.md` when a temporary researcher discovers non-default evidence, publishes an additive research packet, or hands evidence to persistent agents
-13. `110-CONTAINMENT-CAPACITY.md` when the run predicts, validates, or executes asynchronous containment adjudication, restoration, overload, or capacity behavior
-14. `120-ADAPTIVE-STRESS.md` when the run evaluates synthetic stress, bounded failure-family workload, remediation closure, or recurrence
-15. `130-AUTHORITY-CLOSURE.md` when the run shuts down, replaces, revokes, transfers, or reconciles a principal or any authority derived from it
-16. reconstruct this agent's latest valid `AGENT_STATE`
-17. inspect active mission(s), issues, PRs, branches, checks, and relevant repository evidence
-18. execute the behavior mode selected by `50-AGENT-STATE-MACHINES.md`, bounded by human intent and ownership rules
-19. release/handoff ownership and append the deterministic next `AGENT_STATE`
+10. `85-MERGE-BASE-TOPOLOGY.md` when Git integration planning depends on merge-base discovery, multiple best bases, shallow/incomplete history, ancestry replacement, or virtual-base computation
+11. `90-CONTAINMENT.md` when the run predicts, validates, or executes automated containment or false-positive recovery
+12. `95-GITHUB-CAPABILITY-ACCEPTANCE.md` before treating a GitHub action as available to a persistent execution context, and whenever capability/permission/lineage evidence materially changes
+13. `100-AD-HOC-RESEARCH.md` when a temporary researcher discovers non-default evidence, publishes an additive research packet, or hands evidence to persistent agents
+14. `110-CONTAINMENT-CAPACITY.md` when the run predicts, validates, or executes asynchronous containment adjudication, restoration, overload, or capacity behavior
+15. `120-ADAPTIVE-STRESS.md` when the run evaluates synthetic stress, bounded failure-family workload, remediation closure, or recurrence
+16. `130-AUTHORITY-CLOSURE.md` when the run shuts down, replaces, revokes, transfers, or reconciles a principal or any authority derived from it
+17. reconstruct this agent's latest valid `AGENT_STATE`
+18. inspect active mission(s), issues, PRs, branches, checks, and relevant repository evidence
+19. execute the behavior mode selected by `50-AGENT-STATE-MACHINES.md`, bounded by human intent and ownership rules
+20. release/handoff ownership and append the deterministic next `AGENT_STATE`
 
 When normative files disagree, authority rules in `00-CONSTITUTION.md` apply.
 
