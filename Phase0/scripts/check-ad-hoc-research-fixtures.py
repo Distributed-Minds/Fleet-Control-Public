@@ -54,7 +54,6 @@ def publication(case):
         return "BLOCK_INVENTORY_UNKNOWN"
     if not case.get("schema_compatible", False):
         return "BLOCK_SCHEMA_INCOMPATIBLE"
-    # Self-authored metadata is deliberately ignored here; only current external authority counts.
     if not case.get("authority_current", False):
         return "BLOCK_AUTHORITY_STALE"
     if "packet" not in case:
@@ -145,12 +144,10 @@ def concurrent_publication(case):
     artifacts = int(case.get("initial_packets", 0))
     lineages = 1 if artifacts else 0
 
-    # Every publisher starts from the same empty/pre-create observation.
     if strategy in {"atomic_unique", "serialized"}:
         if artifacts == 0 and publishers:
             artifacts = 1
             lineages = 1
-        # Later equivalent attempts lose creation or serialize behind the first and adopt it.
     elif strategy == "reconcile_after_create":
         artifacts += publishers
         if not case.get("inventory_complete", False) or not case.get("semantic_identity_indexed", False):
@@ -164,7 +161,6 @@ def concurrent_publication(case):
 
     if case.get("lost_ack_retry", False):
         if strategy in {"atomic_unique", "serialized"}:
-            # Retry of the same semantic operation sees/adopts the existing unique entry.
             artifacts = max(artifacts, 1)
             lineages = 1
         elif strategy == "reconcile_after_create" and not case.get("inventory_complete", True):
@@ -185,6 +181,17 @@ def packet_fields(case):
     return "PRESERVE_REQUIRED_FIELDS"
 
 
+def expand_packet_refs(case, templates):
+    expanded = dict(case)
+    for target in ("packet", "retry_packet", "matching_packet"):
+        ref_key = f"{target}_ref"
+        if ref_key in expanded:
+            expanded[target] = templates[expanded.pop(ref_key)]
+    if "matching_packet_refs" in expanded:
+        expanded["matching_packet_payloads"] = [templates[ref] for ref in expanded.pop("matching_packet_refs")]
+    return expanded
+
+
 def check_expected(case, actual):
     expected = case["expected"]
     if actual != expected:
@@ -194,6 +201,7 @@ def check_expected(case, actual):
 def main():
     fixture_path = Path(sys.argv[1] if len(sys.argv) > 1 else "Phase0/fixtures/ad-hoc-research-spec1.json")
     data = json.loads(fixture_path.read_text(encoding="utf-8"))
+    templates = data.get("packet_templates", {})
     failures = []
     groups = (
         ("publication_cases", publication),
@@ -205,8 +213,9 @@ def main():
     )
     total = 0
     for key, reducer in groups:
-        for case in data[key]:
+        for raw_case in data[key]:
             total += 1
+            case = expand_packet_refs(raw_case, templates)
             try:
                 actual = reducer(case)
                 check_expected(case, actual)
