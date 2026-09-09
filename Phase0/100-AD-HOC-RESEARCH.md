@@ -53,6 +53,39 @@ These handoff fields are durable evidence, not optional presentation metadata. I
 
 Material content, source-basis, topic, or semantic-conclusion change creates a new packet identity. An unchanged retry reuses the same identity.
 
+### Semantic packet identity v1
+
+The executable `adhoc-packet-semantic-v1` identity is derived from one canonical semantic input object. The required semantic fields are exactly:
+
+```text
+packet_schema
+topic
+authoritative_baseline
+unique_nondefault_sources
+external_sources
+observations
+derived_conclusions
+predictions
+unknowns
+contradictions
+stale_source_warnings
+discovery_vocabulary
+affected_packages
+proposed_deltas
+unresolved_questions
+useful_next_actions
+```
+
+A missing field is an invalid identity input; a conditionally empty field is represented explicitly by its truthful empty JSON value. Provider locator, temporary execution identity, transport diagnostics, UI headings, formatting, and other presentation-only data are not semantic identity inputs.
+
+Canonicalization serializes only the field set above as UTF-8 JSON with object keys sorted lexicographically, no insignificant whitespace, direct Unicode encoding, JSON types preserved, and array order preserved. Non-finite JSON numbers are rejected. The identity is:
+
+`adhoc-packet-semantic-v1:sha256:<lowercase SHA-256 hex of canonical bytes>`
+
+Equivalent object-key ordering therefore converges. Changing presentation-only data does not split identity. Changing any included semantic value, source basis, or included array ordering changes the canonical bytes and therefore the identity.
+
+Publication and retry reconciliation re-derive this identity from packet content at the decision boundary. A fixture-supplied label, provider locator, or claimed identity cannot substitute for the computed value. A located packet whose computed semantic identity differs from the candidate is a content/locator conflict rather than an adoptable retry result.
+
 ## Publication authority
 
 Publication is a bounded additive side effect. Current authority is established outside packet-authored content and binds at least:
@@ -90,6 +123,8 @@ Before any retry create after cutoff or acknowledgement loss, reconcile the publ
 
 Only `ABSENT` under complete authoritative inventory plus current compatible publication authority may authorize a fresh create. `ONE_COMPLETE` adopts the existing canonical packet. Ambiguous, incomplete, stale, incompatible, or conflict state performs no blind create.
 
+At the recovery boundary, schema compatibility is checked again before either fresh creation or adoption. A prior create with a located packet is adoptable or continuable only when the candidate and located packet re-derive the same semantic identity. Schema incompatibility or different immutable semantic content blocks the recovery path even when a provider locator exists or the earlier request may have succeeded.
+
 Concurrent equivalent researchers may compute the same packet identity. Separate execution identities remain provenance, but duplicate publication attempts do not become independent evidentiary corroboration.
 
 ## Canonicalization boundary
@@ -110,12 +145,16 @@ Acknowledgement loss never upgrades uncertainty into permission. Incomplete dest
 
 - authoritative baseline before non-default evidence;
 - temporary identity unable to claim persistent state;
+- computed semantic identity under object-key reordering;
+- declared presentation-only variance without identity drift;
+- semantic content and source-basis changes producing new identities;
 - concurrent equivalent publishers;
 - acknowledgement loss and retry;
 - incomplete inventory;
 - provider-assigned locator conflicts;
 - stale publication authority;
-- schema incompatibility;
+- schema incompatibility, including after a prior create;
+- lost-ack recovery with different semantic packet content;
 - duplicate-lineage canonicalization;
 - packet-as-policy rejection;
 - required stale-source warning preservation;
