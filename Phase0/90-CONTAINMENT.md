@@ -17,6 +17,8 @@ A decision binds:
 
 - stable operation identity and exact subject/resource incarnation;
 - detector policy/version and evidence identities;
+- detector/evidence currentness and detector-version compatibility;
+- attribution confidence for the exact subject/resource;
 - independent evidence-lineage count and contradictory/exculpatory evidence;
 - requested restriction level and the narrowest effective restriction known to satisfy the immediate risk;
 - current authority disposition;
@@ -28,7 +30,7 @@ Restriction levels, from least to most harmful, are:
 
 `OBSERVE < BLOCK_ACTION < SUSPEND_CAPABILITY < FREEZE_NEW_AUTHORITY < ISOLATE < TERMINATE < DESTRUCTIVE_CLEANUP`
 
-Absent an explicit current justification for a broader action, the reducer selects the least harmful effective restriction.
+Absent an explicit current justification for a broader action, the reducer selects the least harmful effective restriction. Stale detector evidence or an incompatible detector basis cannot authorize a fresh restriction. Ambiguous attribution is bounded to observation-only behavior until the exact subject/resource identity is sufficiently established; it cannot be promoted into coercive mutation merely because confidence or independent-lineage count is otherwise high.
 
 ### `DependencyBasis`
 
@@ -60,15 +62,17 @@ Recovery never rewrites an old restriction as if it did not occur.
 1. Confidence alone never mints authority.
 2. Correlated observations from one lineage count once toward independence.
 3. High-impact restrictions fail closed when required independent evidence is absent.
-4. Contradictory/exculpatory evidence remains first-class and may reduce the maximum justified restriction.
-5. Exact subject/resource incarnation is checked before containment and recovery.
-6. Temporary restrictions do not become indefinite because follow-up is missing.
-7. Every dependency-consuming boundary revalidates the exact bound dependency basis.
-8. Retry after cutoff reuses the same semantic operation identity and cannot stack duplicate restrictions.
-9. Locator reuse cannot let stale containment or recovery mutate a replacement incarnation.
-10. Termination does not claim complete shutdown until compatible derivative-closure evidence exists.
-11. Pure-model success does not authorize a production external side effect.
-12. Residual harm and unresolved dependency/closure debt remain explicit terminal facts.
+4. Stale detector evidence and incompatible detector versions are non-success for fresh containment.
+5. Ambiguous subject attribution permits observation only; it cannot authorize coercive restriction until attribution is resolved.
+6. Contradictory/exculpatory evidence remains first-class and may reduce the maximum justified restriction.
+7. Exact subject/resource incarnation is checked before containment and recovery.
+8. Temporary restrictions do not become indefinite because follow-up is missing.
+9. Every dependency-consuming boundary revalidates the exact bound dependency basis.
+10. Retry after cutoff reuses the same semantic operation identity and cannot stack duplicate restrictions.
+11. Locator reuse cannot let stale containment or recovery mutate a replacement incarnation.
+12. Termination does not claim complete shutdown until compatible derivative-closure evidence exists.
+13. Pure-model success does not authorize a production external side effect.
+14. Residual harm and unresolved dependency/closure debt remain explicit terminal facts.
 
 ## Deterministic fixtures
 
@@ -76,6 +80,8 @@ Recovery never rewrites an old restriction as if it did not occur.
 
 - false positive and exact recovery;
 - compromised/correlated detector lineages;
+- stale detector evidence and incompatible detector versions;
+- ambiguous subject attribution bounded to observation-only behavior;
 - stale subject/resource identity and locator reuse;
 - stale/incompatible dependency bases;
 - authority loss;
@@ -103,7 +109,7 @@ The existing starter workflow copies the full `Phase0/` tree, so the contract, f
 
 ## Migration
 
-Adopt additively. Historical restrictions retain their observed meaning but gain no dependency-continuity or recovery guarantee by reinterpretation. Before any fresh mutation or recovery based on legacy state, establish exact current subject/resource identity, authority, and compatible dependency bases. Missing historical facts remain explicit reconciliation debt.
+Adopt additively. Historical restrictions retain their observed meaning but gain no dependency-continuity or recovery guarantee by reinterpretation. Before any fresh mutation or recovery based on legacy state, establish exact current subject/resource identity, current evidence/detector compatibility, authority, and compatible dependency bases. Missing historical facts remain explicit reconciliation debt.
 
 Rollback disables fresh automated high-impact containment first while preserving evidence and bounded manual recovery paths. Rollback never silently downgrades dependency or authority requirements.
 
@@ -113,4 +119,4 @@ This file, the fixture, and the checker live under `Phase0/`, which the existing
 
 ## Done condition
 
-The pure public containment model deterministically proves proportional, exact-incarnation-safe, dependency-basis-safe, expiry-aware, retry-safe, false-positive-recoverable decisions while keeping external authority, derivative closure, and volatile-evidence dependencies explicit rather than simulated as production completion.
+The pure public containment model deterministically proves proportional, exact-incarnation-safe, evidence-currentness-safe, attribution-safe, dependency-basis-safe, expiry-aware, retry-safe, false-positive-recoverable decisions while keeping external authority, derivative closure, and volatile-evidence dependencies explicit rather than simulated as production completion.
