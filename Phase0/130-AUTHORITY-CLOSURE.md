@@ -64,11 +64,14 @@ At cutoff:
 1. the ancestor immediately loses permission to mint fresh derivative authority;
 2. descendants cannot gain new authority solely from that ancestor after the fence;
 3. existing derivative credentials, jobs, leases, reservations, queues, and deferred effects are revoked, cancelled, expired, quarantined, or explicitly transferred under independent authority;
-4. ambiguous or partially cancelled descendants remain durable non-success debt;
-5. acknowledgement loss is reconciled against authoritative state before destructive retry;
-6. destructive cleanup binds the exact resource incarnation so locator reuse cannot revoke a replacement;
-7. repeated shutdown/retry is idempotent; and
-8. historical effects and committed obligations remain represented truthfully.
+4. a provider credential that remains technically usable is still denied by fleet admission after its authority is revoked, and external invalidation remains explicit revocation debt until proven complete;
+5. ambiguous or partially cancelled descendants remain durable non-success debt;
+6. acknowledgement loss is reconciled against authoritative state before destructive retry;
+7. destructive cleanup binds the exact resource incarnation so locator reuse cannot revoke a replacement;
+8. repeated shutdown/retry is idempotent; and
+9. historical effects and committed obligations remain represented truthfully.
+
+If old and new protocol versions disagree about lineage or derivation semantics, mutation-capable continuation fails closed until compatibility is mechanically established. Version skew cannot be resolved by choosing whichever interpretation preserves more authority.
 
 ## Independent handoff
 
@@ -94,6 +97,7 @@ An implementation must prove at least:
 - child and grandchild authority cannot escape an ancestor cutoff;
 - concurrent descendant creation is ordered by the cutoff fence;
 - delayed/runtime-minted jobs require valid current authority or become denied/unresolved;
+- a provider-valid credential whose fleet authority is revoked is denied and leaves explicit external-invalidation debt;
 - same cancellation retried after acknowledgement loss converges without duplicate destructive effect;
 - resource locator reuse cannot revoke a newer incarnation;
 - independent handoff preserves only explicitly retained scope;
@@ -101,6 +105,7 @@ An implementation must prove at least:
 - cyclic delegation without an external root cannot self-authorize;
 - multi-root authority preserves only the capability justified by surviving roots;
 - incomplete provider/pagination inventory never yields global closure;
+- incompatible lineage/protocol versions fail closed before mutation-capable continuation;
 - committed obligations and historical effects are not mislabeled as revoked;
 - independently rooted siblings are not over-revoked;
 - provider inaccessibility remains explicit debt; and
