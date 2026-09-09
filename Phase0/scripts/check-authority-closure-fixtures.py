@@ -13,6 +13,7 @@ def main() -> None:
         "child-after-cutoff-denied",
         "grandchild-race-fenced",
         "delayed-job-requires-current-authority",
+        "provider-valid-revoked-credential-denied-with-debt",
         "ack-loss-reconciles-before-retry",
         "partial-cancel-not-closed",
         "locator-reuse-incarnation-safe",
@@ -23,6 +24,7 @@ def main() -> None:
         "cycle-without-external-root",
         "cycle-with-independent-root",
         "incomplete-pagination-not-complete",
+        "lineage-version-disagreement-fails-closed",
         "runtime-minted-authority-is-descendant",
         "committed-obligation-not-revoked",
         "historical-effect-not-revoked",
@@ -38,6 +40,7 @@ def main() -> None:
     assert cases["child-after-cutoff-denied"]["expected"] == "DENY"
     assert cases["grandchild-race-fenced"]["expected"] == "NO_AUTHORITY"
     assert cases["delayed-job-requires-current-authority"]["expected"] == "DENY_OR_UNRESOLVED"
+    assert cases["provider-valid-revoked-credential-denied-with-debt"]["expected"] == "DENY_AND_RECORD_REVOCATION_DEBT"
     assert cases["ack-loss-reconciles-before-retry"]["expected"] == "READBACK_FIRST"
     assert cases["partial-cancel-not-closed"]["expected_closure"] == "PARTIAL"
     assert cases["locator-reuse-incarnation-safe"]["expected"] == "DO_NOT_CANCEL_REPLACEMENT"
@@ -48,6 +51,7 @@ def main() -> None:
     assert cases["cycle-without-external-root"]["expected"] == "NO_AUTHORITY"
     assert cases["cycle-with-independent-root"]["expected"] == "ROOT_BOUNDED_ONLY"
     assert cases["incomplete-pagination-not-complete"]["expected_closure"] == "UNKNOWN"
+    assert cases["lineage-version-disagreement-fails-closed"]["expected"] == "FAIL_CLOSED_UNTIL_COMPATIBLE"
     assert cases["runtime-minted-authority-is-descendant"]["expected"] == "TRACK_DERIVATIVE"
 
     for name in ("committed-obligation-not-revoked", "historical-effect-not-revoked"):
