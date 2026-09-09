@@ -1,7 +1,52 @@
 #!/usr/bin/env python3
+import hashlib
 import json
 import sys
 from pathlib import Path
+
+
+SEMANTIC_IDENTITY_VERSION = "adhoc-packet-semantic-v1"
+SEMANTIC_PACKET_FIELDS = (
+    "packet_schema",
+    "topic",
+    "authoritative_baseline",
+    "unique_nondefault_sources",
+    "external_sources",
+    "observations",
+    "derived_conclusions",
+    "predictions",
+    "unknowns",
+    "contradictions",
+    "stale_source_warnings",
+    "discovery_vocabulary",
+    "affected_packages",
+    "proposed_deltas",
+    "unresolved_questions",
+    "useful_next_actions",
+)
+
+
+def canonical_semantic_packet(packet):
+    missing = [field for field in SEMANTIC_PACKET_FIELDS if field not in packet]
+    if missing:
+        raise ValueError(f"missing semantic packet fields: {','.join(missing)}")
+    semantic = {field: packet[field] for field in SEMANTIC_PACKET_FIELDS}
+    return json.dumps(
+        semantic,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+
+
+def semantic_packet_identity(packet):
+    digest = hashlib.sha256(canonical_semantic_packet(packet)).hexdigest()
+    return f"{SEMANTIC_IDENTITY_VERSION}:sha256:{digest}"
+
+
+def packets_match(left, right):
+    return semantic_packet_identity(left) == semantic_packet_identity(right)
 
 
 def publication(case):
@@ -12,22 +57,34 @@ def publication(case):
     # Self-authored metadata is deliberately ignored here; only current external authority counts.
     if not case.get("authority_current", False):
         return "BLOCK_AUTHORITY_STALE"
+    if "packet" not in case:
+        return "BLOCK_PACKET_IDENTITY_UNKNOWN"
+    candidate_id = semantic_packet_identity(case["packet"])
     count = case.get("matching_packets", 0)
     if count == 0:
         return "CREATE"
     if count == 1:
-        if not case.get("content_identity_matches", True):
+        matching = case.get("matching_packet")
+        if matching is None or semantic_packet_identity(matching) != candidate_id:
             return "BLOCK_LOCATOR_CONFLICT"
         return "ADOPT_EXISTING" if case.get("matching_complete", False) else "RECONCILE_INCOMPLETE"
-    if case.get("all_semantically_equivalent", False):
+    matches = case.get("matching_packet_payloads", [])
+    if len(matches) != count:
+        return "BLOCK_LOCATOR_CONFLICT"
+    if all(semantic_packet_identity(packet) == candidate_id for packet in matches):
         return "CANONICALIZE_DUPLICATES"
     return "BLOCK_LOCATOR_CONFLICT"
 
 
 def identity(case):
     case_id = case["id"]
-    if case_id in {"same-semantic-retry", "changed-content-new-identity"}:
-        return "SAME_LINEAGE" if case["packet_identity"] == case["retry_packet_identity"] else "NEW_LINEAGE"
+    if case_id in {
+        "same-semantic-retry",
+        "presentation-only-variance-same-identity",
+        "changed-content-new-identity",
+        "changed-source-new-identity",
+    }:
+        return "SAME_LINEAGE" if packets_match(case["packet"], case["retry_packet"]) else "NEW_LINEAGE"
     if case_id in {"temporary-cannot-claim-persistent-state", "shared-transport-principal-not-persistent-identity"}:
         return "REJECT_IDENTITY_ESCALATION" if case.get("claims_persistent_identity") else "OK"
     if case_id == "packet-storage-not-policy":
@@ -62,7 +119,15 @@ def recovery(case):
         return "READ_ONLY_RECONCILE" if case.get("created", False) else "BLOCK_AUTHORITY_STALE"
     if not case.get("inventory_complete", True):
         return "BLOCK_INVENTORY_UNKNOWN"
+    if not case.get("schema_compatible", False):
+        return "BLOCK_SCHEMA_INCOMPATIBLE"
+    if "packet" not in case:
+        return "BLOCK_PACKET_IDENTITY_UNKNOWN"
+    semantic_packet_identity(case["packet"])
     if case.get("created", False):
+        matching = case.get("matching_packet")
+        if matching is None or not packets_match(case["packet"], matching):
+            return "BLOCK_LOCATOR_CONFLICT"
         return "ADOPT_EXISTING" if case.get("matching_complete", False) else "RECONCILE_INCOMPLETE"
     return "RECONCILE_THEN_CREATE_IF_ABSENT"
 
