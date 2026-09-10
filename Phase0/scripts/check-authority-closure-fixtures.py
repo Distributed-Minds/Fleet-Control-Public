@@ -20,6 +20,8 @@ REQUIRED_CASES = {
     "multi-root-any-declared-survives",
     "cycle-without-external-root",
     "cycle-with-independent-root",
+    "cycle-all-required-missing-root",
+    "cycle-any-declared-surviving-root",
     "incomplete-pagination-not-complete",
     "lineage-version-disagreement-fails-closed",
     "runtime-minted-authority-is-descendant",
@@ -74,8 +76,22 @@ def main() -> None:
         "fleet_authority_revoked": True,
         "external_invalidation_complete": True,
     }) == {"expected": "DENY"}
+    assert evaluate_authority_closure({
+        "cycle": True,
+        "external_root": True,
+        "composition": "ALL_REQUIRED",
+        "surviving_roots": 2,
+        "required_roots": 2,
+    }) == {"expected": "BOUNDED_AUTHORITY"}
+    assert evaluate_authority_closure({
+        "cycle": True,
+        "external_root": True,
+        "composition": "ANY_OF_DECLARED",
+        "surviving_roots": 0,
+        "required_roots": 2,
+    }) == {"expected": "NO_AUTHORITY"}
 
-    print(f"authority closure executable fixtures: {len(cases)} cases + 4 negative controls passed")
+    print(f"authority closure executable fixtures: {len(cases)} cases + 6 negative controls passed")
 
 
 if __name__ == "__main__":

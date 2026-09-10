@@ -15,6 +15,19 @@ class UnsupportedAuthorityClosureCase(ValueError):
     """Raised when a synthetic case does not describe a supported semantic path."""
 
 
+def _evaluate_composition(case: dict[str, Any]) -> dict[str, Any] | None:
+    """Evaluate a declared multi-root composition rule when one is present."""
+    composition = case.get("composition")
+    if composition == "ALL_REQUIRED":
+        surviving = case.get("surviving_roots", 0)
+        required = case.get("required_roots", 0)
+        return {"expected": "BOUNDED_AUTHORITY" if surviving >= required else "NO_AUTHORITY"}
+    if composition == "ANY_OF_DECLARED":
+        surviving = case.get("surviving_roots", 0)
+        return {"expected": "BOUNDED_AUTHORITY" if surviving > 0 else "NO_AUTHORITY"}
+    return None
+
+
 def evaluate_authority_closure(case: dict[str, Any]) -> dict[str, Any]:
     """Compute the spec-2 disposition for one synthetic authority state."""
 
@@ -52,18 +65,20 @@ def evaluate_authority_closure(case: dict[str, Any]) -> dict[str, Any]:
             return {"expected": "PRESERVE_BOUNDED"}
         return {"expected": "REJECT"}
 
-    # Cycles cannot manufacture authority; multi-root policy is explicit.
+    # Cycles cannot manufacture authority. A surviving external root is only the
+    # seed for the SCC; any declared multi-root composition still constrains the
+    # effective capability of that cyclic component.
     if case.get("cycle"):
-        return {"expected": "ROOT_BOUNDED_ONLY" if case.get("external_root") else "NO_AUTHORITY"}
+        if not case.get("external_root"):
+            return {"expected": "NO_AUTHORITY"}
+        composed = _evaluate_composition(case)
+        if composed is not None:
+            return composed
+        return {"expected": "ROOT_BOUNDED_ONLY"}
 
-    composition = case.get("composition")
-    if composition == "ALL_REQUIRED":
-        surviving = case.get("surviving_roots", 0)
-        required = case.get("required_roots", 0)
-        return {"expected": "BOUNDED_AUTHORITY" if surviving >= required else "NO_AUTHORITY"}
-    if composition == "ANY_OF_DECLARED":
-        surviving = case.get("surviving_roots", 0)
-        return {"expected": "BOUNDED_AUTHORITY" if surviving > 0 else "NO_AUTHORITY"}
+    composed = _evaluate_composition(case)
+    if composed is not None:
+        return composed
 
     # Runtime/deferred authority remains derivative even after the initiator stops.
     if case.get("runtime_minted") and case.get("initiator_stopped"):
