@@ -14,6 +14,8 @@
     {"name":"multi-root-any-declared-survives","composition":"ANY_OF_DECLARED","surviving_roots":1,"required_roots":2,"expected":"BOUNDED_AUTHORITY"},
     {"name":"cycle-without-external-root","cycle":true,"external_root":false,"expected":"NO_AUTHORITY"},
     {"name":"cycle-with-independent-root","cycle":true,"external_root":true,"expected":"ROOT_BOUNDED_ONLY"},
+    {"name":"cycle-all-required-missing-root","cycle":true,"external_root":true,"composition":"ALL_REQUIRED","surviving_roots":1,"required_roots":2,"expected":"NO_AUTHORITY"},
+    {"name":"cycle-any-declared-surviving-root","cycle":true,"external_root":true,"composition":"ANY_OF_DECLARED","surviving_roots":1,"required_roots":2,"expected":"BOUNDED_AUTHORITY"},
     {"name":"incomplete-pagination-not-complete","inventory_complete":false,"expected_closure":"UNKNOWN"},
     {"name":"lineage-version-disagreement-fails-closed","lineage_protocol_compatible":false,"mutation_requested":true,"expected":"FAIL_CLOSED_UNTIL_COMPATIBLE"},
     {"name":"runtime-minted-authority-is-descendant","runtime_minted":true,"initiator_stopped":true,"expected":"TRACK_DERIVATIVE"},
