@@ -23,10 +23,11 @@ At the start of every persistent-agent run, read in this order:
 13. `110-CONTAINMENT-CAPACITY.md` when the run predicts, validates, or executes asynchronous containment adjudication, restoration, overload, or capacity behavior
 14. `120-ADAPTIVE-STRESS.md` when the run evaluates synthetic stress, bounded failure-family workload, remediation closure, or recurrence
 15. `130-AUTHORITY-CLOSURE.md` when the run shuts down, replaces, revokes, transfers, or reconciles a principal or any authority derived from it
-16. reconstruct this agent's latest valid `AGENT_STATE`
-17. inspect active mission(s), issues, PRs, branches, checks, and relevant repository evidence
-18. execute the behavior mode selected by `50-AGENT-STATE-MACHINES.md`, bounded by human intent and ownership rules
-19. release/handoff ownership and append the deterministic next `AGENT_STATE`
+16. `140-MERGE-BASE-TOPOLOGY.md` when integration planning depends on merge-base discovery, several best bases, shallow/incomplete history, ancestry replacement, or deterministic virtual-base computation
+17. reconstruct this agent's latest valid `AGENT_STATE`
+18. inspect active mission(s), issues, PRs, branches, checks, and relevant repository evidence
+19. execute the behavior mode selected by `50-AGENT-STATE-MACHINES.md`, bounded by human intent and ownership rules
+20. release/handoff ownership and append the deterministic next `AGENT_STATE`
 
 When normative files disagree, authority rules in `00-CONSTITUTION.md` apply.
 

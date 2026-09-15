@@ -21,6 +21,12 @@ def dependency_ok(case):
 def decide(case):
     if not case.get("subject_current", True):
         return {"disposition": "IDENTITY_STALE", "level": None}
+    if not case.get("evidence_current", True):
+        return {"disposition": "EVIDENCE_STALE", "level": None}
+    if not case.get("detector_compatible", True):
+        return {"disposition": "DETECTOR_INCOMPATIBLE", "level": None}
+    if not case.get("attribution_confident", True):
+        return {"disposition": "ATTRIBUTION_AMBIGUOUS", "level": "OBSERVE"}
     dep = case.get("dependency_state", "CURRENT")
     if dep == "STALE":
         return {"disposition": "DEPENDENCY_STALE", "level": None}

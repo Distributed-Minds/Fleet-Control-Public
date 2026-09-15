@@ -1,0 +1,24 @@
+{
+  "schema": "fleet-control/coordination-history-spec5-fixtures/v1",
+  "issue": 22,
+  "cases": [
+    {"id":"positive-all-current","expect":"ELIGIBLE","facts":{"archive_exact":true,"order_current":true,"manifest_current":true,"snapshot_coherent":true,"source_current":true,"authority_current":true,"horizon_current":true,"durability_current":true,"protected":false}},
+    {"id":"opaque-id-not-order","expect":"INELIGIBLE","facts":{"archive_exact":true,"order_current":false,"order_evidence":"opaque_uuid"}},
+    {"id":"manifest-competing-successors","expect":"INELIGIBLE","facts":{"manifest_current":false,"manifest_state":"fork:M2a|M2b"}},
+    {"id":"manifest-rollback","expect":"INELIGIBLE","facts":{"manifest_current":false,"manifest_state":"M2_to_restored_M1"}},
+    {"id":"mixed-cut-omission","expect":"INELIGIBLE","facts":{"snapshot_coherent":false,"snapshot_state":"old_manifest_plus_post_delete_live"}},
+    {"id":"mixed-cut-overlap-dedup","expect":"ELIGIBLE","facts":{"snapshot_coherent":true,"stable_record_identity":true,"archive_live_overlap":true}},
+    {"id":"source-version-moved","expect":"INELIGIBLE","facts":{"archive_exact":true,"source_current":false,"source_state":"archived_R_v1_live_R_v2"}},
+    {"id":"authority-revoked","expect":"INELIGIBLE","facts":{"archive_exact":true,"authority_current":false}},
+    {"id":"retention-expires-before-horizon","expect":"INELIGIBLE","facts":{"horizon_current":true,"durability_current":false,"durability_state":"retention_shorter_than_horizon"}},
+    {"id":"key-custody-lost","expect":"INELIGIBLE","facts":{"horizon_current":true,"durability_current":false,"durability_state":"key_unavailable"}},
+    {"id":"caller-self-weakens-horizon","expect":"INELIGIBLE","facts":{"horizon_current":false,"horizon_state":"caller_selected_shorter_objective"}},
+    {"id":"authorized-future-only-downgrade","expect":"INELIGIBLE","facts":{"horizon_current":true,"horizon_state":"shorter_successor","predecessor_record_retired":false}},
+    {"id":"authorized-bounded-retirement","expect":"ELIGIBLE","facts":{"archive_exact":true,"order_current":true,"manifest_current":true,"snapshot_coherent":true,"source_current":true,"authority_current":true,"horizon_current":true,"durability_current":true,"predecessor_record_retired":true,"protected":false}},
+    {"id":"horizon-rollback-after-downgrade","expect":"INELIGIBLE","facts":{"horizon_current":false,"horizon_state":"rollback_or_stale_rejoin"}},
+    {"id":"lost-ack-manifest-reconcile","expect":"RECONCILE","facts":{"manifest_transition_outcome":"unknown","retry":"must_reconcile_exact_successor"}},
+    {"id":"partial-delete-retry","expect":"RECONCILE","facts":{"partial_effect":true,"retry":"reobserve_exact_source_and_bases"}},
+    {"id":"protected-active-owner","expect":"INELIGIBLE","facts":{"protected":true,"protected_reason":"active_ownership_chain"}},
+    {"id":"incomplete-pagination","expect":"INELIGIBLE","facts":{"order_current":false,"order_evidence":"incomplete_frontier"}}
+  ]
+}
