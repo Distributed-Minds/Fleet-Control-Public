@@ -205,30 +205,40 @@ No “newer wins,” textual similarity, or model-based reconciliation occurs in
 
 # 3. Canonical hashing test vector
 
+The published fixture is itself valid against the candidate semantic-definition schema.
+
 Normative object:
 
 ~~~json
 {
   "semantic_id": "https://example.org/sem/profile/example/1",
-  "kind": "profile",
+  "definition_kind": "profile",
+  "requires": [],
+  "optional_requires": [],
+  "conflicts": [],
   "exports": [
-    "https://example.org/sem/profile/example/1#intent/a",
-    "https://example.org/sem/profile/example/1#state/b"
-  ],
-  "requires": []
+    {
+      "id": "https://example.org/sem/profile/example/1#intent/a",
+      "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "id": "https://example.org/sem/profile/example/1#state/b",
+      "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  ]
 }
 ~~~
 
 Required JCS byte sequence:
 
 ~~~text
-{"exports":["https://example.org/sem/profile/example/1#intent/a","https://example.org/sem/profile/example/1#state/b"],"kind":"profile","requires":[],"semantic_id":"https://example.org/sem/profile/example/1"}
+{"conflicts":[],"definition_kind":"profile","exports":[{"definition_hash":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","id":"https://example.org/sem/profile/example/1#intent/a"},{"definition_hash":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","id":"https://example.org/sem/profile/example/1#state/b"}],"optional_requires":[],"requires":[],"semantic_id":"https://example.org/sem/profile/example/1"}
 ~~~
 
 SHA-256:
 
 ~~~text
-sha256:f03c2be7809a1890c0ed986644c81a000b4549328f9c4934313858d304dd16b8
+sha256:2ba8cba596be0c3cc843d9f35441a93513df8179952d15e1539332c50fac6989
 ~~~
 
 Changing:
