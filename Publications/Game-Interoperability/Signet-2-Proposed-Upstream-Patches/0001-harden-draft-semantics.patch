@@ -1,0 +1,258 @@
+From: Distributed Minds / Fleet-Control research
+Subject: [PATCH 1/3] Harden Signet 2 draft semantics before implementation
+Base: kian-cx/signetprotocol@2ddb136ee941705d3e1c020eaddad93be65026f2
+
+This documentation-only proposal applies the lowest-risk changes supported by
+current cross-lane research: negotiated capabilities, resolver abstention,
+pin freshness, scoped server-authority wording, explicit training contribution,
+and a contract-first roadmap.
+
+It intentionally does not yet introduce the full proposed semantic/profile
+schema or package trust model; those are staged separately for review.
+
+diff --git a/docs/content/proposals/translation-profiles.mdx b/docs/content/proposals/translation-profiles.mdx
+--- a/docs/content/proposals/translation-profiles.mdx
++++ b/docs/content/proposals/translation-profiles.mdx
+@@ -50,15 +50,19 @@
+ - which intents it can **emit** (a game without jumping never emits `jump`),
+ - which archetypes it can **show**, and with what palette.
+ 
++A capability declaration is an offer, not the session contract. The server derives a **negotiated session contract** from every participant's capabilities plus the session requirements.
++
++The contract records which capabilities are required, optional, activated, rejected or available only through an explicitly approved fallback. Missing required semantics make the participant incompatible unless the active ruleset authorizes a typed fallback. Optional semantics are activated deterministically according to session policy.
++
++This lets an older or simpler game participate without making "ignore or approximate" an implicit rule for simulation-affecting behavior.
+-The server uses the common subset. If a game cannot express an intent, the server ignores it or approximates it, and says so, instead of failing. This is how an older or simpler game can play next to a newer one without losing the match.
+ 
+ ## The translation API
+ 
++One API, two directions. Both take a closed list of candidates and return them **ranked**, or explicitly report that none is suitable:
+-One API, two directions. Both take a closed list of candidates and return them **ranked**:
+ 
+ ```text
++to_intent(context, intent_vocabulary)   -> ranked intents | NO_MATCH
++to_appearance(archetype, palette)       -> ranked appearances | NO_MATCH
+-to_intent(context, intent_vocabulary)   -> ranked intents
+-to_appearance(archetype, palette)       -> ranked appearances
+ ```
+ 
+ A resolver can be a plain lookup table, a person, or a model. They are interchangeable behind the same API.
+@@ -85,7 +89,9 @@
+ 
+ ## Translation profiles: decisions that stay decided
+ 
++Every decision is saved in a **translation profile**, next to the translator's `signet.json`. It works like a lock file: within one exact profile revision, a pinned choice is deterministic.
++
++Pinning does **not** prove that a choice remains compatible forever. If the game version, integration surface, semantic definition, candidate set or another declared dependency changes, the pinned choice can remain deterministic while its compatibility status becomes stale and requires revalidation.
+-Every decision is saved in a **translation profile**, next to the translator's `signet.json`. It works like a lock file: once a choice is pinned, the result is always the same.
+ 
+ ```json
+ {
+@@ -98,7 +104,7 @@
+ }
+ ```
+ 
++**Resolution order for participant-owned choices:** a pin from the player, then the translator's own profile, then the resolver's suggestion, then a safe default. Simulation-affecting semantic mappings and session policy can have different authorities; a player pin is not a universal override of server-authoritative meaning.
+-**Resolution order:** a pin from the player, then the translator's own profile, then the resolver's suggestion, then a safe default.
+ 
+ **When something is not registered**, the policy is configurable: *strict* (ignore it), *suggest* (use the best candidate, marked provisional, and queue it for review) or *ask* (decide in the development tool).
+ 
+@@ -120,7 +126,9 @@
+ 
+ ## Learning from decisions
+ 
++Every approved choice is **eligible** to become a training example: *state, candidates, chosen*. Local approval does not automatically publish that decision into a shared dataset. Dataset contribution is a separate explicit action under the dataset's contribution terms.
++
++With enough contributed examples a ranker can be fine-tuned for games. Rules for the dataset:
+-Every approved choice is a training example: *state, candidates, chosen*. With enough of them a ranker can be fine-tuned for games. Rules for the dataset:
+ 
+ - Only names and identifiers, never game files, textures, sounds or models.
+ - Contributed under an open license.
+@@ -130,8 +138,9 @@
+ 
+ 1. Write about 30 cases (for example `weapon.ranged` against the palettes of Minecraft, Doom and OpenArena, and 10 intent mappings).
+ 2. Compare three resolvers: hand-written rules, a plain text-embedding similarity and a contrastive ranker.
++3. Measure top-1 accuracy, explicit `NO_MATCH` correctness, candidate-order stability and how often a person overrides the suggestion.
++4. Include cases where no candidate is correct, and perturb candidate ordering so a first-item bias cannot look accurate by accident.
++5. Decide whether a model belongs in the architecture at all.
+-3. Measure top-1 accuracy and how often a person overrides the suggestion.
+-4. Decide whether a model belongs in the architecture at all.
+ 
+ ## Compatibility
+ 
+diff --git a/docs/content/forge/architecture.mdx b/docs/content/forge/architecture.mdx
+--- a/docs/content/forge/architecture.mdx
++++ b/docs/content/forge/architecture.mdx
+@@ -18,7 +18,7 @@
+ Only meaning travels over the network, never game files.
+ 
+ 1. **The player** presses a key in their game. The **input translator** turns it into an intent ("move forward", "fire").
++2. **The server** receives everyone's intents, applies the rules and the physics, and decides what happens: positions, hits, damage, deaths. It is authoritative over shared simulation state, so clients cannot directly dictate authoritative positions, hits, damage or deaths. This removes important classes of client-side state forgery, but server authority by itself does not prevent every form of cheating.
+-2. **The server** receives everyone's intents, applies the rules and the physics, and decides what happens: positions, hits, damage, deaths. It is the only authority, so nobody can cheat by modifying their client.
+ 3. The server sends back the **state** and the **archetypes** ("there is a ranged weapon here"). It does not say what it looks like.
+ 4. Each game's **output translator** chooses how to show it with what that game has.
+ 
+@@ -31,7 +31,7 @@
+ | **Archetype** | Something that *exists* in the world, described by its function, with no shape or graphics | `weapon.ranged`, `weapon.melee`, `health_pickup`, `armor` |
+ | **Archetype catalog** | The shared list of archetypes. Also published by the SDK | ~15 archetypes in version 0 |
+ | **Appearance palette** | The items *one* game has that can stand for an archetype. Each game's "bag of items" | Minecraft: bow, crossbow, fishing rod |
++| **Capabilities** | What a game offers when it connects. The server combines these offers with session requirements to derive a negotiated contract | "I cannot jump", "I can show weapons and health pickups" |
+-| **Capabilities** | What a game declares when it connects: which intents it can send and which archetypes it can show | "I cannot jump", "I can show weapons and health pickups" |
+ | **Resolver** | The piece that picks the best option from a closed list. It can be a table, a person or an AI model | "weapon.ranged in Minecraft → bow" |
+ | **Translation profile** | The file where decisions are saved. Once pinned, a decision does not change | `signet.lock.json` |
+ 
+@@ -46,11 +46,11 @@
+ 
+ ## The translation API
+ 
++One API, two directions. Both take a closed list of candidates and return them **ranked**, or explicitly report that no candidate is suitable:
+-One API, two directions. Both take a closed list of candidates and return them **ranked**:
+ 
+ ```text
++to_intent(context, intent_vocabulary)   -> ranked intents | NO_MATCH
++to_appearance(archetype, palette)       -> ranked appearances | NO_MATCH
+-to_intent(context, intent_vocabulary)   -> ranked intents
+-to_appearance(archetype, palette)       -> ranked appearances
+ ```
+ 
+ A resolver can be a plain lookup table, a person, or a model. They are interchangeable behind the same API.
+diff --git a/docs/content/forge/workflow.mdx b/docs/content/forge/workflow.mdx
+--- a/docs/content/forge/workflow.mdx
++++ b/docs/content/forge/workflow.mdx
+@@ -9,7 +9,9 @@
+ 
+ <Callout type="warning">Draft proposal, part of Signet 2.</Callout>
+ 
++Every decision is saved in a file next to the translator's `signet.json`, similar to the lock files that package managers use. Within one exact profile revision, a pinned decision is **deterministic**: it always gives the same result.
++
++Deterministic does not mean permanently compatible. If a declared dependency such as the game version, integration surface, semantic definition or candidate set changes, a pinned entry can require revalidation before it is treated as current.
+-Every decision is saved in a file next to the translator's `signet.json`, similar to the lock files that package managers use. Once pinned, the decision is **deterministic**: it always gives the same result.
+ 
+ ```json
+ {
+diff --git a/docs/content/forge/understanding-a-game.mdx b/docs/content/forge/understanding-a-game.mdx
+--- a/docs/content/forge/understanding-a-game.mdx
++++ b/docs/content/forge/understanding-a-game.mdx
+@@ -17,7 +17,7 @@
+ | What can **exist** in the world? | Archetypes the game can show | `weapon.ranged`, `weapon.melee`, `health_pickup` |
+ | What does the game **have** to show them? | The appearance palette | bow, crossbow, fishing rod, golden apple |
+ 
++Together they become the game's **capabilities**, which the translator declares when it connects. They are capability offers: the server combines them with the session requirements to derive a deterministic negotiated contract.
+-Together they become the game's **capabilities**, which the translator declares when it connects. The server then uses only what every game in the match can handle.
+ 
+ ## Setting up controls in advance (calibration)
+ 
+@@ -75,5 +75,7 @@
+ 
+ ## Recording what the game cannot do
+ 
++Forge also records **gaps**: intents the game cannot emit (an old game without jumping) or archetypes it cannot show. Negotiation uses those gaps to decide whether a participant is compatible, whether an optional semantic should be disabled, or whether the active ruleset explicitly permits a typed fallback.
++
++If Forge cannot legitimately observe a calibration value, `unknown`, `unsupported` or `observe-only` is preferable to inventing precision.
+-Forge also records **gaps**: intents the game cannot emit (an old game without jumping) or archetypes it cannot show. Thanks to capabilities, the server uses this to approximate or ignore those actions instead of breaking the match.
+ 
+diff --git a/docs/content/forge/how-the-model-decides.mdx b/docs/content/forge/how-the-model-decides.mdx
+--- a/docs/content/forge/how-the-model-decides.mdx
++++ b/docs/content/forge/how-the-model-decides.mdx
+@@ -21,6 +21,7 @@
+ Advantages of this approach:
+ 
+ - **It cannot go outside the list.** Since it only scores candidates, it never proposes something the game does not have or an intent that does not exist.
++- **It can abstain.** A closed list does not guarantee that the correct answer is present. The resolver can return `NO_MATCH` instead of forcing a wrong top-ranked candidate.
+ - **It is explainable.** You see the scores of every option, not just the winner.
+ - **It is replaceable.** The resolver is an interface: a model today, a better one tomorrow, or a hand-written table.
+ 
+@@ -38,7 +39,7 @@
+ 
+ The fast path is used almost always. The model only steps in the first time something new appears.
+ 
++Priority when there are several sources for a participant-owned choice:
+-Priority when there are several sources:
+ 
+ 1. What the **player** pinned.
+ 2. The translator's **profile**.
+@@ -45,6 +46,8 @@
+ 3. The **model's** suggestion.
+ 4. A safe **default**.
+ 
++A model suggestion is advisory, not protocol authority. Simulation-affecting semantic mappings and session policy may have different authority rules and must not be silently overridden by a local suggestion.
++
+ <Callout type="info">
+ **The model is never in the game loop.** The server simulates 20 times per second and a model of this size needs a GPU. So the model works before playing or when something new appears, and its answer is saved. During the match only the profile is consulted, which is instant.
+ </Callout>
+diff --git a/docs/content/forge/reliability-and-limits.mdx b/docs/content/forge/reliability-and-limits.mdx
+--- a/docs/content/forge/reliability-and-limits.mdx
++++ b/docs/content/forge/reliability-and-limits.mdx
+@@ -14,13 +14,14 @@
+ - **The server does not change for each new game.** It only understands intents and archetypes.
+ - **Nothing is random during the match.** Every decision comes from a pinned profile.
+ - **AI stays outside the protocol.** If a model fails or changes, the match is not affected.
++- **Limited games degrade explicitly.** Capability offers feed a negotiated session contract, so unsupported required semantics can fail admission while optional semantics or explicitly approved fallbacks degrade predictably.
+-- **Limited games do not break the match.** Thanks to capabilities, the server knows what each one can do.
+ - **Building a translator is easier.** Calibration solves the obvious, the model suggests the hard parts and Forge keeps the work.
+ 
+ ## Limits and rules
+ 
+ - **Legal.** Calibration only reads the player's own devices and what the game officially allows: open-source engines, permitted mods or your own server. No code is injected into online games and no anti-cheat systems are bypassed. A closed game with no legitimate way to read or drive it is out of scope.
++- **Physics.** Intents do not remove the need for a common physics on the server. The motion profile helps normalize and preserve the feel of each game, but it does not redefine authoritative server physics.
++- **Server authority is not complete anti-cheat.** Authoritative shared state prevents clients from directly dictating positions, hits, damage or deaths. Other forms of cheating still need their own threat model and mitigations.
+-- **Physics.** Intents do not remove the need for a common physics on the server. The motion profile helps each game feel faithful, but the server remains the authority.
+ - **Model not validated.** We have not tested any model for this yet. The figures for the model mentioned are its authors', on other tasks.
+ 
+ ## Compatibility with the current version
+diff --git a/docs/content/forge/fine-tuning.mdx b/docs/content/forge/fine-tuning.mdx
+--- a/docs/content/forge/fine-tuning.mdx
++++ b/docs/content/forge/fine-tuning.mdx
+@@ -22,7 +22,9 @@
+ 
+ The fine-tuned model suggests better next time.
+ 
++Every approved decision is **eligible** to become an example: *situation, options, chosen*. Local approval does not automatically publish that decision into a community training dataset. Contribution is a separate explicit action under the dataset's contribution terms.
++
++With enough contributed examples the model can be fine-tuned for video games. With a model like CLM, which separates a large frozen encoder from two small "heads", only those heads would need training, which should be cheap. This has not been tested yet.
+-Every approved decision is an example: *situation, options, chosen*. With enough examples the model can be fine-tuned for video games. With a model like CLM, which separates a large frozen encoder from two small "heads", only those heads would need training, which should be cheap. This has not been tested yet.
+ 
+ ## Data rules
+ 
+@@ -32,5 +34,16 @@
+ 
+ ## Validate before relying on it
+ 
++Before a model becomes part of Forge, we will run a small experiment: about 30 cases, comparing hand-written rules, plain text similarity and a contrastive ranker.
++
++We will measure:
++
++- top-1 accuracy;
++- explicit `NO_MATCH` correctness;
++- stability when candidate ordering is perturbed;
++- how often a person overrides the suggestion.
++
++The cases will include examples where none of the supplied candidates is correct. This prevents a resolver that simply prefers an early list item from looking accurate because of fixture ordering.
++
++The result decides whether a model adds value.
+-Before a model becomes part of Forge, we will run a small experiment: about 30 cases, comparing hand-written rules, plain text similarity and a contrastive ranker. We will measure top-1 accuracy and how often a person overrides the suggestion. The result decides whether a model adds value.
+ 
+diff --git a/docs/content/forge/roadmap.mdx b/docs/content/forge/roadmap.mdx
+--- a/docs/content/forge/roadmap.mdx
++++ b/docs/content/forge/roadmap.mdx
+@@ -13,12 +13,14 @@
+ 
+ | # | Step | Outcome |
+ |---|---|---|
++| 1 | Publish a tiny versioned semantic core and the first modular profile, with normative definitions and conformance assertions | Independent implementations can refer to the same meaning |
++| 2 | Add capability offers to the protocol greeting and define deterministic session negotiation, including required/optional semantics and typed fallback | Compatible participants derive the same session contract |
++| 3 | Define deterministic profile composition, participant-owned overlays, dependency identity and compatibility freshness | Pinned behavior is reproducible without pretending stale mappings are current |
++| 4 | Define the calibration wizard and how measured, declared, inferred and unavailable values are represented | Tiers 0 and 1 work without AI and without invented precision |
++| 5 | Prototype without AI across two materially different integration modes | End-to-end semantic and authority boundaries are exercised |
++| 6 | Run conformance, pairwise interoperability and dependency-drift tests | The contract is tested before model suggestions are added |
++| 7 | Run the 30-case resolver experiment with `NO_MATCH` cases and candidate-order perturbation | Decide whether a model adds value without first-item bias |
++| 8 | First version of Signet Forge (review, pin, explicit dataset contribution, export data) | A tool for the community built around tested contracts |
+-| 1 | Publish version 0 of the vocabulary (~15 intents) and of the catalog (~15 archetypes) | A stable list to discuss |
+-| 2 | Add capabilities to the protocol greeting, as an optional field | Compatible with Signet/1 |
+-| 3 | Define the translation profile format and the calibration wizard | Tiers 0 and 1 without AI |
+-| 4 | Prototype without AI: `weapon.ranged` → bow in the Minecraft translator | End-to-end demonstration |
+-| 5 | 30-case experiment: hand-written rules vs text similarity vs contrastive model | Decide whether the model adds value |
+-| 6 | First version of Signet Forge (review, pin, export data) | A tool for the community |
+ 
+ ## Open questions
+ 
