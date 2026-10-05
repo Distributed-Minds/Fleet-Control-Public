@@ -659,3 +659,37 @@ Two independent clean runs produced identical output hashes. C and TypeScript sy
 **UNKNOWN:** whether this exact logical shim is sufficient or desirable for Signet 2. Real Godot/Unreal/Unity/gateway implementations remain required before recommending the interface itself.
 
 **DERIVED:** the paper's proposed split can now be stated more narrowly: mechanical generation is justified for contract shape; local engine/game behavior still requires explicit implementation and behavioral evidence.
+
+# Real-target correction: v0 logical shim falsified
+
+Two concrete target experiments now exist.
+
+## Godot 4.7.2 GDExtension
+
+- real 4.7.2 ABI definitions sourced from `gdextension_interface.json`;
+- shared library compiled;
+- exported GDExtension init exercised through a host harness;
+- `get_godot_version2` discovery and generated shim surface passed.
+
+Evidence class: `ABI_HOST_HARNESS_PASS`, not a live Godot-runtime claim.
+
+## Signet documented Minecraft gateway
+
+- Source-RCON-compatible framing passed against an in-process server;
+- five representative documented command classes round-tripped;
+- v0 generated shim coverage: `NO=5, PARTIAL=2`.
+
+**OBSERVED:** the first generated function set is not a sufficient generic translator contract.
+
+**CORRECTION:** L2 now models adapter operations by translator role (`HOST/IMPORTER/WORLD/INPUT/PRESENTATION/AUTHORITY`) and keeps semantic contract references external.
+
+v1 descriptor validation:
+
+```text
+minecraft-responsibility-coverage: 7/7
+minecraft-role-contract: PASS
+godot-generic-gameplay-claims: 0
+godot-engine-vs-game-boundary: PASS
+```
+
+**DERIVED:** the stable code-generation input should describe a target's legitimate operation surface, rather than assuming all integrations share one fixed calibration-oriented API.
