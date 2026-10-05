@@ -228,3 +228,29 @@ Next implementation-grade falsification:
 - different profiles + ordering models;
 - no dummy domain fields;
 - exact cross-implementation conformance outcomes.
+
+
+---
+
+## Continuation pass 4 — machine-readable contract — 2026-10-05
+
+New durable outputs:
+
+- [Machine-Readable Semantic Core Candidate](L1/06-Machine-Readable-Core-Candidate.md)
+- [Candidate JSON Schema](L1/schema/signet-semantic-core-0.schema.json)
+- [Turn-based capability example](L1/schema/examples/turn-based-capabilities.json)
+- [Hidden-information card session requirements](L1/schema/examples/card-session-requirements.json)
+- [Hidden-information negotiated contract](L1/schema/examples/card-negotiated-contract.json)
+
+The candidate uses JSON Schema Draft 2020-12 for structural validation.
+
+Critical boundary:
+
+> schema-valid != semantically conformant.
+
+The schema makes semantic identities, ordering models, authority/visibility references, requirements, fallbacks and negotiated outcomes explicit. Independent conformance/replay tests are still required to prove shared meaning.
+
+Next L1 targets:
+
+1. canonical definition serialization/hashing;
+2. profile dependency/composition conflict semantics.
