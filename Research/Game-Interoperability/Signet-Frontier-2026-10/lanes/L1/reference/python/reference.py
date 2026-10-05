@@ -172,6 +172,14 @@ def run_vectors(vector_dir: Path) -> None:
     if sha256_jcs(actual) != cv["expected_profile_set_hash"]:
         failures.append("COMP-VECTOR-001 digest mismatch")
 
+    contract_vector = json.loads((vector_dir / "contract-vector-001.json").read_text())
+    contract_jcs = canonicalize(contract_vector["contract"])
+    contract_hash = sha256_jcs(contract_vector["contract"])
+    if contract_jcs != contract_vector["expected_jcs"]:
+        failures.append("CONTRACT-VECTOR-001 JCS mismatch")
+    if contract_hash != contract_vector["expected_contract_hash"]:
+        failures.append("CONTRACT-VECTOR-001 digest mismatch")
+
     negatives = json.loads((vector_dir / "composition-negative-vectors.json").read_text())
     for vector in negatives:
         try:
@@ -188,6 +196,7 @@ def run_vectors(vector_dir: Path) -> None:
         raise SystemExit(1)
     print("PASS: HASH-VECTOR-001")
     print("PASS: COMP-VECTOR-001")
+    print("PASS: CONTRACT-VECTOR-001")
     print(f"PASS: {len(negatives)} negative composition vectors")
 
 if __name__ == "__main__":
