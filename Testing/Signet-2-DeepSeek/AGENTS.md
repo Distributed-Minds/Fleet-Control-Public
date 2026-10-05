@@ -1,26 +1,72 @@
-# Signet 2 DeepSeek/OpenCode validation harness
+# Signet 2 DeepSeek/OpenCode autonomous fork-delivery harness
 
-You are an independent pre-contact reviewer of the Signet 2 response work in this repository.
+The independent validation phase is complete.
+
+Historical validation result:
+
+`READY_AFTER_MINOR_FIXES`
+
+The active mission is now to repair the known reproducibility defects and produce the public maintainer-facing Signet fork.
+
+## Start here
+
+Read, in order:
+
+1. `Testing/Signet-2-DeepSeek/VALIDATION-SUMMARY.md`
+2. `Testing/Signet-2-DeepSeek/FORK-HANDOFF.md`
+3. `Publications/Game-Interoperability/SIGNET-2-FORK-DELIVERY-PLAN.md`
+
+The older `PLAN.md` is retained as completed validation history. Do **not** rerun the entire original validation plan unless a targeted regression points to a new systemic problem.
 
 ## Mission
 
-Determine whether the material on branch `research/signet-2-response-synthesis-2026-10-05` is ready to send to the maintainer of `kian-cx/signetprotocol`.
+Produce:
 
-Your job is to **falsify, reproduce, simplify, and audit** the response. Do not optimize for agreement.
+- corrected L1 evidence on a dedicated correction branch;
+- corrected L2 evidence on a dedicated correction branch;
+- public `geromet/signetprotocol` fork;
+- public branch `review/signet2-interoperability`;
+- direct Signet source/doc edits on that branch;
+- successful upstream-style documentation build/checks;
+- final adversarial audit with no remaining HIGH stop-ship finding;
+- concise Discord message draft containing the branch URL.
 
-Read `PLAN.md` in this directory and execute it.
+The human does not need to approve intermediate engineering decisions.
 
-## Hard boundaries
+## Hard contact boundary
 
-- Do not push to any remote.
-- Do not open or modify upstream issues, PRs, Discussions, releases, branches, or files.
-- Do not contact the Signet maintainer.
-- Do not mutate this repository's remote branches.
-- Local clones, worktrees, temporary branches, patch application, builds, tests, and throwaway files are allowed.
-- Treat Signet 2 / Forge as a draft proposal unless upstream evidence says otherwise.
-- Do not convert inability to reproduce into proof that a claim is false.
+You may create and push correction branches and the public fork review branch.
 
-For each test use exactly one status:
+You must **not**:
+
+- mutate `kian-cx/signetprotocol`;
+- open an upstream PR, issue, or Discussion;
+- contact the Signet maintainer;
+- merge into upstream.
+
+Stop with the branch ready and the Discord message drafted.
+
+## Parallel execution
+
+Prefer these independent project subagents:
+
+- `signet-l1-repair`
+- `signet-l2-repair`
+- `signet-fork-builder`
+
+Run the final:
+
+- `signet-final-audit`
+
+after the correction heads and fork branch exist.
+
+If custom subagents are unavailable, create equivalent built-in subagent tasks.
+
+Do not make every subagent reread the full research corpus.
+
+## Evidence rules
+
+For each executed test use:
 
 `PASS | FAIL | PARTIAL | BLOCKED | NOT_TESTED`
 
@@ -28,71 +74,56 @@ For substantive conclusions distinguish:
 
 `OBSERVED | DERIVED | PREDICTED | UNKNOWN`
 
-## Expected revisions
+Do not broaden narrow evidence labels.
 
-Primary synthesis branch:
+Examples:
 
-`research/signet-2-response-synthesis-2026-10-05`
+`ABI_HOST_HARNESS_PASS != GODOT_RUNTIME_PASS`
 
-Expected synthesis head when this harness was written:
+`PINNED_CHOICE != CORRECT_CHOICE`
+
+`VALID_SIGNATURE != CURRENT_AUTHORIZATION`
+
+## Historical revisions
+
+Original synthesis snapshot used for the completed validation:
 
 `0f8d88b984ea0467d604719cdeae3abd2a531c3c`
 
-Target upstream snapshot:
+Historical L1 head:
 
-`kian-cx/signetprotocol@2ddb136ee941705d3e1c020eaddad93be65026f2`
+`b8f47a332fcb0aa641cfe676e22b49a801731628`
 
-Supporting lane heads:
+Historical L2 head:
 
-```text
-L1 b8f47a332fcb0aa641cfe676e22b49a801731628
-L2 a5a677f7bf3e80d2face8f2185b27fcb8e394ab3
-L3 821d13fe33f293281c85dc9da3a32e2a3fb47148
-L4 22cdaf37b08d940a518c4a6a9dcea51553cd7256
-```
+`a5a677f7bf3e80d2face8f2185b27fcb8e394ab3`
 
-If heads have moved, record the difference before testing. Do not silently substitute new evidence.
+Historical L3 head:
 
-## Parallel execution
+`821d13fe33f293281c85dc9da3a32e2a3fb47148`
 
-Prefer parallel independent review.
+Historical L4 head:
 
-If these project subagents are available, launch them concurrently:
+`22cdaf37b08d940a518c4a6a9dcea51553cd7256`
 
-- `signet-upstream-audit`
-- `signet-semantics-audit`
-- `signet-adapter-audit`
-- `signet-trust-validation-audit`
+Historical upstream Signet snapshot:
 
-If custom subagents are unavailable, use OpenCode's built-in `general` / `explore` subagents with the same four lane assignments.
+`2ddb136ee941705d3e1c020eaddad93be65026f2`
 
-Do not make all subagents reread the entire corpus. Give each the narrow files/branches named in `PLAN.md`.
+Before doing fork work, inspect current upstream state and record any movement.
 
-The parent session owns:
-- environment/revision check;
-- patch-series mechanical application if not delegated;
-- docs build integration;
-- cross-lane contradiction review;
-- final severity triage;
-- final verdict.
+## Final report
 
-Subagents should return findings with file/section/command evidence, not essays.
+Write/update a concise completion record in Fleet-Control-Public containing:
 
-## Final deliverable
+- corrected L1 branch/head;
+- corrected L2 branch/head;
+- upstream base SHA;
+- public fork URL;
+- review branch URL/head;
+- build/test commands and results;
+- remaining limitations;
+- final audit verdict;
+- Discord message draft.
 
-Write the final report locally as:
-
-`Testing/Signet-2-DeepSeek/RESULTS.md`
-
-Use `REPORT-TEMPLATE.md`.
-
-The final verdict must be exactly one of:
-
-```text
-READY_TO_SEND
-READY_AFTER_MINOR_FIXES
-NEEDS_ANOTHER_RESEARCH_PASS
-DO_NOT_SEND_YET
-```
-
-Do not edit the response documents unless the human explicitly asks after reviewing RESULTS.md.
+Do not copy the internal validation harness into the Signet fork.
