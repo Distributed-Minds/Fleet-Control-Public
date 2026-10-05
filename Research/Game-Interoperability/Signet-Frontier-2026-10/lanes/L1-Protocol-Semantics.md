@@ -287,3 +287,14 @@ New L4 conformance families:
 - `COMP01`–`COMP11`.
 
 The highest-value next milestone is now implementation rather than further prose: two independent implementations of hashing + dependency closure + composition should produce identical canonical bytes, failures, and hashes.
+
+
+---
+
+## Publication-shaped synthesis
+
+The detailed technical response now has a shorter paper-form synthesis:
+
+- [Shared Meaning Needs Shared Contracts](../../../Publications/Game-Interoperability/SHARED-MEANING-NEEDS-SHARED-CONTRACTS-PAPER-DRAFT.md)
+
+It keeps the Signet 2 response constructive, states the methodology/falsification explicitly, and moves schema-level detail into the L1 appendices.
