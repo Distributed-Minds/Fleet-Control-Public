@@ -46,7 +46,8 @@ A future open ecosystem could use a Signet-like protocol underneath and a Melty-
 Public-facing drafts:
 
 - `Publications/Game-Interoperability/OPEN-GAME-INTEROPERABILITY-FRONTIER-DRAFT.md`
-- `Publications/Game-Interoperability/FROM-SHARED-MEANING-TO-SHARED-CONTRACTS-DRAFT.md` — direct L1 response to the Signet 2 intents/archetypes/translation-profiles proposal
+- `Publications/Game-Interoperability/FROM-SHARED-MEANING-TO-SHARED-CONTRACTS-DRAFT.md` — detailed technical response working draft
+- `Publications/Game-Interoperability/SHARED-MEANING-NEEDS-SHARED-CONTRACTS-PAPER-DRAFT.md` — publication-shaped response paper
 
 Compact community handoff:
 
