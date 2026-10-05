@@ -134,6 +134,22 @@ def compose(inp: dict) -> dict:
                 raise CompositionError("INVALID_EXTENSION_TARGET")
 
     ordering = inp.get("ordering_model")
+    if ordering is None and "ordering_preferences" in inp:
+        for candidate in inp["ordering_preferences"]:
+            wanted = _ref_key(candidate)
+            if all(
+                not definition.get("ordering_constraints", {}).get("accepted", [])
+                or wanted in {
+                    _ref_key(item)
+                    for item in definition.get("ordering_constraints", {}).get("accepted", [])
+                }
+                for definition in closure.values()
+            ):
+                ordering = candidate
+                break
+        if inp["ordering_preferences"] and ordering is None:
+            raise CompositionError("ORDERING_MODEL_CONFLICT")
+
     if ordering:
         wanted = _ref_key(ordering)
         for definition in closure.values():
@@ -142,6 +158,22 @@ def compose(inp: dict) -> dict:
                 raise CompositionError("ORDERING_MODEL_CONFLICT")
 
     visibility = inp.get("visibility_policy")
+    if visibility is None and "visibility_preferences" in inp:
+        for candidate in inp["visibility_preferences"]:
+            wanted = _ref_key(candidate)
+            if all(
+                not definition.get("visibility_constraints", {}).get("accepted", [])
+                or wanted in {
+                    _ref_key(item)
+                    for item in definition.get("visibility_constraints", {}).get("accepted", [])
+                }
+                for definition in closure.values()
+            ):
+                visibility = candidate
+                break
+        if inp["visibility_preferences"] and visibility is None:
+            raise CompositionError("VISIBILITY_POLICY_CONFLICT")
+
     if visibility:
         wanted = _ref_key(visibility)
         for definition in closure.values():
@@ -187,6 +219,13 @@ def run_vectors(vector_dir: Path) -> None:
         if sha256_jcs(actual) != vector["expected_profile_set_hash"]:
             failures.append(f'{vector["vector_id"]} digest mismatch')
 
+    negotiation_vector = json.loads((vector_dir / "negotiation-vector-001.json").read_text())
+    negotiation_result = compose(negotiation_vector["input"])
+    if negotiation_result != negotiation_vector["expected_composition"]:
+        failures.append("NEGOTIATION-VECTOR-001 composition mismatch")
+    if sha256_jcs(negotiation_result) != negotiation_vector["expected_profile_set_hash"]:
+        failures.append("NEGOTIATION-VECTOR-001 digest mismatch")
+
     contract_vector = json.loads((vector_dir / "contract-vector-001.json").read_text())
     contract_jcs = canonicalize(contract_vector["contract"])
     contract_hash = sha256_jcs(contract_vector["contract"])
@@ -211,6 +250,7 @@ def run_vectors(vector_dir: Path) -> None:
         raise SystemExit(1)
     print("PASS: HASH-VECTOR-001")
     print("PASS: COMP-VECTOR-001")
+    print("PASS: NEGOTIATION-VECTOR-001")
     print("PASS: CONTRACT-VECTOR-001")
     print(f"PASS: {len(additional)} additional composition vectors")
     print(f"PASS: {len(negatives)} negative composition vectors")
