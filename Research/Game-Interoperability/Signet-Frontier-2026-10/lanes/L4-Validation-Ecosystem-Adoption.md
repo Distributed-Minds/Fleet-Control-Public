@@ -636,3 +636,114 @@ Search next for:
 - benchmark-gaming where implementations overfit a public suite while remaining incompatible off-suite.
 
 Prefer reproducible failure reports and implementation matrices over generic interoperability commentary.
+
+
+---
+
+# Second evidence pass — layered profiles and living standards
+
+## OBSERVED — even a successful domain profile needs further profile layers
+
+NASA's Artemis Distributed Simulation is a useful current stress test for the idea that one accepted interoperability standard or domain profile can finish the semantic problem.
+
+The Artemis work explicitly builds on **HLA + SpaceFOM**, but still requires additional common datatypes, message definitions, execution protocols, object classes, and interaction classes for the Artemis mission domain. Those additions are packaged in an ADS Federation Object Model.
+
+This yields a stronger L4 rule:
+
+~~~text
+BASE_STANDARD_CONFORMANT
++ DOMAIN_PROFILE_CONFORMANT
+!=
+MISSION_PROFILE_COMPLETE
+~~~
+
+A real ecosystem can remain interoperable while adding narrower profiles above a stable core, but every additional profile needs its own assertions, vectors, pairwise evidence, and version/freshness identity.
+
+**Design delta for Signet:** do not aim for one permanently complete universal semantic vocabulary. Stabilize a small core, then let narrower profiles compose above it. L4 should validate each profile boundary independently and also validate the claimed compositions.
+
+## OBSERVED — standards evolve from implementation experience
+
+NASA's 2025 SpaceFOM lessons-learned work makes a complementary point: the first SpaceFOM deliberately focused on the highest-value core interoperability problems, shipped a practical initial version, then used real deployments and a growing implementation community to drive the next version.
+
+This supports the L4 milestone ordering already proposed:
+
+~~~text
+SMALL_TESTABLE_CORE
+-> REAL IMPLEMENTATIONS
+-> FAILURE / GAP EVIDENCE
+-> PROFILE OR STANDARD REVISION
+-> REVALIDATION
+~~~
+
+rather than:
+
+~~~text
+DESIGN UNIVERSAL MODEL FIRST
+-> WAIT FOR COMPLETENESS
+~~~
+
+The practical consequence is that **test-suite findings are protocol input**, not just a release gate. An ambiguity discovered by independent adapters should produce a durable handoff to L1 and remain represented as a regression fixture after the semantic correction.
+
+## OBSERVED — cross-standard interoperability needs explicit bridges
+
+NASA's 2022 work on HLA, RPR FOM, SMP, and SpaceFOM describes the lack of rules/guidelines for interoperability across those standards and presents explicit bridge solutions.
+
+For Signet, this argues against claiming that external standards can be "supported" merely by mentioning them in documentation.
+
+A bridge claim should bind:
+
+- source standard/profile and version;
+- target Signet profile and version;
+- semantic mapping;
+- unsupported or lossy fields;
+- time/authority model translation;
+- generated or hand-written bridge implementation;
+- conformance vectors in both directions where meaningful;
+- known non-equivalences.
+
+### Cross-standard bridge state
+
+~~~text
+LOSSLESS_FOR_DECLARED_SUBSET
+LOSSY_WITH_DECLARED_FALLBACKS
+ONE_WAY_ONLY
+STRUCTURALLY_MAPPABLE_BUT_SEMANTICALLY_UNVALIDATED
+INCOMPATIBLE
+UNKNOWN
+~~~
+
+This is a future validation shape, not a requirement that Signet implement HLA, DIS, OpenXR, glTF, or any other external standard now.
+
+## L4 design correction — profile composition must be tested, not inferred
+
+If future Signet profiles compose, for example:
+
+~~~text
+core@1
++ fps@1
++ inventory@1
++ vehicle@1
+~~~
+
+then passing each profile independently does not prove their composition is conflict-free.
+
+L4 should eventually add composition fixtures for:
+
+- overlapping field/semantic ownership;
+- contradictory fallback rules;
+- incompatible units or coordinate frames;
+- conflicting authority assumptions;
+- event ordering;
+- lifecycle coupling;
+- version combinations;
+- optional-feature interactions.
+
+Candidate evidence state:
+
+~~~text
+PROFILE_A_PASS
++ PROFILE_B_PASS
+!= PROFILE_A_PLUS_B_PASS
+~~~
+
+That becomes especially important once independently governed profiles appear.
