@@ -279,5 +279,78 @@
         }
       ]
     }
+  },
+  {
+    "vector_id": "COMP-NEG-008",
+    "expected_reason": "SEMANTIC_DEFINITION_CONFLICT",
+    "input": {
+      "selected_profiles": [
+        {
+          "id": "https://example.org/sem/profile/a/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "id": "https://example.org/sem/profile/b/1",
+          "definition_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      ],
+      "catalog": [
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/a/1",
+            "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "requires": [],
+          "optional_requires": [
+            {
+              "id": "https://example.org/sem/profile/b/1",
+              "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ],
+          "exports": []
+        },
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/b/1",
+            "definition_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          },
+          "requires": [],
+          "exports": []
+        }
+      ]
+    }
+  },
+  {
+    "vector_id": "COMP-NEG-009",
+    "expected_reason": "INVALID_EXTENSION_TARGET",
+    "input": {
+      "selected_profiles": [
+        {
+          "id": "https://example.org/sem/profile/b/1",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "catalog": [
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/b/1",
+            "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "requires": [],
+          "exports": [
+            {
+              "id": "https://example.org/sem/profile/b/1#concept/child",
+              "definition_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            }
+          ],
+          "extends": [
+            {
+              "child": "https://example.org/sem/profile/b/1#concept/child",
+              "parent": "https://example.org/sem/profile/a/1#concept/base"
+            }
+          ]
+        }
+      ]
+    }
   }
 ]
