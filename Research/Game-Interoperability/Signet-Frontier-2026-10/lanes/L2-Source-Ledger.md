@@ -223,3 +223,37 @@ Next vocabulary:
 4. Model performance remains **CLAIMED** until independently reproduced.
 5. A failed bounded search is no-material-delta evidence, never proof of nonexistence.
 6. Legal/privacy/package-trust interpretation discovered during L2 is handed to L3.
+
+## I. Signet 2 proposal — new primary response target
+
+Observed current Signet main:
+
+`490dfa9423841a45f2917d8d013e010ca0eb5548`
+
+Commit message:
+
+`Docs: Signet Forge section, Signet 2 proposal and architecture PDF`
+
+This commit directly follows the L2 package's earlier observed Signet baseline `36cf99c9a24d0ea1ef984c74a2f4d72fcb7fa85c`.
+
+Primary new sources:
+- `docs/public/signet-2-architecture.pdf`
+- `docs/content/proposals/translation-profiles.mdx`
+- `docs/content/forge/index.mdx`
+- `docs/content/forge/understanding-a-game.mdx`
+- `docs/content/forge/workflow.mdx`
+- `docs/content/forge/fine-tuning.mdx`
+
+Material new observations:
+- the proposal is explicitly a draft and not implemented;
+- Signet 2 defines intents, archetypes, capabilities, appearance palettes, resolvers and translation profiles;
+- calibration handles obvious and measurable mappings before model use;
+- the resolver ranks closed candidates and accepted choices are pinned;
+- simulation-affecting intents must be pinned;
+- the model is explicitly unvalidated for this use case;
+- the proposed first experiment is approximately 30 cases comparing rules, text similarity and a contrastive ranker;
+- Forge is separated from the runtime standard.
+
+L2 uses these as primary project claims and responds in:
+
+`Publications/Game-Interoperability/RESPONSE-TO-SIGNET-2-ARCHITECTURE-DRAFT.md`
