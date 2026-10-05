@@ -43,9 +43,10 @@ A future open ecosystem could use a Signet-like protocol underneath and a Melty-
 6. [Concrete recommendations and experiment roadmap](06-Recommendations-and-Roadmap.md)
 7. [Source ledger](Source-Ledger.md)
 
-Public-facing draft:
+Public-facing drafts:
 
 - `Publications/Game-Interoperability/OPEN-GAME-INTEROPERABILITY-FRONTIER-DRAFT.md`
+- `Publications/Game-Interoperability/FROM-SHARED-MEANING-TO-SHARED-CONTRACTS-DRAFT.md` — direct L1 response to the Signet 2 intents/archetypes/translation-profiles proposal
 
 Compact community handoff:
 
