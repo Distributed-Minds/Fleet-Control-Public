@@ -338,3 +338,37 @@ Next implementation targets:
 4. selection-order and duplicate-path invariance;
 5. Unicode/JCS edge vectors;
 6. third-party/third-language independent implementation.
+
+
+---
+
+## Continuation pass 7 — extended executable conformance — 2026-10-05
+
+Both reference implementations now pass:
+
+~~~text
+PASS: HASH-VECTOR-001
+PASS: COMP-VECTOR-001
+PASS: CONTRACT-VECTOR-001
+PASS: 5 additional composition vectors
+PASS: 9 negative composition vectors
+~~~
+
+New coverage:
+
+- canonical full negotiated `contract_hash`;
+- selection-order invariance;
+- duplicate dependency-path coalescing;
+- optional dependency non-activation;
+- explicit optional dependency activation;
+- valid semantic concept extension;
+- optional dependency definition mismatch rejection;
+- invalid extension-target rejection.
+
+Published full contract hash:
+
+~~~text
+sha256:49539b9e09a204fe8d1a5a44f247247a19c591f66d902623d62695e2819fe2b0
+~~~
+
+Next unresolved executable semantics are no longer basic profile closure. They are negotiation-before-selection problems: intersecting multiple acceptable ordering/visibility models, selecting optional modules deterministically, and composing ruleset dependencies.
