@@ -18,3 +18,48 @@ The descriptor records the local mechanism and authority class, but leaves `sema
 The Minecraft example covers all seven responsibilities extracted from Signet's current gateway documentation. The generic Godot example claims only the engine host/version boundary; it does **not** pretend a bare GDExtension knows a particular game's controls, terrain or presentation hooks.
 
 This is a descriptor/evidence model, not yet the final generated ABI.
+
+
+## Executed generator pass
+
+v1 now has an executable generator:
+
+- `generate.py`
+
+It consumes the role descriptor and emits:
+
+- `adapter.operations.json`;
+- `signet_adapter_role_ops.h`;
+- `signet_adapter_role_ops.rs`.
+
+The generated operation signatures intentionally use opaque byte payloads. Payload semantics remain owned by the external semantic contract rather than being invented by L2.
+
+Observed local validation:
+
+```text
+minecraft-deterministic-generation: PASS
+godot-deterministic-generation: PASS
+generated-c-header-syntax: PASS
+
+negative duplicate-operation-id: PASS(rejected)
+negative role-authority-mismatch: PASS(rejected)
+negative invalid-operation-id: PASS(rejected)
+```
+
+Generated artifact digests are recorded in `generation-validation-output.txt`.
+
+The current test environment did not provide `rustc` or `dotnet`, so the generated Rust output is retained as generated source but is not compiler-validated here.
+
+## Live Godot runtime status
+
+The Godot 4.7.2 release and Linux x86_64 asset were confirmed through the upstream release metadata. The execution environment contains no Godot binary, and binary release assets could not be materialized into this test container.
+
+Therefore the evidence remains:
+
+`ABI_HOST_HARNESS_PASS`
+
+and explicitly **not**:
+
+`GODOT_RUNTIME_PASS`.
+
+That is an infrastructure limitation of this pass, not evidence for or against the GDExtension target.
