@@ -10,26 +10,31 @@ The active mission is now to repair the known reproducibility defects and produc
 
 ## Start here
 
+The fork exists and is contact-ready technically. The active task is now **presentation simplification** so the maintainer does not have to dig through the docs tree.
+
 Read, in order:
 
-1. `Testing/Signet-2-DeepSeek/VALIDATION-SUMMARY.md`
-2. `Testing/Signet-2-DeepSeek/FORK-HANDOFF.md`
-3. `Publications/Game-Interoperability/SIGNET-2-FORK-DELIVERY-PLAN.md`
+1. `Testing/Signet-2-DeepSeek/FORK-PRESENTATION-HANDOFF.md`
+2. `Testing/Signet-2-DeepSeek/FORK-COMPLETION.md`
+3. `Testing/Signet-2-DeepSeek/VALIDATION-SUMMARY.md`
+4. `Publications/Game-Interoperability/SIGNET-2-FORK-DELIVERY-PLAN.md`
 
 The older `PLAN.md` is retained as completed validation history. Do **not** rerun the entire original validation plan unless a targeted regression points to a new systemic problem.
 
 ## Mission
 
-Produce:
+Improve the **maintainer-facing presentation** of the existing public branch:
 
-- corrected L1 evidence on a dedicated correction branch;
-- corrected L2 evidence on a dedicated correction branch;
-- public `geromet/signetprotocol` fork;
-- public branch `review/signet2-interoperability`;
-- direct Signet source/doc edits on that branch;
-- successful upstream-style documentation build/checks;
-- final adversarial audit with no remaining HIGH stop-ship finding;
-- concise Discord message draft containing the branch URL.
+`geromet/signetprotocol@review/signet2-interoperability`
+
+Required result:
+
+- root-level `SIGNET2-REVIEW.md` that explains the whole proposal in 2–4 minutes;
+- a prominent README banner linking to it;
+- detailed docs remain drill-down material;
+- docs build still passes;
+- a fresh reviewer can understand the P0 proposal and evidence without opening Fleet-Control;
+- no contact with upstream yet.
 
 The human does not need to approve intermediate engineering decisions.
 
