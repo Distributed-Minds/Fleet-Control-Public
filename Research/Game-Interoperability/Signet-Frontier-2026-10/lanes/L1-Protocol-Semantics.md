@@ -254,3 +254,36 @@ Next L1 targets:
 
 1. canonical definition serialization/hashing;
 2. profile dependency/composition conflict semantics.
+
+
+---
+
+## Continuation pass 5 — canonical hashing and profile composition — 2026-10-05
+
+New durable outputs:
+
+- [Canonical Definition Hashing and Profile Composition](L1/07-Canonical-Hashing-and-Profile-Composition.md)
+- [Semantic Definition Schema](L1/schema/signet-semantic-definition-0.schema.json)
+- [Canonical Hash Vector](L1/schema/test-vectors/hash-vector-001.json)
+- [Composition Hash Vector](L1/schema/test-vectors/composition-vector-001.json)
+
+Decisions:
+
+- hash only normative JSON, not annotations/documentation;
+- source-canonicalize schema-declared set arrays because RFC 8785 preserves array order;
+- apply RFC 8785 JCS;
+- hash canonical UTF-8 bytes with SHA-256;
+- same semantic ID + different hash fails closed;
+- required profile dependencies form an exact deterministic closure;
+- duplicate profile/concept IDs must be definition-equivalent;
+- profiles may extend via new semantic IDs but may not monkey-patch imported concepts;
+- ordering/visibility constraints compose by intersection;
+- required composition is atomic;
+- activated profile sets and full negotiated contracts may themselves be canonically hashed.
+
+New L4 conformance families:
+
+- `HASH01`–`HASH06`;
+- `COMP01`–`COMP11`.
+
+The highest-value next milestone is now implementation rather than further prose: two independent implementations of hashing + dependency closure + composition should produce identical canonical bytes, failures, and hashes.
