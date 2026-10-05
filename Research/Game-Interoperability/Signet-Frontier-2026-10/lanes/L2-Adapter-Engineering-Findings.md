@@ -643,3 +643,19 @@ changed dependency: game_version
 ```
 
 **DERIVED:** determinism and currency are orthogonal properties. A lock/profile format should encode both the frozen decision and enough dependency identity to know when that decision requires revalidation.
+
+# Executable proof: deterministic adapter-contract generation
+
+L2 now also has:
+
+`Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Verifiable-Translation-Prototype/adapter-shim-generation/`
+
+A small machine-readable adapter-shim descriptor generates C, Rust, C# and TypeScript surfaces.
+
+Two independent clean runs produced identical output hashes. C and TypeScript syntax checks passed in the available environment.
+
+**OBSERVED:** deterministic code generation of the repetitive interface layer is feasible for this bounded fixture.
+
+**UNKNOWN:** whether this exact logical shim is sufficient or desirable for Signet 2. Real Godot/Unreal/Unity/gateway implementations remain required before recommending the interface itself.
+
+**DERIVED:** the paper's proposed split can now be stated more narrowly: mechanical generation is justified for contract shape; local engine/game behavior still requires explicit implementation and behavioral evidence.
