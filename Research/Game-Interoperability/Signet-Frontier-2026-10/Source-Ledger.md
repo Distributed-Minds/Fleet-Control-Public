@@ -312,3 +312,71 @@ L4 relevance:
 - bridging HLA, RPR FOM, SMP, and SpaceFOM requires explicit interoperability rules rather than name-level standards compatibility.
 
 This supports profile-scoped conformance, composition testing, and explicit cross-standard bridge evidence.
+
+
+---
+
+## Signet 2 response-paper sources added 2026-10-05
+
+### Signet 2 / Signet Forge primary design sources
+
+- Signet 2 proposal — intents, archetypes and translation profiles  
+  https://github.com/kian-cx/signetprotocol/blob/main/docs/content/proposals/translation-profiles.mdx
+- Signet Forge architecture and concepts  
+  https://github.com/kian-cx/signetprotocol/blob/main/docs/content/forge/architecture.mdx
+- Signet Forge reliability and limits  
+  https://github.com/kian-cx/signetprotocol/blob/main/docs/content/forge/reliability-and-limits.mdx
+- Signet Forge roadmap and open questions  
+  https://github.com/kian-cx/signetprotocol/blob/main/docs/content/forge/roadmap.mdx
+- Publication commit containing the full Signet 2 / Signet Forge design-document expansion  
+  https://github.com/kian-cx/signetprotocol/commit/2ddb136ee941705d3e1c020eaddad93be65026f2
+
+Evidence class: **primary project design source**.
+
+Observed status at research time: Signet 2 is explicitly a draft proposal and not implemented. The design proposes a shared intent/archetype semantic hub, capabilities, calibration and motion profiles, pinned translation profiles, an offline/human-confirmed resolver path, and Signet Forge as a separate companion tool.
+
+L4 relevance: this is the paper being answered. Claims are treated as proposed architecture or hypotheses rather than as implemented behavior.
+
+### NIST canonical-data-model scaling precedent
+
+- NIST SP 1108R2 — *NIST Framework and Roadmap for Smart Grid Interoperability Standards, Release 2.0*, §3.7.3 Common Understanding of Information  
+  https://www.nist.gov/system/files/documents/smartgrid/NIST_Framework_Release_2-0_corr.pdf
+
+Evidence class: **primary government interoperability framework**.
+
+L4 relevance: NIST explicitly describes bilateral semantic transformations among n systems as growing on the order of n² and a canonical data model reducing the mapping burden toward n+1. The same section also emphasizes semantic harmonization. This is strong precedent for distinguishing Signet 2's mapping-topology improvement from proof of semantic interoperability.
+
+### IETF capability-negotiation precedent
+
+- RFC 5939 — Session Description Protocol (SDP) Capability Negotiation  
+  https://www.rfc-editor.org/rfc/rfc5939.html
+
+Evidence class: **primary IETF standard**.
+
+L4 relevance: distinguishes advertised capabilities, potential configurations, actual configurations, and negotiation. The Signet lesson is conceptual rather than syntactic: capability declaration should not be conflated with the actual session configuration selected.
+
+### IPv6 Ready conformance/interoperability separation
+
+- IPv6 Ready news / test-plan updates  
+  https://www.ipv6ready.org/news.html
+- IPv6 Ready FAQ  
+  https://www.ipv6ready.org/faq.html
+
+Evidence class: **primary certification-program source**.
+
+L4 relevance: current program material distinguishes conformance testing from interoperability testing. The SRv6 Gold program requires both conformance and interoperability plans, and the FAQ describes submission of both test logs for relevant retesting. This is direct precedent for:
+
+~~~text
+SELF_CONFORMANCE != PAIRWISE_INTEROPERABILITY
+~~~
+
+### SpaceFOM V2 current semantic-interoperability evidence
+
+Crues, Zack; Möller, Björn; Garro, Alfredo; Dexter, Dan.  
+**SpaceFOM V2: The Next Generation in Space Simulation Interoperability and How You Can Help.**  
+SISO SIMposium, 2026. NASA NTRS Document ID 20260008222.  
+https://ntrs.nasa.gov/citations/20260008222
+
+Evidence class: **primary/institutional current technical source**.
+
+L4 relevance: explicitly states that heterogeneous simulation interoperability requires more than compatible software and needs common semantics for time, space, physical entities, and execution control. It also describes evolution through operational experience and multi-organization adoption. This supports a small, versioned semantic core that evolves from independent implementation evidence.
