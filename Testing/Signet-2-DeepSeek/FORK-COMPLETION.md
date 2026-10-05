@@ -10,7 +10,7 @@
 |---|---|
 | Public fork | https://github.com/geromet/signetprotocol |
 | Review branch | `review/signet2-interoperability` |
-| Review branch head | `ab313ff9e3005ac52451d985b6574e7f74b41fce` |
+| Review branch head | `f2eddd920cd2e1825cc7f38e51c7d956d359cb53` |
 | Compare view | https://github.com/kian-cx/signetprotocol/compare/main...geromet:review/signet2-interoperability |
 | Upstream base SHA | `2ddb136ee941705d3e1c020eaddad93be65026f2` (upstream `main` unmoved) |
 | Corrected L1 branch | `correction/l1-cross-language-determinism` @ `f109e15ed1c73b0c76876524ec3c126e34bd63ae` |
@@ -82,6 +82,36 @@ no research-lane trees were copied into the fork.
 `CONTACT-READY` — the second pass confirmed the prior HIGH/MED findings are
 resolved and introduced none. Residual LOW items only (see limitations).
 
+## Presentation update (active task)
+
+The branch was made self-explanatory from the repository root:
+
+- added root-level `SIGNET2-REVIEW.md` (~183 lines) — a 2–4 minute summary of the
+  proposal, P0/P1/P2 scope, what was actually tested, what is explicitly not
+  proposed, and the next files to inspect;
+- added a prominent `[!IMPORTANT]` README banner linking to it, directly after the
+  badges; the rest of upstream README is unchanged;
+- detailed docs remain the drill-down; no new long report, PDF, patch bundle or
+  Fleet-Control metadata was added.
+
+A fresh skeptical-maintainer subagent, reading only the README banner and
+`SIGNET2-REVIEW.md`, correctly summarized the core proposal, the five changes,
+P0/P1/P2, the executed evidence, what is not proposed, and the main open
+question — with no digging required. It found no HIGH issue. Two MED wording
+items it raised were fixed:
+
+1. `semantic-contracts.mdx` §11 L1 callout no longer reads as pending; it now
+   states both languages reproduce the ordering rule plus adversarial vectors.
+2. `SIGNET2-REVIEW.md` now attributes the audit as a local review and invites
+   independent review (rather than self-certifying).
+3. `roadmap.mdx` P0 list gained "semantic acceptability separated from session
+   preference" for parity with the review page.
+
+Post-change validation: docs build PASS (43/43 routes, exit 0); README banner
+link to `SIGNET2-REVIEW.md` resolves; both evidence SHAs resolve; no forbidden
+content in the fork.
+
+
 ## Remaining limitations
 
 - **Godot 4.7.2 runtime:** BLOCKED (binary not materializable in this
@@ -102,8 +132,14 @@ resolved and introduced none. Residual LOW items only (see limitations).
 
 ## Discord message draft (to send)
 
-> Hi — I've put my feedback on a review branch in my fork rather than editing upstream: https://github.com/geromet/signetprotocol/tree/review/signet2-interoperability
->
-> It's docs-only, based on `2ddb136`. The main proposal argues for versioned semantic identity, capability offers that negotiate a deterministic session contract, typed fallback, resolver `NO_MATCH`/`ABSTAIN`, and executable conformance vectors; a smaller page covers evidence boundaries and explicitly non-blocking lifecycle work. The L1/L2 experiments are pinned to exact commits in a public notebook, and the docs build clean (40 pages).
->
-> I'd genuinely welcome being told where this is wrong — especially if the semantic core is already implied by the current draft, or if the P0/P1/P2 framing is off. Happy to split, shrink, or drop anything.
+> Hi @kian_cx — I read the Signet 2 / Forge draft and wrote up a focused review.
+> Short version: the architecture looks right; the gap I see is that "shared
+> meaning" isn't yet an explicit, versioned, deterministic contract, so
+> independent translators can diverge. The branch tightens five boundaries
+> (semantic identity, negotiated session contract, optional activation, resolver
+> `NO_MATCH`/`ABSTAIN`, pinned ≠ current) and marks P0/P1/P2+. Docs-only, based on
+> your current main (`2ddb136`). Corrected cross-language L1/L2 fixtures are
+> pinned as evidence; Godot runtime reproduction is explicitly **not** claimed.
+> Start here: https://github.com/geromet/signetprotocol/tree/review/signet2-interoperability
+> → `SIGNET2-REVIEW.md` (~3 min). I'd genuinely welcome pushback, including
+> "already covered" or "not a blocker." No rush.
