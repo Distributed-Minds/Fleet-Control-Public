@@ -127,17 +127,35 @@ Domain meaning still comes from a profile semantic ID.
 
 ### 5. Ordering and causal metadata
 
-The core supplies fields capable of representing the selected session time model:
+The core does **not** require one universal clock such as a fixed simulation tick.
+
+Instead it binds each session to an explicit ordering model and provides stable semantic message/event identity plus optional causal references:
 
 ~~~yaml
 message_id: <unique within session>
-tick: 18442
-sequence: 57
+ordering:
+  model: https://signetprotocol.io/sem/ordering/fixed-tick/1
+  value:
+    tick: 18442
+    substep: 3
 caused_by:
   - <message-or-event-id>
 ~~~
 
-Not every profile must use every field. The negotiated time model defines which are required.
+A turn-based session could instead negotiate:
+
+~~~yaml
+ordering:
+  model: https://signetprotocol.io/sem/ordering/turn-sequence/1
+  value:
+    turn: 42
+    phase: action
+    action_index: 1
+~~~
+
+An event-driven session may need only a monotonic event sequence.
+
+The core therefore standardizes **how an ordering model is selected and identified**, not the contents of every ordering model.
 
 ### 6. Issuer and authority scope reference
 
@@ -149,11 +167,23 @@ authority_epoch: 7
 
 The receiver evaluates these values against the negotiated/session authority table. `authority_epoch` prevents a late claim from a previous ownership interval being accepted after responsibility transfers.
 
-### 7. Capability/profile negotiation
+### 7. Visibility / disclosure policy reference
+
+Some domains contain authoritative facts that are not visible to every participant: a card hand, fog-of-war state, a secret objective, or private team information.
+
+The core should provide a generic way for a semantic claim/state to reference the negotiated disclosure policy:
+
+~~~yaml
+visibility_policy_ref: <session/profile-defined-policy>
+~~~
+
+The core does **not** define concrete concepts such as "hand" or "fog of war." Those belong to profiles/rulesets. It only makes selective disclosure an explicit part of the contract rather than an undocumented transport side effect.
+
+### 8. Capability/profile negotiation
 
 The core defines how profiles are advertised, required, activated and rejected. Domain capability content belongs to the profile.
 
-### 8. Typed incompatibility
+### 9. Typed incompatibility
 
 The core defines deterministic compatibility outcomes and reason codes, so “can parse” does not become “can safely participate.”
 
@@ -434,10 +464,11 @@ Do not import the full HLA time-management surface into a beta game protocol.
 
 Instead, make the **time model explicit**.
 
-Candidate models:
+Candidate ordering models:
 
 ~~~text
 fixed_tick
+turn_sequence
 logical_step
 event_sequence
 ~~~
@@ -445,7 +476,7 @@ event_sequence
 For current Signet:
 
 ~~~yaml
-time_model:
+ordering_model:
   id: fixed_tick
   tick_hz: 20
   command_application: exactly_once_when_seq_positive
@@ -453,12 +484,23 @@ time_model:
   wall_clock_authoritative: false
 ~~~
 
-Authoritative events should have stable IDs and enough ordering context for replay:
+For a turn-based game:
+
+~~~yaml
+ordering_model:
+  id: turn_sequence
+  phases: [start, action, resolution, end]
+~~~
+
+Authoritative events should have stable IDs and enough model-specific ordering context for replay:
 
 ~~~yaml
 event_id: evt:93b...
-tick: 18442
-sequence: 3
+ordering:
+  model: fixed_tick
+  value:
+    tick: 18442
+    sequence: 3
 caused_by:
   - intent:104:1042
 ~~~
