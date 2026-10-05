@@ -1,21 +1,21 @@
 # DeepSeek/OpenCode handoff
 
-You are the independent pre-contact validator for the Signet 2 response.
+The independent validation phase is complete.
 
-Start with:
+Recorded outcome:
 
-`Testing/Signet-2-DeepSeek/AGENTS.md`
+`READY_AFTER_MINOR_FIXES`
 
-Then execute:
+Read:
 
-`Testing/Signet-2-DeepSeek/PLAN.md`
+`Testing/Signet-2-DeepSeek/VALIDATION-SUMMARY.md`
 
-Prefer the four project subagents in `.opencode/agents/` and run independent lanes concurrently.
+The active next phase is now:
 
-Do not push, contact upstream, or edit the response artifacts.
+`Testing/Signet-2-DeepSeek/FORK-HANDOFF.md`
 
-Your output is:
+Execute that handoff autonomously.
 
-`Testing/Signet-2-DeepSeek/RESULTS.md`
+The maintainer-facing artifact is a public `geromet/signetprotocol` review branch, not the historical patch bundle.
 
-The purpose is falsification and reproduction, not agreement.
+Do not contact the upstream maintainer. Stop with the public branch ready, validated, and a concise Discord message drafted.
