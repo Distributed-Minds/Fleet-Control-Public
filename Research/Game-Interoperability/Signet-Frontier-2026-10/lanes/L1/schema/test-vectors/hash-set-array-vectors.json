@@ -1,0 +1,153 @@
+[
+  {
+    "vector_id": "HASH-SET-POS-001",
+    "purpose": "A normative definition whose non-BMP set arrays are source-canonical under SEM-ORDER-1 (UTF-16 code units) is accepted. U+10000 (surrogate pair D800 DC00) sorts before U+E000.",
+    "expected_reason": null,
+    "expected_definition_hash": "sha256:4565fed58e9d107d78c7c12e3eb4e36ef18b0406f07f1e38f63f7da1ae457710",
+    "normative": {
+      "semantic_id": "https://example.org/sem/profile/unicode/1",
+      "definition_kind": "profile",
+      "requires": [],
+      "optional_requires": [],
+      "conflicts": [],
+      "exports": [
+        {
+          "id": "https://example.org/sem/profile/unicode/1#c/\uD800\uDC00",
+          "definition_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        },
+        {
+          "id": "https://example.org/sem/profile/unicode/1#c/\uE000",
+          "definition_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        }
+      ]
+    }
+  },
+  {
+    "vector_id": "HASH-SET-NEG-001",
+    "purpose": "Unsorted requires set array must be rejected (HASH05).",
+    "expected_reason": "SET_ARRAY_NOT_CANONICAL",
+    "normative": {
+      "semantic_id": "https://example.org/sem/profile/example/1",
+      "definition_kind": "profile",
+      "requires": [
+        {
+          "id": "https://example.org/sem/profile/b/1",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        {
+          "id": "https://example.org/sem/profile/a/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "optional_requires": [],
+      "conflicts": [],
+      "exports": []
+    }
+  },
+  {
+    "vector_id": "HASH-SET-NEG-002",
+    "purpose": "Duplicate requires set-array entry must be rejected (HASH05).",
+    "expected_reason": "SET_ARRAY_NOT_CANONICAL",
+    "normative": {
+      "semantic_id": "https://example.org/sem/profile/example/1",
+      "definition_kind": "profile",
+      "requires": [
+        {
+          "id": "https://example.org/sem/profile/a/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "id": "https://example.org/sem/profile/a/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "optional_requires": [],
+      "conflicts": [],
+      "exports": []
+    }
+  },
+  {
+    "vector_id": "HASH-SET-NEG-003",
+    "purpose": "Non-BMP exports sorted by Unicode code point (U+E000 before U+10000) are NOT canonical under SEM-ORDER-1 and must be rejected. Before the correction Python code-point order would have accepted this while JavaScript UTF-16 order rejected it.",
+    "expected_reason": "SET_ARRAY_NOT_CANONICAL",
+    "normative": {
+      "semantic_id": "https://example.org/sem/profile/unicode/1",
+      "definition_kind": "profile",
+      "requires": [],
+      "optional_requires": [],
+      "conflicts": [],
+      "exports": [
+        {
+          "id": "https://example.org/sem/profile/unicode/1#c/\uE000",
+          "definition_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        {
+          "id": "https://example.org/sem/profile/unicode/1#c/\uD800\uDC00",
+          "definition_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      ]
+    }
+  },
+  {
+    "vector_id": "HASH-SET-NEG-004",
+    "purpose": "Duplicate export semantic id with divergent definition hashes must be rejected (HASH05 duplicate semantic id).",
+    "expected_reason": "SET_ARRAY_NOT_CANONICAL",
+    "normative": {
+      "semantic_id": "https://example.org/sem/profile/example/1",
+      "definition_kind": "profile",
+      "requires": [],
+      "optional_requires": [],
+      "conflicts": [],
+      "exports": [
+        {
+          "id": "https://example.org/sem/profile/example/1#c/x",
+          "definition_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        },
+        {
+          "id": "https://example.org/sem/profile/example/1#c/x",
+          "definition_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        }
+      ]
+    }
+  },
+  {
+    "vector_id": "HASH-SET-NEG-005",
+    "purpose": "Unsorted authority_scopes set array must be rejected (HASH05).",
+    "expected_reason": "SET_ARRAY_NOT_CANONICAL",
+    "normative": {
+      "semantic_id": "https://example.org/sem/profile/example/1",
+      "definition_kind": "profile",
+      "requires": [],
+      "optional_requires": [],
+      "conflicts": [],
+      "exports": [],
+      "authority_scopes": [
+        "https://example.org/sem/scope/z",
+        "https://example.org/sem/scope/a"
+      ]
+    }
+  },
+  {
+    "vector_id": "HASH-SET-NEG-006",
+    "purpose": "Unsorted extends set array must be rejected (HASH05).",
+    "expected_reason": "SET_ARRAY_NOT_CANONICAL",
+    "normative": {
+      "semantic_id": "https://example.org/sem/profile/example/1",
+      "definition_kind": "profile",
+      "requires": [],
+      "optional_requires": [],
+      "conflicts": [],
+      "exports": [],
+      "extends": [
+        {
+          "child": "https://example.org/sem/profile/example/1#c/z",
+          "parent": "https://example.org/sem/profile/example/1#c/a"
+        },
+        {
+          "child": "https://example.org/sem/profile/example/1#c/a",
+          "parent": "https://example.org/sem/profile/example/1#c/b"
+        }
+      ]
+    }
+  }
+]

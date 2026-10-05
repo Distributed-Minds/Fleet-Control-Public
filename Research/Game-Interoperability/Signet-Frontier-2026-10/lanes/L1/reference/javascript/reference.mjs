@@ -11,6 +11,69 @@ class CompositionError extends Error {
   }
 }
 
+class SetArrayError extends Error {
+  constructor(reason, detail = "") {
+    super(detail ? `${reason} (${detail})` : reason);
+    this.reason = reason;
+    this.detail = detail;
+  }
+}
+
+const SET_ARRAY_NOT_CANONICAL = "SET_ARRAY_NOT_CANONICAL";
+
+// SEM-ORDER-1: ECMAScript relational operators compare strings by UTF-16 code
+// units, matching RFC 8785 object-property ordering.
+function utf16Compare(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function compareRef(a, b) {
+  const byId = utf16Compare(a.id, b.id);
+  return byId !== 0 ? byId : utf16Compare(a.definition_hash, b.definition_hash);
+}
+
+function refsContain(refs, wanted) {
+  return refs.some((ref) => compareRef(ref, wanted) === 0);
+}
+
+function validateRefArray(refs, field) {
+  for (let i = 1; i < refs.length; i++) {
+    if (compareRef(refs[i - 1], refs[i]) >= 0) {
+      throw new SetArrayError(SET_ARRAY_NOT_CANONICAL, field);
+    }
+  }
+  const ids = new Set();
+  for (const ref of refs) {
+    if (ids.has(ref.id)) throw new SetArrayError(SET_ARRAY_NOT_CANONICAL, `${field}:duplicate_id`);
+    ids.add(ref.id);
+  }
+}
+
+function validateSetArrays(normative) {
+  for (const field of ["requires", "optional_requires", "conflicts", "exports"]) {
+    if (field in normative) validateRefArray(normative[field], field);
+  }
+  if ("extends" in normative) {
+    const edges = normative.extends;
+    for (let i = 1; i < edges.length; i++) {
+      const byChild = utf16Compare(edges[i - 1].child, edges[i].child);
+      const cmp = byChild !== 0 ? byChild : utf16Compare(edges[i - 1].parent, edges[i].parent);
+      if (cmp >= 0) throw new SetArrayError(SET_ARRAY_NOT_CANONICAL, "extends");
+    }
+  }
+  for (const field of ["ordering_constraints", "visibility_constraints"]) {
+    if (field in normative) validateRefArray(normative[field].accepted ?? [], `${field}.accepted`);
+  }
+  if ("authority_scopes" in normative) {
+    const scopes = normative.authority_scopes;
+    for (let i = 1; i < scopes.length; i++) {
+      if (utf16Compare(scopes[i - 1], scopes[i]) >= 0) {
+        throw new SetArrayError(SET_ARRAY_NOT_CANONICAL, "authority_scopes");
+      }
+    }
+  }
+}
+
 function validateString(value) {
   for (let i = 0; i < value.length; i++) {
     const code = value.charCodeAt(i);
@@ -50,10 +113,6 @@ function sha256Jcs(value) {
   return "sha256:" + crypto.createHash("sha256").update(Buffer.from(canonicalize(value), "utf8")).digest("hex");
 }
 
-function refKey(ref) {
-  return `${ref.id}\u0000${ref.definition_hash}`;
-}
-
 function compose(inp) {
   const catalog = new Map(inp.catalog.map((item) => [item.semantic.id, item]));
   const state = new Map();
@@ -72,14 +131,16 @@ function compose(inp) {
     if (state.get(semanticId) === 2) return;
     state.set(semanticId, 1);
     closure.set(semanticId, definition);
-    for (const dependency of definition.requires ?? []) visit(dependency);
+    for (const dependency of [...(definition.requires ?? [])].sort(compareRef)) visit(dependency);
     state.set(semanticId, 2);
   }
 
-  for (const selected of inp.selected_profiles) visit(selected);
+  for (const selected of [...inp.selected_profiles].sort(compareRef)) visit(selected);
 
-  for (const definition of closure.values()) {
-    for (const optional of definition.optional_requires ?? []) {
+  const sortedClosure = () => [...closure.values()].sort((a, b) => compareRef(a.semantic, b.semantic));
+
+  for (const definition of sortedClosure()) {
+    for (const optional of [...(definition.optional_requires ?? [])].sort(compareRef)) {
       if (closure.has(optional.id)) {
         const activeHash = closure.get(optional.id).semantic.definition_hash;
         if (activeHash !== optional.definition_hash) {
@@ -90,8 +151,8 @@ function compose(inp) {
   }
 
   const activeIds = new Set(closure.keys());
-  for (const definition of closure.values()) {
-    for (const conflict of definition.conflicts ?? []) {
+  for (const definition of sortedClosure()) {
+    for (const conflict of [...(definition.conflicts ?? [])].sort(compareRef)) {
       if (activeIds.has(conflict.id)) {
         const otherHash = closure.get(conflict.id).semantic.definition_hash;
         if (otherHash === conflict.definition_hash) throw new CompositionError("PROFILE_CONFLICT");
@@ -100,7 +161,7 @@ function compose(inp) {
   }
 
   const concepts = new Map();
-  for (const definition of closure.values()) {
+  for (const definition of sortedClosure()) {
     for (const exported of definition.exports ?? []) {
       if (concepts.has(exported.id) && concepts.get(exported.id).definition_hash !== exported.definition_hash) {
         throw new CompositionError("CONCEPT_DEFINITION_CONFLICT");
@@ -109,7 +170,7 @@ function compose(inp) {
     }
   }
 
-  for (const definition of closure.values()) {
+  for (const definition of sortedClosure()) {
     for (const edge of definition.extends ?? []) {
       if (edge.child === edge.parent || !concepts.has(edge.parent) || !concepts.has(edge.child)) {
         throw new CompositionError("INVALID_EXTENSION_TARGET");
@@ -120,10 +181,9 @@ function compose(inp) {
   let ordering = inp.ordering_model;
   if (ordering === undefined && Object.hasOwn(inp, "ordering_preferences")) {
     for (const candidate of inp.ordering_preferences) {
-      const wanted = refKey(candidate);
       const compatible = [...closure.values()].every((definition) => {
         const accepted = definition.ordering_constraints?.accepted ?? [];
-        return !accepted.length || new Set(accepted.map(refKey)).has(wanted);
+        return !accepted.length || refsContain(accepted, candidate);
       });
       if (compatible) {
         ordering = candidate;
@@ -136,10 +196,9 @@ function compose(inp) {
   }
 
   if (ordering) {
-    const wanted = refKey(ordering);
     for (const definition of closure.values()) {
       const accepted = definition.ordering_constraints?.accepted ?? [];
-      if (accepted.length && !new Set(accepted.map(refKey)).has(wanted)) {
+      if (accepted.length && !refsContain(accepted, ordering)) {
         throw new CompositionError("ORDERING_MODEL_CONFLICT");
       }
     }
@@ -148,10 +207,9 @@ function compose(inp) {
   let visibility = inp.visibility_policy;
   if (visibility === undefined && Object.hasOwn(inp, "visibility_preferences")) {
     for (const candidate of inp.visibility_preferences) {
-      const wanted = refKey(candidate);
       const compatible = [...closure.values()].every((definition) => {
         const accepted = definition.visibility_constraints?.accepted ?? [];
-        return !accepted.length || new Set(accepted.map(refKey)).has(wanted);
+        return !accepted.length || refsContain(accepted, candidate);
       });
       if (compatible) {
         visibility = candidate;
@@ -164,18 +222,17 @@ function compose(inp) {
   }
 
   if (visibility) {
-    const wanted = refKey(visibility);
     for (const definition of closure.values()) {
       const accepted = definition.visibility_constraints?.accepted ?? [];
-      if (accepted.length && !new Set(accepted.map(refKey)).has(wanted)) {
+      if (accepted.length && !refsContain(accepted, visibility)) {
         throw new CompositionError("VISIBILITY_POLICY_CONFLICT");
       }
     }
   }
 
   const result = {
-    profiles: [...closure.values()].map((definition) => definition.semantic).sort((a, b) => refKey(a) < refKey(b) ? -1 : refKey(a) > refKey(b) ? 1 : 0),
-    concepts: [...concepts.values()].sort((a, b) => refKey(a) < refKey(b) ? -1 : refKey(a) > refKey(b) ? 1 : 0),
+    profiles: [...closure.values()].map((definition) => definition.semantic).sort(compareRef),
+    concepts: [...concepts.values()].sort(compareRef),
   };
   if (ordering) result.ordering_model = ordering;
   if (visibility) result.visibility_policy = visibility;
@@ -217,10 +274,38 @@ function readJson(file) {
 function runVectors(vectorDir) {
   const failures = [];
   const hv = readJson(path.join(vectorDir, "hash-vector-001.json"));
+  try {
+    validateSetArrays(hv.definition.normative);
+  } catch (err) {
+    if (!(err instanceof SetArrayError)) throw err;
+    failures.push(`HASH-VECTOR-001 unexpected set-array rejection: ${err.reason}`);
+  }
   const actualJcs = canonicalize(hv.definition.normative);
   const actualHash = sha256Jcs(hv.definition.normative);
   if (actualJcs !== hv.expected_jcs) failures.push("HASH-VECTOR-001 JCS mismatch");
   if (actualHash !== hv.expected_definition_hash) failures.push("HASH-VECTOR-001 digest mismatch");
+
+  const setVectors = readJson(path.join(vectorDir, "hash-set-array-vectors.json"));
+  for (const vector of setVectors) {
+    const expectedReason = vector.expected_reason ?? null;
+    let rejectedReason = null;
+    try {
+      validateSetArrays(vector.normative);
+    } catch (err) {
+      if (!(err instanceof SetArrayError)) throw err;
+      rejectedReason = err.reason;
+    }
+    if (expectedReason === null) {
+      if (rejectedReason !== null) failures.push(`${vector.vector_id} unexpectedly rejected: ${rejectedReason}`);
+      else if (vector.expected_definition_hash && sha256Jcs(vector.normative) !== vector.expected_definition_hash) {
+        failures.push(`${vector.vector_id} digest mismatch`);
+      }
+    } else if (rejectedReason === null) {
+      failures.push(`${vector.vector_id} expected ${expectedReason}, accepted instead`);
+    } else if (rejectedReason !== expectedReason) {
+      failures.push(`${vector.vector_id} expected ${expectedReason}, got ${rejectedReason}`);
+    }
+  }
 
   const cv = readJson(path.join(vectorDir, "composition-vector-001.json"));
   const actual = compose(cv.input);
@@ -233,6 +318,20 @@ function runVectors(vectorDir) {
     const actual = compose(vector.input);
     if (canonicalize(actual) !== canonicalize(vector.expected_composition)) {
       failures.push(`${vector.vector_id} composition mismatch`);
+    }
+    if (sha256Jcs(actual) !== vector.expected_profile_set_hash) {
+      failures.push(`${vector.vector_id} digest mismatch`);
+    }
+  }
+
+  const unicodeVectors = readJson(path.join(vectorDir, "composition-unicode-vectors.json"));
+  for (const vector of unicodeVectors) {
+    const actual = compose(vector.input);
+    if (canonicalize(actual) !== canonicalize(vector.expected_composition)) {
+      failures.push(`${vector.vector_id} composition mismatch`);
+    }
+    if (canonicalize(actual) !== vector.expected_jcs) {
+      failures.push(`${vector.vector_id} JCS mismatch`);
     }
     if (sha256Jcs(actual) !== vector.expected_profile_set_hash) {
       failures.push(`${vector.vector_id} digest mismatch`);
@@ -258,10 +357,27 @@ function runVectors(vectorDir) {
   }
 
   const contractVector = readJson(path.join(vectorDir, "contract-vector-001.json"));
+  try {
+    validateRefArray(contractVector.contract.profiles, "contract.profiles");
+  } catch (err) {
+    if (!(err instanceof SetArrayError)) throw err;
+    failures.push(`CONTRACT-VECTOR-001 unexpected set-array rejection: ${err.reason}`);
+  }
   const contractJcs = canonicalize(contractVector.contract);
   const contractHash = sha256Jcs(contractVector.contract);
   if (contractJcs !== contractVector.expected_jcs) failures.push("CONTRACT-VECTOR-001 JCS mismatch");
   if (contractHash !== contractVector.expected_contract_hash) failures.push("CONTRACT-VECTOR-001 digest mismatch");
+
+  const setOrderNegatives = readJson(path.join(vectorDir, "composition-set-order-vectors.json"));
+  for (const vector of setOrderNegatives) {
+    try {
+      compose(vector.input);
+      failures.push(`${vector.vector_id} unexpectedly composed successfully`);
+    } catch (err) {
+      if (!(err instanceof CompositionError)) throw err;
+      if (err.reason !== vector.expected_reason) failures.push(`${vector.vector_id} expected ${vector.expected_reason}, got ${err.reason}`);
+    }
+  }
 
   const negatives = readJson(path.join(vectorDir, "composition-negative-vectors.json"));
   for (const vector of negatives) {
@@ -285,6 +401,9 @@ function runVectors(vectorDir) {
   console.log("PASS: CONTRACT-VECTOR-001");
   console.log(`PASS: ${additional.length} additional composition vectors`);
   console.log(`PASS: ${negatives.length} negative composition vectors`);
+  console.log(`PASS: ${setVectors.length} HASH05 set-array vectors`);
+  console.log(`PASS: ${unicodeVectors.length} non-BMP composition vectors`);
+  console.log(`PASS: ${setOrderNegatives.length} deterministic set-order negative vectors`);
 }
 
 if (process.argv.length !== 3) {

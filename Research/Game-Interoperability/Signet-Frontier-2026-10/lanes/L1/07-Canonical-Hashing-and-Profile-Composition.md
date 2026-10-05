@@ -114,20 +114,68 @@ Therefore every normative schema member must declare whether an array is:
 For arrays declared as sets:
 
 1. items MUST be unique;
-2. items MUST be sorted by the member's specified canonical comparison key;
+2. items MUST be sorted by the canonical comparison key defined in HASH-2a;
 3. a definition containing an unsorted set-array MUST be rejected rather than silently reinterpreted.
 
 Examples:
 
 ~~~text
-requires[]     -> set, sort by semantic_id then definition_hash
-exports[]      -> set, sort by semantic_id
-conflicts[]    -> set, sort by semantic_id then definition_hash
-phases[]       -> ordered sequence if the phase order is semantic
-tuple fields   -> ordered sequence
+requires[]         -> set, order by SEM-ORDER-1
+optional_requires[]-> set, order by SEM-ORDER-1
+conflicts[]        -> set, order by SEM-ORDER-1
+exports[]          -> set, order by SEM-ORDER-1
+extends[]          -> set, order by (child, parent) using the UTF-16 string rule
+authority_scopes[] -> set, order by the UTF-16 string rule
+ordering_constraints.accepted[]   -> set, order by SEM-ORDER-1
+visibility_constraints.accepted[] -> set, order by SEM-ORDER-1
+phases[]           -> ordered sequence if the phase order is semantic
+tuple fields       -> ordered sequence
 ~~~
 
 Rejecting unsorted set arrays is preferable to hidden normalization because the source file itself remains reviewably canonical.
+
+## HASH-2a — Semantic-reference comparator (SEM-ORDER-1)
+
+The earlier draft said each set array was ordered by "the member's specified canonical
+comparison key" without pinning that key. That left one degree of freedom, and two
+conforming implementations could disagree on non-BMP identifiers:
+
+- Unicode **code-point** order compares U+E000 before U+10000;
+- **UTF-16 code-unit** order (the order RFC 8785 uses for object property names)
+  compares U+10000 (surrogate pair `D800 DC00`) before U+E000.
+
+This section removes that freedom.
+
+A **semantic reference** is the JSON object pair `(id, definition_hash)`. Two semantic
+references MUST be compared as follows:
+
+1. compare `id` as a sequence of **UTF-16 code units**, exactly as RFC 8785 §3.2.3
+   orders object property names (equivalently, ECMAScript `<` on strings): the first
+   differing code unit decides; if one sequence is a proper prefix of the other, the
+   shorter sequence sorts first;
+2. if the `id` values are equal, compare `definition_hash` by the same UTF-16
+   code-unit rule.
+
+A **bare semantic ID** (a `semanticId` string, e.g. in `authority_scopes[]`) is compared
+by the same UTF-16 code-unit rule.
+
+This is the ONLY canonical comparison key for schema-declared set arrays. Implementations
+MUST NOT use Unicode code-point order, locale/collation order, or code-unit order
+truncated to the BMP.
+
+`SEM-ORDER-1` is therefore *consistent with* RFC 8785 object-property ordering rather
+than a second ordering regime: both order strings by UTF-16 code units. Under
+`SEM-ORDER-1` a non-BMP code point in the range U+10000..U+10FFFF sorts **before**
+BMP code points U+E000..U+FFFF.
+
+Set arrays of semantic references MUST be strictly ascending under `SEM-ORDER-1` and
+MUST NOT contain two entries with the same `id` (even when their `definition_hash`
+values differ). This is the `HASH05` rejection rule; its deterministic reason code is:
+
+~~~text
+SET_ARRAY_NOT_CANONICAL
+~~~
+
 
 ## HASH-3 — Keep exact numerics out of binary-float ambiguity
 
@@ -338,6 +386,68 @@ semantic_id + definition_hash
 ~~~
 
 before composition.
+
+## COMP-1a — Deterministic evaluation of unordered collections
+
+Several composition inputs are declared semantically unordered sets (COMP-1), while
+others are ordered sequences whose order is policy:
+
+~~~text
+unordered (MUST be canonicalized before evaluation):
+  selected_profiles[]
+  requires[]
+  optional_requires[]
+  conflicts[]
+  exports[]
+  extends[]
+  ordering_constraints.accepted[]
+  visibility_constraints.accepted[]
+  authority_scopes[]
+
+ordered (order is semantic; MUST NOT be reordered):
+  ordering_preferences[]
+  visibility_preferences[]
+  optional_profile_preferences[]
+  phases[] and other explicitly ordered sequences
+~~~
+
+Before evaluating a composition, an implementation MUST canonicalize every unordered
+collection into ascending `SEM-ORDER-1` order (bare strings by the UTF-16 string rule).
+It MUST then traverse the canonicalized collections.
+
+Consequently the reported failure reason for a given input object graph MUST NOT depend
+on the source order of any unordered collection. Two JSON inputs that differ only by a
+permutation of an unordered set array MUST produce the same composition result or the
+same rejection reason.
+
+When more than one violation is present, the first violation reached by the canonical
+evaluation wins. Composition evaluates in this fixed phase order:
+
+~~~text
+1. selected-reference resolution and required closure
+     REQUIRED_PROFILE_UNSUPPORTED
+     SEMANTIC_DEFINITION_CONFLICT
+     REQUIRED_PROFILE_CYCLE
+2. active optional-dependency hash check
+     SEMANTIC_DEFINITION_CONFLICT
+3. explicit profile conflicts
+     PROFILE_CONFLICT
+4. exported concept collisions
+     CONCEPT_DEFINITION_CONFLICT
+5. extension-edge validation
+     INVALID_EXTENSION_TARGET
+6. ordering-model constraints
+     ORDERING_MODEL_CONFLICT
+7. visibility-policy constraints
+     VISIBILITY_POLICY_CONFLICT
+~~~
+
+Within phase 1, every `selected_profiles[]` entry and every `requires[]` array is
+visited in `SEM-ORDER-1` order, so the reason is total and order-independent.
+
+The `optional_profile_preferences[]` list is deliberately ordered policy (see 10);
+`negotiate_optional` MUST preserve its order and MUST NOT sort it.
+
 
 ## COMP-2 — Expand the required dependency closure
 
@@ -801,7 +911,11 @@ Changing normative semantic content changes the definition hash.
 
 ### HASH05 — Set-array source canonicality
 
-Unsorted or duplicate values in schema-declared set arrays are rejected.
+Unsorted or duplicate values in schema-declared set arrays are rejected before hashing.
+The canonical order is `SEM-ORDER-1` (HASH-2a); the deterministic rejection reason is
+`SET_ARRAY_NOT_CANONICAL`. Enforcement is exercised by
+`schema/test-vectors/hash-set-array-vectors.json`.
+
 
 ### HASH06 — Cross-language JCS agreement
 

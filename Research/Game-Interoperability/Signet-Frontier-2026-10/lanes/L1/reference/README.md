@@ -26,6 +26,9 @@ PASS: OPTIONAL-NEGOTIATION-VECTOR-001
 PASS: CONTRACT-VECTOR-001
 PASS: 5 additional composition vectors
 PASS: 9 negative composition vectors
+PASS: 7 HASH05 set-array vectors
+PASS: 1 non-BMP composition vectors
+PASS: 2 deterministic set-order negative vectors
 ~~~
 
 ## What is implemented
@@ -43,6 +46,11 @@ Both references independently implement:
 - ordering-model constraint checks;
 - visibility-policy constraint checks;
 - deterministic canonical profile/concept ordering;
+- `SEM-ORDER-1` semantic-reference ordering (UTF-16 code units), applied to every
+  schema-declared set array;
+- deterministic evaluation of semantically unordered inputs (`COMP-1a`);
+- `HASH05` source-canonicality validation of set arrays with reason
+  `SET_ARRAY_NOT_CANONICAL`;
 - ordered session preference negotiation for ordering/visibility models;
 - deterministic optional-profile preference activation/skipping;
 - full negotiated contract hashing.

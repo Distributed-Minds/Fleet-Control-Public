@@ -246,6 +246,67 @@ handoff:
   requested_followup: Reimplement the vectors independently without reusing either reference implementation, then extend the matrix to optional dependencies, extension edges, contract hashes, and Unicode/JCS edge cases.
 ~~~
 
+# Correction pass — `correction/l1-cross-language-determinism`
+
+The independent validation run found three latent L1 determinism gaps that the committed
+fixtures did not cover (see `Testing/Signet-2-DeepSeek/VALIDATION-SUMMARY.md`). This
+section records the correction. The historical evidence above is unchanged.
+
+Base (historical L1 head, not rewritten):
+
+~~~text
+b8f47a332fcb0aa641cfe676e22b49a801731628
+~~~
+
+Corrections applied on the correction branch:
+
+1. **One normative comparator.** Added `HASH-2a` / `SEM-ORDER-1` to
+   `07-Canonical-Hashing-and-Profile-Composition.md`: semantic references are compared
+   as `(id, definition_hash)` over UTF-16 code units, matching RFC 8785 object-property
+   ordering. Python previously used Unicode code-point order; JavaScript used UTF-16
+   order. Both now implement `SEM-ORDER-1`.
+2. **Non-BMP adversarial vectors.** Added `composition-unicode-vectors.json`
+   (`COMP-UNICODE-001`): U+10000 (`D800 DC00`) must sort before U+E000. The historical
+   Python reference emits the opposite order and fails this vector; the historical
+   JavaScript reference passes it. After the correction both pass identically.
+3. **Deterministic reason for unordered input.** Added `COMP-1a` to `07`: all
+   semantically unordered set arrays are canonicalized before evaluation, and the first
+   violation in a fixed phase order wins. Added
+   `composition-set-order-vectors.json` (`COMP-NEG-SET-ORDER-001a/001b`): the same
+   selected-profile set in both source orders must reject with
+   `SEMANTIC_DEFINITION_CONFLICT`. Both historical references returned
+   `REQUIRED_PROFILE_UNSUPPORTED` for the reversed order.
+4. **HASH05 enforced.** Both references now validate source canonicality of
+   schema-declared set arrays before hashing and reject with
+   `SET_ARRAY_NOT_CANONICAL`. Added `hash-set-array-vectors.json` with positive and
+   negative cases, including a non-BMP array that is sorted by code point but not by
+   `SEM-ORDER-1`.
+
+Re-run commands:
+
+~~~bash
+bash reference/run-all.sh
+python3 reference/python/reference.py schema/test-vectors
+node reference/javascript/reference.mjs schema/test-vectors
+~~~
+
+Corrected output, both languages (Python 3.14.7, Node v26.10.0):
+
+~~~text
+PASS: HASH-VECTOR-001
+PASS: COMP-VECTOR-001
+PASS: NEGOTIATION-VECTOR-001
+PASS: OPTIONAL-NEGOTIATION-VECTOR-001
+PASS: CONTRACT-VECTOR-001
+PASS: 5 additional composition vectors
+PASS: 9 negative composition vectors
+PASS: 7 HASH05 set-array vectors
+PASS: 1 non-BMP composition vectors
+PASS: 2 deterministic set-order negative vectors
+~~~
+
+The full pre-existing corpus still passes unchanged.
+
 # Conclusion
 
 The L1 semantic-contract work has crossed from architecture into executable interoperability evidence.
