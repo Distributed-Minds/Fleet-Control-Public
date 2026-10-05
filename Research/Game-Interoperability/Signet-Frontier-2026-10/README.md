@@ -51,6 +51,19 @@ Compact community handoff:
 
 - `Publications/Game-Interoperability/DISCORD-HANDOFF.md`
 
+## Parallel continuation lanes
+
+The next research pass is split into four non-overlapping lanes:
+
+1. [L1 — Protocol & Semantic Interoperability](lanes/L1-Protocol-Semantics.md)
+2. [L2 — Adapter Engineering & Adaptive Translation](lanes/L2-Adapters-Adaptive-Translation.md)
+3. [L3 — Trust, Distribution, Privacy, Legal & Governance](lanes/L3-Trust-Distribution-Governance.md)
+4. [L4 — Validation, Ecosystem & Adoption](lanes/L4-Validation-Ecosystem-Adoption.md)
+
+See [LANES.md](LANES.md) for ownership boundaries, handoff format, shared evidence rules, and the synthesis target.
+
+Each lane continues the native-language / recursive-discovery method inside its own domain and hands material cross-lane findings to the lane that owns the follow-up.
+
 ## Evidence labels
 
 - **OBSERVED** — directly present in current project/source material.
