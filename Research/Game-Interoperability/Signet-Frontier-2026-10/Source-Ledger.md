@@ -10,7 +10,7 @@ This ledger separates project self-description from independent standards/resear
 
 Repository:
 - https://github.com/kian-cx/signetprotocol
-- observed main head: `36cf99c9a24d0ea1ef984c74a2f4d72fcb7fa85c`
+- observed main head: `2ddb136ee941705d3e1c020eaddad93be65026f2`
 
 Key sources:
 - README: https://github.com/kian-cx/signetprotocol/blob/main/README.md
