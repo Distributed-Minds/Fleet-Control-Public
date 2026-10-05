@@ -955,6 +955,294 @@ The trigger should be ecosystem dependency, not prestige.
 
 ---
 
+# 12. Signet 2 / Forge trust response
+
+## 12.1 New upstream evidence
+
+**OBSERVED:** Signet Protocol commit \`490dfa9423841a45f2917d8d013e010ca0eb5548\` adds the draft proposal *Intents, archetypes and translation profiles* plus planned Signet Forge documentation.
+
+Primary sources:
+
+- https://github.com/kian-cx/signetprotocol/blob/490dfa9423841a45f2917d8d013e010ca0eb5548/docs/content/proposals/translation-profiles.mdx
+- https://github.com/kian-cx/signetprotocol/blob/490dfa9423841a45f2917d8d013e010ca0eb5548/docs/content/forge/index.mdx
+- https://github.com/kian-cx/signetprotocol/blob/490dfa9423841a45f2917d8d013e010ca0eb5548/docs/content/forge/workflow.mdx
+- https://github.com/kian-cx/signetprotocol/blob/490dfa9423841a45f2917d8d013e010ca0eb5548/docs/content/forge/fine-tuning.mdx
+- https://github.com/kian-cx/signetprotocol/blob/490dfa9423841a45f2917d8d013e010ca0eb5548/docs/content/forge/understanding-a-game.mdx
+
+The proposal is explicitly **draft / not implemented**.
+
+**OBSERVED:** simulation-affecting intents must use pinned decisions; translation profiles live beside \`signet.json\`; profile decisions can come from a player, translator profile, resolver/model, or safe default; profile text can be changed through Git/community pull requests; approved decisions may later become training examples.
+
+**DERIVED:** the translation profile is therefore an authority-bearing executable configuration surface. It belongs in L3's package/update/trust model even though the mapping semantics themselves remain L1 and the implementation mechanics remain L2.
+
+## 12.2 Separate four profile authorities
+
+The current priority order is useful but should not be represented as one undifferentiated profile source.
+
+~~~text
+PLAYER_PIN
+TRANSLATOR_PUBLISHER_PROFILE
+RESOLVER_SUGGESTION
+SAFE_DEFAULT
+~~~
+
+These have different authority and persistence.
+
+### Player pin
+
+- local participant choice;
+- highest semantic-selection priority for the bound game/profile context;
+- must survive ordinary translator/package updates unless the participant explicitly resets or migrates it;
+- should not silently become community training data merely because it exists locally.
+
+### Translator publisher profile
+
+- publisher-maintained baseline;
+- distributed as package/configuration content;
+- must be bound to the exact translator release, game/version or fingerprint basis, semantic vocabulary/catalog revisions, and package provenance;
+- changing it is a behavioral update even when executable bytes do not change.
+
+### Resolver suggestion
+
+- advisory evidence only;
+- exact resolver/model identity and version should be recorded;
+- candidate scores are not authority and are not probabilities unless separately calibrated;
+- for simulation-affecting intents, unresolved suggestions must not silently become authoritative merely because a policy is set to \`suggest\`.
+
+### Safe default
+
+A “default” must be defined by the owning semantic/policy contract rather than by arbitrary package code.
+
+For simulation-affecting actions, the safe default will often be:
+
+~~~text
+NO_AUTHORITATIVE_ACTION
+IGNORE
+OBSERVE_ONLY
+REQUIRE_PIN
+~~~
+
+rather than “pick the first plausible mapping.”
+
+## 12.3 Split package baseline from participant overlay
+
+A single mutable text file next to the translator risks conflating publisher updates with participant-owned decisions.
+
+**PROPOSED storage model:**
+
+~~~text
+publisher_profile
+  immutable/versioned with translator release
+
+participant_overlay
+  local/user-owned pins and explicit overrides
+
+session_resolution
+  derived effective profile for one exact dependency cut
+~~~
+
+The effective profile is derived, never edited as the authority source.
+
+~~~text
+EFFECTIVE_PROFILE =
+  current publisher profile
++ compatible participant overlay
++ exact vocabulary/catalog revisions
++ exact game/translator dependency identities
++ current calibration basis
++ explicit unresolved/default dispositions
+~~~
+
+Package update must not overwrite participant pins. A participant pin that no longer composes with the new game, translator, vocabulary, archetype catalog, or calibration basis becomes **STALE / RECONFIRM_REQUIRED**, not silently transplanted.
+
+## 12.4 Profile identity belongs in trust and compatibility evidence
+
+For consequential use, bind at least:
+
+~~~yaml
+translation_profile_basis:
+  profile_format_version: ...
+  translator_package_id: ...
+  translator_version: ...
+  translator_artifact_digest: ...
+  game_id: ...
+  game_version_or_fingerprint: ...
+  protocol_version: ...
+  intent_vocabulary_revision: ...
+  archetype_catalog_revision: ...
+  publisher_profile_digest: ...
+  participant_overlay_digest: ...
+  calibration_procedure_version: ...
+  calibration_result_digest: ...
+  resolver_identity: ...
+  resolver_version: ...
+  unresolved_entries: [...]
+  effective_profile_digest: ...
+~~~
+
+**DERIVED:** a package may remain byte-identical while a profile update materially changes input-to-intent behavior. Compatibility/trust evidence must therefore bind the effective profile, not only the executable artifact.
+
+The exact session/wire binding is L1-owned; L3's requirement is that trust evidence cannot treat the profile as invisible mutable state.
+
+## 12.5 Git/community profile updates are supply-chain updates
+
+Signet 2 says anyone can improve a translator profile with a pull request.
+
+That is good for collaboration, but it creates a new poisoning surface.
+
+A profile-only PR can change:
+
+- \`fire\` into another intent;
+- a weapon/archetype representation;
+- a fallback;
+- a calibration assumption;
+- resolver metadata;
+- provisional-to-pinned status.
+
+**PROPOSED:** directory/release tooling should treat profile changes as release-relevant configuration changes.
+
+At minimum:
+
+1. semantic diff profile entries;
+2. identify whether simulation-affecting mappings changed;
+3. rerun the applicable replay/conformance set;
+4. generate a new profile/effective-profile digest;
+5. preserve provenance and reviewer/approval evidence;
+6. never inherit an old compatibility PASS across a material profile change without revalidation;
+7. surface the change to users when it changes participant-observable controls or simulation semantics.
+
+A valid artifact signature over executable bytes does not authenticate a separately mutable profile fetched from another ref.
+
+## 12.6 Resolver/model supply chain
+
+The model remains outside the per-tick simulation loop, which is a strong boundary.
+
+It is still part of the development supply chain.
+
+Record at least:
+
+- model/retriever/ranker identity;
+- exact version or artifact digest where obtainable;
+- license;
+- execution location: local / developer service / shared service;
+- candidate-set source;
+- prompt/template/configuration identity if behaviorally relevant;
+- output that was accepted;
+- human or policy actor that accepted it.
+
+If Forge later downloads a model automatically, that model is another executable dependency and should pass the same update/provenance policy as other launcher/tool dependencies.
+
+## 12.7 Forge privacy boundary
+
+The current proposal's data rules are directionally strong:
+
+- names and identifiers only;
+- no game textures/sounds/models in training data;
+- no usernames;
+- no input logs.
+
+But the execution location remains an open question.
+
+**PROPOSED:**
+
+~~~text
+LOCAL_FORGE
+  discovery/palette/profile stays local unless explicitly exported
+
+REMOTE_FORGE_SERVICE
+  every transmitted field has a documented schema/purpose/retention policy
+  no implicit upload of installed-game inventory, paths, raw input, assets or saves
+~~~
+
+A game's item/ability registry can still reveal which game/mod/content a person has installed. “Only names and identifiers” is data minimisation, not automatically “non-personal” or “non-sensitive.”
+
+Calibration input traces should be reduced locally to the minimum derived mapping/measurement needed by the profile. Do not upload raw key/mouse/controller traces merely because Forge can observe them.
+
+## 12.8 Training-data governance
+
+“Every approved choice is a training example” needs a provenance boundary.
+
+**PROPOSED training record:**
+
+~~~yaml
+mapping_example:
+  semantic_subject: ...
+  candidate_set_revision: ...
+  selected_candidate: ...
+  translator_game_basis: ...
+  profile_revision: ...
+  approval_source: HUMAN | MAINTAINER_POLICY | OTHER
+  contributor_or_source_ref: ...
+  contribution_license: ...
+  created_at: ...
+  superseded_or_invalidated_by: ...
+  privacy_projection: ...
+~~~
+
+Requirements:
+
+- participant-local pins are **not contributed by default**;
+- contribution must be explicit and license-scoped;
+- invalidated mappings remain traceable so obsolete decisions do not silently train future models as positive truth;
+- conflicting community decisions may coexist as evidence rather than being reduced to majority vote;
+- model-training eligibility is distinct from package/profile inclusion.
+
+The proposal already says training examples should be openly licensed. L3's addition is that the system must prove which contributor/source actually granted that license for each example set.
+
+## 12.9 New Signet 2 adversarial fixtures for L4
+
+Add these to the L4 handoff corpus:
+
+31. signed translator release + mutable unsigned profile from another ref -> profile is non-authoritative;
+32. profile-only update swaps a simulation-affecting mapping -> old compatibility evidence becomes stale;
+33. translator update tries to overwrite participant pin -> participant overlay remains authoritative or requires explicit migration;
+34. participant pin references retired vocabulary/archetype revision -> \`RECONFIRM_REQUIRED\`, not silent carry-forward;
+35. package rollback restores old executable but leaves new profile -> incompatible mixed cut is rejected;
+36. profile rollback with current executable -> currentness policy detects stale profile;
+37. malicious community PR changes \`fire\` mapping while all code is unchanged -> semantic diff/replay catches it before trusted release;
+38. resolver suggestion accepted under model M1, model later changes to M2 -> historical pin remains attributable to M1 and is not silently re-scored;
+39. shared Forge service receives palette -> exact transmitted fields are visible and installed-game paths/assets remain local;
+40. local calibration raw input is available -> exported/training record contains only derived mapping/measurement, not raw input log;
+41. contributed training example lacks an applicable open-license/provenance record -> excluded from training set;
+42. mapping becomes invalid after game update -> invalidated example is not reused as current positive evidence;
+43. two communities choose different valid appearances for one archetype -> coexist as scoped mappings; directory/governance does not manufacture one universal truth;
+44. \`suggest\` policy encounters unknown simulation-affecting intent -> no unpinned authoritative action is emitted;
+45. publisher profile and participant overlay are individually valid but built against incompatible semantic revisions -> effective-profile derivation fails closed.
+
+## 12.10 Governance consequence
+
+Signet 2 sharpens the governance split.
+
+Protocol governance now owns:
+
+- intent vocabulary;
+- archetype catalog;
+- rules for semantic identifiers/versions.
+
+Translator/profile governance owns:
+
+- game-specific palette;
+- publisher baseline mappings;
+- calibration/profile releases.
+
+Participant authority owns:
+
+- local pins/overrides.
+
+Forge/dataset governance owns:
+
+- suggestion tooling;
+- accepted-example corpus;
+- model releases.
+
+Package-directory governance decides:
+
+- which exact package/profile releases are listed/current/revoked.
+
+These may initially share people, but they must not silently share authority.
+
+---
+
 # 12. Adversarial fixture list for L4
 
 These are handed to L4 for executable validation.
