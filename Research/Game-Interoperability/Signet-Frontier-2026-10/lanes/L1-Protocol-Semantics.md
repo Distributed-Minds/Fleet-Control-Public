@@ -372,3 +372,70 @@ sha256:49539b9e09a204fe8d1a5a44f247247a19c591f66d902623d62695e2819fe2b0
 ~~~
 
 Next unresolved executable semantics are no longer basic profile closure. They are negotiation-before-selection problems: intersecting multiple acceptable ordering/visibility models, selecting optional modules deterministically, and composing ruleset dependencies.
+
+
+---
+
+## Continuation pass 8 — deterministic pre-selection negotiation — 2026-10-05
+
+New durable output:
+
+- [Deterministic Pre-Selection Negotiation](L1/09-Deterministic-Preselection-Negotiation.md)
+- [Negotiation vector](L1/schema/test-vectors/negotiation-vector-001.json)
+
+Executable rule:
+
+~~~text
+profiles:
+  publish accepted semantic model sets
+
+session:
+  publishes ordered preference lists
+
+negotiation:
+  choose first preference accepted by every activated profile
+~~~
+
+Both Python and JavaScript references reproduce the same ordering/visibility selection and hash.
+
+---
+
+## Continuation pass 9 — deterministic optional-profile negotiation — 2026-10-05
+
+New durable output:
+
+- [Deterministic Optional-Profile Negotiation](L1/10-Optional-Profile-Negotiation.md)
+- [Optional negotiation vector](L1/schema/test-vectors/optional-negotiation-vector-001.json)
+- [Cross-language runner](L1/reference/run-all.sh)
+
+Current complete local test matrix:
+
+~~~text
+PASS: HASH-VECTOR-001
+PASS: COMP-VECTOR-001
+PASS: NEGOTIATION-VECTOR-001
+PASS: OPTIONAL-NEGOTIATION-VECTOR-001
+PASS: CONTRACT-VECTOR-001
+PASS: 5 additional composition vectors
+PASS: 9 negative composition vectors
+~~~
+
+Optional policy:
+
+- required profile set must compose or the session fails;
+- optional candidates are attempted in explicit session preference order;
+- accepted optionals remain active;
+- conflicting/unavailable later optionals are skipped with exact reason codes;
+- ordering/visibility selection is recomputed over each tentative complete set.
+
+The optional-profile fixture itself initially contained a non-canonical expected profile ordering; executable validation caught and corrected the research artifact before this pass was recorded.
+
+Next L1 implementation targets:
+
+1. ruleset dependency composition;
+2. source-canonical set-array validation;
+3. Unicode/JCS edge vectors;
+4. full numeric policy;
+5. external JCS library cross-check;
+6. third independent implementation;
+7. concrete mapping of Signet 2's first intent/archetype vocabulary into the proposed profile structure.
