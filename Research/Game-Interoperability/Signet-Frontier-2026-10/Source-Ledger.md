@@ -292,3 +292,23 @@ L4 relevance: common HLA use did not automatically yield a-priori interoperabili
 Evidence class: **primary industry-forum source**.
 
 L4 relevance: emphasizes implementation prototyping, pilots, testbeds, plugfests, open tooling, and validation as adoption mechanisms. Membership/community size is therefore not treated as interoperability evidence by itself.
+
+
+### NASA Artemis / living-profile evidence
+
+- NASA NTRS — Development of the Artemis Distributed Simulation FOMs  
+  https://ntrs.nasa.gov/citations/20250000892
+- NASA NTRS — Evolving the SpaceFOM: Lessons Learned and Future Development  
+  https://ntrs.nasa.gov/citations/20250000915
+- NASA NTRS — Enabling Simulation Interoperability between International Standards in the Space Domain  
+  https://ntrs.nasa.gov/citations/20220009047
+
+Evidence class: **primary/institutional technical literature**.
+
+L4 relevance:
+
+- HLA + SpaceFOM provide a strong common foundation but Artemis still needs mission-specific common datatypes, messages, execution protocols, and FOM extensions;
+- implementation/deployment experience is explicitly used to evolve SpaceFOM;
+- bridging HLA, RPR FOM, SMP, and SpaceFOM requires explicit interoperability rules rather than name-level standards compatibility.
+
+This supports profile-scoped conformance, composition testing, and explicit cross-standard bridge evidence.
