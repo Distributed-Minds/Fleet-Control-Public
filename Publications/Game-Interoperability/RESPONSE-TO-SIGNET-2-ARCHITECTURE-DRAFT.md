@@ -1530,18 +1530,18 @@ Each semantic case is evaluated under three conditions:
 2. every candidate-order rotation;
 3. removal of the correct candidate, requiring `__NO_MATCH__`.
 
-Three mechanism baselines are implemented:
+Three mechanism controls are implemented:
 
-- explicit lookup;
+- a gold oracle (reads the stored answer; an upper-bound sanity check, **not** a resolver baseline);
 - naive lexical token overlap;
 - deliberately bad first-candidate selection.
 
 Observed:
 
 ```text
-lookup:  base_accuracy=1.000 no_match=1.000 order_stability=1.000
-lexical: base_accuracy=1.000 no_match=0.000 order_stability=0.167
-first:   base_accuracy=1.000 no_match=0.000 order_stability=0.000
+gold_oracle: base_accuracy=1.000 no_match=1.000 order_stability=1.000
+lexical:     base_accuracy=1.000 no_match=0.000 order_stability=0.167
+first:       base_accuracy=1.000 no_match=0.000 order_stability=0.000
 ```
 
 This is a benchmark-design result, not a model-performance result.

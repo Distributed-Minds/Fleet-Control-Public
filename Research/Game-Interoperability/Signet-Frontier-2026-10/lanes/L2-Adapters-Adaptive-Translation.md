@@ -289,11 +289,11 @@ A source-anchored seed harness now exists:
 Initial result:
 
 ```text
-lookup:  1.000 base / 1.000 no-match / 1.000 order-stability
+gold_oracle: 1.000 base / 1.000 no-match / 1.000 order-stability
 lexical: 1.000 base / 0.000 no-match / 0.167 order-stability
 first:   1.000 base / 0.000 no-match / 0.000 order-stability
 ```
 
-The 100% base score for the deliberately bad first-candidate baseline demonstrates why the final benchmark cannot rely on top-1 accuracy under one candidate ordering.
+`gold_oracle` reads the case's stored gold label, so it is a harness sanity check and upper bound, not a resolver baseline. The 100% base score for the deliberately bad first-candidate baseline demonstrates why the final benchmark cannot rely on top-1 accuracy under one candidate ordering.
 
 The harness is intentionally pre-model. CLM/Laya/LLM backends remain open until the case set and evaluation mechanics are frozen enough to make their results meaningful.

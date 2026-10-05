@@ -33,18 +33,27 @@ Every seed case is tested three ways:
 
 This follows the L2 finding that a closed list prevents invention but does not guarantee that the correct answer is present.
 
-## Current baselines
+## Current backends
 
-- `lookup` — explicit hand-written table; returns `__NO_MATCH__` if its known answer is absent;
-- `lexical` — intentionally simple token-overlap ranker;
+- `gold_oracle` — **not a resolver baseline.** It returns the case's stored gold
+  label whenever that label is present in the candidate list
+  (`case["gold"] if case["gold"] in candidates else NO_MATCH`). Its 1.000 scores
+  are a tautological upper bound used only to verify the harness and the
+  NO_MATCH mechanics. It must never be cited as evidence that a resolver works.
+  (This backend was previously mislabelled `lookup`; the measured numbers are
+  unchanged.)
+- `lexical` — intentionally simple token-overlap ranker (a real, weak control);
 - `first` — deliberately bad control that always selects the first candidate.
+
+Regenerate `results.json` byte-for-byte with `python3 benchmark.py`. The oracle
+is flagged in the output as `"is_gold_oracle": true`.
 
 ## First result
 
 ```text
-lookup:  base_accuracy=1.000 no_match=1.000 order_stability=1.000
-lexical: base_accuracy=1.000 no_match=0.000 order_stability=0.167
-first:   base_accuracy=1.000 no_match=0.000 order_stability=0.000
+gold_oracle: base_accuracy=1.000 no_match=1.000 order_stability=1.000
+lexical:     base_accuracy=1.000 no_match=0.000 order_stability=0.167
+first:       base_accuracy=1.000 no_match=0.000 order_stability=0.000
 ```
 
 The important result is **not** that lexical achieved 100%.
@@ -64,7 +73,7 @@ Therefore the final Stage-A benchmark must not publish top-1 accuracy without at
 - It does not compare CLM, Laya or an LLM yet.
 - It does not show that six cases are representative.
 - It does not claim synthetic distractors are canonical game palettes.
-- It does not claim lookup is a fair learned-model baseline; it is the explicit-table reference.
+- It does not claim `gold_oracle` is a fair learned-model baseline; it is an oracle upper bound, not a resolver.
 - It does not replace Signet's proposed approximately 30-case experiment.
 
 ## Next expansion rule

@@ -727,10 +727,12 @@ L2 now has a source-anchored seed harness at:
 Observed baseline result:
 
 ```text
-lookup:  base_accuracy=1.000 no_match=1.000 order_stability=1.000
-lexical: base_accuracy=1.000 no_match=0.000 order_stability=0.167
-first:   base_accuracy=1.000 no_match=0.000 order_stability=0.000
+gold_oracle: base_accuracy=1.000 no_match=1.000 order_stability=1.000
+lexical:     base_accuracy=1.000 no_match=0.000 order_stability=0.167
+first:       base_accuracy=1.000 no_match=0.000 order_stability=0.000
 ```
+
+**OBSERVED:** `gold_oracle` reproduces the stored gold label and is therefore a harness sanity check / upper bound, not a resolver baseline.
 
 **OBSERVED:** a deliberately bad first-candidate baseline can achieve 100% top-1 accuracy on the unperturbed seed because the source candidate lists place expected answers first.
 

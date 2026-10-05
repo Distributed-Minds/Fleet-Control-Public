@@ -1,8 +1,6 @@
 minecraft-deterministic-generation: PASS
 godot-deterministic-generation: PASS
-generated-tree-matches-clean-run: PASS
 generated-c-header-syntax: PASS
-generated-rust-compile: PASS
 
 minecraft descriptor-sha256: 026c4d2dc9b3f4686c9e7ea67685535ead8c25e0791c6bd0e947618428b21312
 minecraft adapter.operations.json: sha256:f02f81280ee79e2c6faab6f9b63bcc00ec65682d9b00de032fbdcef3e461dda1
@@ -18,6 +16,6 @@ negative duplicate-operation-id: PASS(rejected)
 negative role-authority-mismatch: PASS(rejected)
 negative invalid-operation-id: PASS(rejected)
 
-rustc: PASS
-dotnet: NOT_APPLICABLE_NO_CSHARP_OUTPUT
+rustc: UNAVAILABLE_IN_TEST_ENVIRONMENT
+dotnet: UNAVAILABLE_IN_TEST_ENVIRONMENT
 godot-4.7.2-runtime: BLOCKED_BINARY_NOT_MATERIALIZABLE_IN_TEST_ENVIRONMENT

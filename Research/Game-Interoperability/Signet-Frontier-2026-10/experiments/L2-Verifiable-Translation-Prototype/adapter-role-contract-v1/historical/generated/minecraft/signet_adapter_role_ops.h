@@ -35,4 +35,3 @@ int32_t sg_adapter_op_presentation_death(SgAdapterContext *ctx, SgAdapterBytes r
 #define SG_ADAPTER_OP_WORLD_FILL "world.fill"
 #define SG_ADAPTER_ROLE_WORLD_FILL "WORLD"
 int32_t sg_adapter_op_world_fill(SgAdapterContext *ctx, SgAdapterBytes request, SgAdapterOut response);
-

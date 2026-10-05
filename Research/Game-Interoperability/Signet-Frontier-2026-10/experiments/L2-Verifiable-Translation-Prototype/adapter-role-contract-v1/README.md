@@ -34,12 +34,28 @@ It consumes the role descriptor and emits:
 
 The generated operation signatures intentionally use opaque byte payloads. Payload semantics remain owned by the external semantic contract rather than being invented by L2.
 
+`run_generation_validation.py` is the canonical reproduction harness. It runs
+`generate.py` twice per target, fails if the two clean runs differ, rewrites
+`generated/`, compiles the generated C header with `-fsyntax-only`, compiles the
+generated Rust with `rustc` when present, runs the negative descriptor tests, and
+regenerates `generation-validation-output.txt` from the outputs. No generated
+artifact is hand-edited.
+
+Reproduce with:
+
+```text
+python3 run_generation_validation.py
+python3 check.py > validation-output.txt
+```
+
 Observed local validation:
 
 ```text
 minecraft-deterministic-generation: PASS
 godot-deterministic-generation: PASS
+generated-tree-matches-clean-run: PASS
 generated-c-header-syntax: PASS
+generated-rust-compile: PASS
 
 negative duplicate-operation-id: PASS(rejected)
 negative role-authority-mismatch: PASS(rejected)
@@ -48,7 +64,10 @@ negative invalid-operation-id: PASS(rejected)
 
 Generated artifact digests are recorded in `generation-validation-output.txt`.
 
-The current test environment did not provide `rustc` or `dotnet`, so the generated Rust output is retained as generated source but is not compiler-validated here.
+The corrected v1 evidence is reproduced from this directory. The pre-correction
+broken artifacts (malformed schema; generated JSON/header files that disagreed
+with the digest manifest) are frozen under `historical/` and are not current
+evidence; see `historical/README.md` and `CORRECTION-NOTES.md`.
 
 ## Live Godot runtime status
 
