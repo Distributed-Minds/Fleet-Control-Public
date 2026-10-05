@@ -269,3 +269,51 @@ L1 use: a `urn:signet:...` identifier is not a valid public URN unless a `signet
 Spanish SCFHLA material already present in this ledger was re-evaluated and remains material: it explicitly separates HLA/FOM syntactic structure from semantic agreement and favors a modular ontology network.
 
 Chinese/Japanese searches in this pass mostly rediscovered already-ledgered HLA adapter/distributed-simulation material. Disposition: **NO MATERIAL DELTA**; no duplicate source entries added.
+
+
+---
+
+## L1 Signet 2 response sources — 2026-10-05
+
+### Signet 2 architecture proposal
+
+**Signet Protocol — “Signet 2: intents, archetypes and translation profiles”**  
+Draft proposal v0.1, 2026-10-05.  
+Public source commit: `490dfa9423841a45f2917d8d013e010ca0eb5548`
+
+- proposal source: https://github.com/kian-cx/signetprotocol/blob/490dfa9423841a45f2917d8d013e010ca0eb5548/docs/content/proposals/translation-profiles.mdx
+- architecture PDF: https://github.com/kian-cx/signetprotocol/blob/490dfa9423841a45f2917d8d013e010ca0eb5548/docs/public/signet-2-architecture.pdf
+- Forge overview: https://github.com/kian-cx/signetprotocol/blob/490dfa9423841a45f2917d8d013e010ca0eb5548/docs/content/forge/index.mdx
+
+Evidence class: **primary project design source / draft proposal**.
+
+L1 use:
+
+- strong convergence on game→meaning→game rather than pairwise bridges;
+- intent versus authoritative-effect separation;
+- capability declaration;
+- deterministic human-confirmed translation profiles;
+- closed-list resolver;
+- AI outside the per-tick simulation path;
+- explicit open questions on motion calibration, vocabulary/catalog governance, resolver placement, and conflicting profiles.
+
+Important qualification: the upstream document explicitly states that Signet 2 is a draft proposal and is not implemented.
+
+### W3C SKOS mapping relations
+
+**SKOS Simple Knowledge Organization System Reference**, W3C Recommendation.  
+https://www.w3.org/TR/skos-reference/#mapping
+
+Evidence class: **primary Web standard**.
+
+L1 use: mature precedent for distinguishing mapping relations such as `exactMatch`, `closeMatch`, `broadMatch`, and `narrowMatch`. L1 does not propose adopting SKOS wholesale for gameplay semantics; operational mappings also need unit/coordinate transforms, loss, assumptions, validity, and conformance evidence.
+
+### Source chronology / provenance
+
+Public timestamps relevant to this response:
+
+- L1 candidate semantic contract: `e4ba7160ed400960fbee20375fa2b618219af304` — 2026-10-05T16:13:53Z
+- L1 pass-1 ledger completion: `57048f8982289d751616d29b54b9aa4901c6ddd6` — 2026-10-05T16:17:48Z
+- Signet 2 proposal/PDF commit: `490dfa9423841a45f2917d8d013e010ca0eb5548` — 2026-10-05T16:31:40Z
+
+This chronology is retained for research provenance only. It does **not** establish or claim priority, independence, or upstream awareness.
