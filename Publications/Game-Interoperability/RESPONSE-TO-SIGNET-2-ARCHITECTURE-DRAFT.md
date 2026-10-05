@@ -283,7 +283,96 @@ A capability offer says "I can do X."
 
 The negotiated contract says "this session selected X under these exact conditions."
 
-### 2.6 Fallback must be typed
+### 2.6 Session policy should choose among semantically acceptable models
+
+The L1 continuation now makes one part of that negotiation executable.
+
+If several ordering models or visibility policies preserve every activated profile's semantics, implementations must not select among them through enumeration order or an implicit local default.
+
+The useful split is:
+
+~~~text
+profile:
+  which semantic models are acceptable?
+
+session:
+  among acceptable models, what do we prefer?
+
+negotiation:
+  select the first session preference accepted by every activated profile
+~~~
+
+For example:
+
+~~~text
+session ordering preferences:
+  fixed-tick@1
+  event-sequence@1
+  turn-sequence@1
+
+profile A accepts:
+  fixed-tick@1
+  event-sequence@1
+
+profile B accepts:
+  event-sequence@1
+  turn-sequence@1
+
+selected:
+  event-sequence@1
+~~~
+
+The important design point is that reusable semantic profiles define **validity**, while the session/ruleset/operator defines **deployment preference**.
+
+This prevents a semantically arbitrary lexicographic rule or implementation-specific enumeration order from becoming hidden protocol policy.
+
+The current L1 executable negotiation vector reproduces this rule in both Python and JavaScript and also applies it to visibility-policy selection.
+
+### 2.7 Optional profiles also need deterministic activation
+
+"Optional" cannot mean "enable it if this implementation happens to have it."
+
+Activating an optional semantic profile can:
+
+- add required dependencies;
+- collide with an existing concept;
+- narrow the valid ordering-model set;
+- narrow the valid visibility-policy set;
+- conflict with an earlier optional feature.
+
+The current L1 candidate rule is deliberately simple:
+
+1. compose the required baseline;
+2. iterate optional profiles in an explicit session preference order;
+3. tentatively add one candidate;
+4. resolve its dependencies and rerun full composition and policy selection;
+5. keep it if the complete contract remains valid;
+6. otherwise skip it with an exact reason and continue.
+
+Earlier accepted optionals remain preferred.
+
+This is greedy by declared session policy, not an attempt to maximize the number of enabled features.
+
+A published executable vector currently demonstrates:
+
+~~~text
+activate optional-event@1
+
+skip optional-fixed@1
+  reason = ORDERING_MODEL_CONFLICT
+
+skip missing@1
+  reason = REQUIRED_PROFILE_UNSUPPORTED
+
+selected ordering:
+  event-sequence@1
+~~~
+
+This makes graceful degradation inspectable and deterministic.
+
+Two peers can compare the exact activated and skipped semantic modules instead of independently deriving what "optional support" means.
+
+### 2.8 Fallback must be typed
 
 Ignore and approximate are acceptable for some presentation failures. They can be dangerous for authoritative gameplay.
 
@@ -1132,7 +1221,27 @@ Test at least:
 - profile version mismatch;
 - participant pin preservation;
 - required-capability rejection;
-- profile-only behavior changes.
+- profile-only behavior changes;
+- deterministic ordering/visibility pre-selection;
+- deterministic optional-profile activation and exact skip reasons.
+
+The L1 lane now contains executable evidence for the last two points.
+
+Its current Python and JavaScript reference implementations reproduce:
+
+~~~text
+PASS: HASH-VECTOR-001
+PASS: COMP-VECTOR-001
+PASS: NEGOTIATION-VECTOR-001
+PASS: OPTIONAL-NEGOTIATION-VECTOR-001
+PASS: CONTRACT-VECTOR-001
+PASS: 5 additional composition vectors
+PASS: 9 negative composition vectors
+~~~
+
+The optional-profile fixture also caught an error in its own originally published expected canonical order before the result was recorded. That is a useful specification-engineering result: canonical executable vectors can falsify the research artifact itself, not merely downstream implementations.
+
+This evidence remains candidate L1 research, not implemented Signet runtime behavior.
 
 ---
 
@@ -1600,6 +1709,12 @@ The following changes strengthen the proposal without replacing its core archite
 22. **Represent official integration policy as scoped project governance.**  
    Do not imply a universal legal conclusion from the official support boundary.
 
+23. **Separate semantic acceptability from session preference.**  
+   Profiles should declare which ordering/visibility models preserve their semantics; the session should publish the ordered preference used to select among the intersection.
+
+24. **Make optional-profile activation deterministic and inspectable.**  
+   Attempt optionals in explicit session preference order, rerun complete composition after each tentative addition, and publish activated/skipped profiles with exact reasons.
+
 ---
 
 ## 13. The boundaries worth preserving
@@ -1773,7 +1888,7 @@ These legal sources are included only to support the narrow proposition that int
 
 The four supporting research lanes remain intact in Distributed-Minds/Fleet-Control-Public:
 
-- **L1 — Protocol & Semantic Interoperability:** research/signet-l1-protocol-semantics
+- **L1 — Protocol & Semantic Interoperability:** research/signet-l1-protocol-semantics (including executable deterministic pre-selection and optional-profile negotiation vectors)
 - **L2 — Adapter Engineering & Adaptive Translation:** research/signet-l2-adapters-ai
 - **L3 — Trust, Distribution, Privacy, Legal & Governance:** research/signet-l3-trust-distribution
 - **L4 — Validation, Ecosystem & Adoption:** research/signet-l4-validation-ecosystem
