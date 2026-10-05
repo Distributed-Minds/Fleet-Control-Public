@@ -3,7 +3,7 @@
 
 ## An experimental validation framework for Signet 2
 
-**Working paper · Draft 0.1 · 2026-10-05**  
+**Working paper · Draft 0.2 · 2026-10-05**  
 **Research lane:** L4 — Validation, Ecosystem & Adoption  
 **Responds to:** *Signet 2: intents, archetypes and translation profiles*, design document v0.1, 2026-10-05.
 
@@ -443,6 +443,23 @@ because a closed list containing only wrong candidates otherwise forces an error
 
 **Falsified if:** reproduction requires private maintainer state or undocumented intervention.
 
+### 5.1 Claim-to-test matrix
+
+This table is the compact experimental contract for the paper.
+
+| Signet 2 claim / design goal | Research question | Test | Primary metric | Falsification / failure signal |
+|---|---|---|---|---|
+| One shared translator path replaces pairwise translators | RQ1 / H1 | Add an independent game to the declared profile | Peer-specific exception count; existing translators modified | Existing peer translators require game-specific branches or mappings |
+| Shared intents/archetypes carry common meaning | RQ2 / H2 | Independent translators execute identical fixtures | Authoritative checkpoint/event agreement | Unpermitted authoritative divergence |
+| Capabilities let heterogeneous games coexist | RQ3 / H3 | Negotiation matrix including incompatible cases | Incorrect acceptance/rejection count | Session accepts semantics that are not mutually supported, or peers disagree on selection |
+| Pinned profiles make decisions deterministic | RQ4a / H4a | Replay identical bound profile repeatedly | Mapping-decision equality | Same valid profile produces different mapping decisions |
+| Profiles remain trustworthy after updates | RQ4b / H4b | Mutate each declared dependency | Correct invalidation rate | Stale evidence remains current after a relevant dependency change |
+| Calibration makes motion faithful | RQ5 / H5 | Repeated timed intent traces | Trajectory error against predeclared tolerance | Error exceeds declared profile tolerance |
+| Resolver adds practical value | RQ6 / H6 | Held-out paired benchmark of three resolver classes | Severe-error rate plus human effort/ranking metric | No pre-registered improvement or worse severe-error rate |
+| Public evidence is independently usable | RQ7 / H7 | Clean-room reproduction | Reproduction state | Undocumented/private maintainer intervention is required |
+
+A claim can pass one row while failing another. No row inherits success automatically from another.
+
 ---
 
 ## 6. Minimum experimental program
@@ -594,6 +611,142 @@ Use separate development and held-out cases.
 Publish exact artifacts, game fingerprints, profiles, replay fixtures, raw logs, pairwise matrix, and known failures.
 
 Have a third party reproduce without private communication.
+
+### 6.1 Statistical analysis plan
+
+The evaluation mixes **normative conformance questions** with **empirical measurements**. They should not be analyzed as if they were the same kind of evidence.
+
+#### Deterministic conformance and negotiation
+
+For finite normative assertions, the primary report is exact:
+
+~~~text
+PASS
+FAIL
+SKIP
+NOT_APPLICABLE
+~~~
+
+with the denominator and every skip reason exposed.
+
+No p-value is needed to decide whether a required assertion failed. A single reproducible violation of a MUST-level semantic assertion is evidence against conformance for that tested version/profile.
+
+Report at minimum:
+
+- assertions eligible;
+- assertions attempted;
+- assertions passed;
+- assertions failed;
+- assertions skipped;
+- exact failure IDs;
+- first divergent authoritative state/event.
+
+For pairwise matrices, report exact attempted/eligible coverage as well as pass/fail counts. Where a proportion is summarized, accompany it with a confidence interval only when making an inference beyond the finite tested matrix.
+
+#### Motion and calibration measurements
+
+Motion evaluation contains repeated continuous measurements and therefore does require distributional reporting.
+
+For each fixture and implementation report:
+
+- number of independent runs;
+- median and mean error;
+- standard deviation where meaningful;
+- 95th percentile error;
+- maximum error;
+- time spent outside the predeclared tolerance;
+- first divergence time.
+
+The primary pass/fail rule remains the **predeclared engineering tolerance**, not statistical significance.
+
+When comparing two calibration procedures or implementations, report the paired difference and a 95% confidence interval. Prefer bootstrap intervals when the error distribution is clearly non-normal or sample size is small.
+
+#### Resolver benchmark
+
+The resolver experiment is a paired held-out comparison because each resolver should see the same cases and candidate sets.
+
+Primary outcomes should be pre-registered in this order:
+
+1. **severe semantic error rate**;
+2. human time to confirmed mapping;
+3. top-1 accuracy;
+4. mean reciprocal rank;
+5. top-k recall;
+6. abstention performance.
+
+A resolver should not be declared better merely because ranking accuracy improves while severe semantic errors increase.
+
+For paired binary outcomes such as top-1 correctness, use a paired test such as McNemar's test only if inferential testing is useful; always report the paired effect size and raw disagreement table.
+
+For continuous paired outcomes such as confirmation time or reciprocal rank, report paired differences with confidence intervals. A paired permutation test or bootstrap is appropriate when parametric assumptions are weak.
+
+If multiple secondary metrics are tested, label them exploratory or apply a predeclared multiplicity correction. The primary decision should depend on a small number of pre-registered outcomes rather than whichever metric becomes favorable.
+
+#### Reproduction
+
+Independent reproduction is categorical evidence, not a significance test.
+
+Report one of:
+
+~~~text
+CONFIRMS
+PARTIALLY_CONFIRMS
+FAILS_TO_REPRODUCE
+INVALIDATED_BY_VERSION_DRIFT
+TEST_SUITE_DISPUTED
+ENVIRONMENT_SPECIFIC
+UNKNOWN
+~~~
+
+The reproducer's raw artifact should remain linked even after the underlying defect is fixed.
+
+### 6.2 Pre-registration record
+
+Before the independent implementation phase starts, freeze a machine-readable pre-registration containing:
+
+~~~yaml
+study_id: ...
+protocol_commit: ...
+semantic_profile:
+  id: ...
+  revision: ...
+vocabulary_revision: ...
+archetype_catalog_revision: ...
+suite_commit: ...
+fixtures:
+  public: [...]
+  held_out_commitment: ...
+primary_hypotheses:
+  - H1
+  - H2
+  - H3
+  - H4a
+  - H4b
+  - H5
+  - H6
+  - H7
+primary_metrics: [...]
+acceptance_thresholds: [...]
+tolerances: [...]
+independence_criteria: [...]
+exclusion_rules: [...]
+analysis_plan_revision: ...
+timestamp: ...
+~~~
+
+The held-out cases need not be public before evaluation, but their immutable commitment/digest should be.
+
+Any post-registration protocol, fixture, threshold, or analysis change must be logged as an amendment rather than silently replacing the original plan.
+
+### 6.3 Stopping rules
+
+To avoid a moving target:
+
+- deterministic conformance testing stops when the pre-registered suite is complete;
+- a normative failure is recorded even if immediately fixed;
+- independent-implementation clarification continues only through the public clarification mechanism;
+- resolver sample size and held-out set are fixed before model comparison;
+- failed cases may create a **future** regression suite but do not disappear from the original experiment.
 
 ---
 
@@ -772,7 +925,72 @@ If all candidates are wrong, the system needs an explicit abstention/no-safe-map
 
 ---
 
-## 10. Threats to validity
+## 10. Relation to established interoperability practice
+
+The proposed validation model is conservative because established standards programs routinely distinguish specification text, conformance, interoperability, implementation diversity, and operational evidence.
+
+### 10.1 Canonical semantic models
+
+NIST's Smart Grid interoperability framework describes bilateral transformations among n independently modeled systems as an order-n² problem and introduces a canonical data model to reduce mappings toward n+1 [2].
+
+That precedent supports Signet 2's central architecture. It also explicitly retains the need for semantic harmonization. A canonical model changes the number of mappings; it does not make semantic agreement automatic.
+
+### 10.2 Capability negotiation
+
+RFC 5939 distinguishes:
+
+- capabilities;
+- potential configurations;
+- the actual configuration;
+- the negotiation process that selects it [3].
+
+The lesson is conceptual rather than a recommendation to reuse SDP. A Signet client saying “I can jump” is not the same protocol fact as the session saying “jump is part of this negotiated profile under these parameters and fallback rules.”
+
+### 10.3 Conformance versus interoperability
+
+The IPv6 Ready Logo Program explicitly defines itself as both a conformance and interoperability testing program. Its current SRv6 Gold program requires both test plans, whereas its earlier Silver level required conformance only [4].
+
+This is direct precedent for:
+
+~~~text
+SELF_CONFORMANCE != PAIRWISE_INTEROPERABILITY
+~~~
+
+The program also requires rerunning conformance and interoperability logs when a product version changes the relevant IPv6 stack, which supports the proposed freshness/invalidation model.
+
+### 10.4 Independent implementation experience
+
+The current W3C Process treats implementation experience as evidence that a specification is sufficiently clear and complete. Its considerations explicitly include independent interoperable implementations, implementations by people other than specification authors, public deployment, and reports of implementation difficulty [5].
+
+RFC 6410 similarly links mature Internet Standard status to independent interoperating implementations, deployment, operational experience, and absence of interoperability-breaking defects [6].
+
+These are strong precedents for treating an independent Signet adapter as specification evidence rather than merely community growth.
+
+### 10.5 Pairwise matrices
+
+OpenID's 2025 interoperability events reported both denominator and success: 153 of 224 possible OpenID4VP pairings were attempted with more than 90% passing, and 47 OpenID4VCI pairs were tested with 87% passing [7].
+
+This is a useful reporting model because a pass percentage without attempted/eligible coverage can conceal a narrowly tested subset.
+
+### 10.6 Living semantic profiles
+
+SpaceFOM exists because shared simulation middleware did not by itself ensure common domain semantics. Current SpaceFOM V2 work continues to emphasize common semantics and evolution from operational, multi-organization implementation experience [8].
+
+This supports a small-core strategy for Signet 2:
+
+~~~text
+SMALL VERSIONED CORE
+-> INDEPENDENT IMPLEMENTATIONS
+-> OBSERVED FAILURES
+-> SEMANTIC REVISION
+-> REVALIDATION
+~~~
+
+rather than attempting a complete universal game ontology before use.
+
+---
+
+## 11. Threats to validity
 
 **Shared server.** Independent adapters tested against one server do not establish an independent server implementation.
 
@@ -794,7 +1012,7 @@ If all candidates are wrong, the system needs an explicit abstention/no-safe-map
 
 ---
 
-## 11. Recommended development order
+## 12. Recommended development order
 
 The source roadmap proposes vocabulary/catalog publication, additive capabilities, profiles/calibration, an end-to-end prototype, a 30-case model experiment, then Forge.
 
@@ -816,7 +1034,7 @@ We recommend inserting validation before vocabulary expansion and AI evaluation:
 
 ---
 
-## 12. Discussion
+## 13. Discussion
 
 Signet 2 makes the correct architectural move by introducing a shared semantic boundary rather than requiring every game to understand every peer.
 
@@ -845,7 +1063,7 @@ Both results improve the standard.
 
 ---
 
-## 13. Conclusion
+## 14. Conclusion
 
 Signet 2's intent/archetype architecture is a plausible way to reduce the engineering cost of cross-game integration. The canonical-hub pattern has precedent, and the proposal contains several strong choices: separation of semantics from presentation, authoritative server simulation, explicit capabilities, deterministic pinned decisions, and AI outside the real-time loop.
 
