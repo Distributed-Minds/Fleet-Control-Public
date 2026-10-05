@@ -1208,6 +1208,48 @@ received / applied
 
 These experiments will reveal more than another fifty vocabulary entries.
 
+## 19.4 Companion machine-readable candidate
+
+To make this response falsifiable rather than purely architectural, we published a candidate coordination schema alongside the paper:
+
+- `Research/Game-Interoperability/Signet-Frontier-2026-10/lanes/L1/schema/signet-semantic-core-0.schema.json`
+- turn-based capability example;
+- hidden-information card-session requirements;
+- corresponding negotiated contract.
+
+The artifact uses JSON Schema Draft 2020-12, currently identified by the JSON Schema project as its latest published specification.[10]
+
+It encodes only the coordination surface:
+
+~~~text
+semantic references
+session/participant identity
+intent/state/event/ack/control categories
+ordering-model references
+authority scopes
+visibility-policy references
+capabilities
+session requirements
+fallbacks
+negotiated compatibility result
+~~~
+
+It deliberately leaves domain payloads to semantic profiles.
+
+Most importantly:
+
+~~~text
+schema-valid
+!=
+semantically conformant
+~~~
+
+The schema can prove that a participant named a semantic definition and supplied the required structural fields.
+
+It cannot prove that two independent implementations attach the same meaning to that definition.
+
+That remains the job of the conformance and replay tests proposed above.
+
 ---
 
 # 20. Conclusion
@@ -1283,6 +1325,10 @@ https://standards.ieee.org/ieee/1516.2/6689/
 
 [9] **Simulation Interoperability Standards Organization (SISO).** Data Files, including HLA Evolved modular FOM examples and reference modules.  
 https://www.sisostandards.org/page/DataFiles
+
+[10] **JSON Schema.** Specification and Draft 2020-12 meta-schema. The project currently identifies 2020-12 as its latest published specification.  
+https://json-schema.org/specification  
+https://json-schema.org/draft/2020-12/schema
 
 ---
 
