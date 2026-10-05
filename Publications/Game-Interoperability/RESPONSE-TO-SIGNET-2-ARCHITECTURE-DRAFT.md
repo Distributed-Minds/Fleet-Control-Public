@@ -1300,3 +1300,131 @@ Relevant supporting files:
 - `Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Verifiable-Translation-Prototype/README.md`
 - `Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Verifiable-Translation-Prototype/adapter-shim-generation/README.md`
 
+# 19. Real-target test A: Godot 4.7.2 GDExtension
+
+The first native target uses Godot 4.7.2 stable, commit `ed1daf0bf001b61586d9930840f2f1394092c079`.
+
+Godot's `gdextension_interface.json` is unusually useful for this research because it is itself a machine-readable source of truth for the native extension ABI. The exact source blob used here is `9b55cc9810d458940acf7659dfac879abbcb8949`.
+
+Fixture:
+
+`Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Verifiable-Translation-Prototype/targets/godot-4.7.2-gdextension/`
+
+A minimal subset of the 4.7.2 ABI was extracted for the types required by the experiment. A Linux shared library then implemented the previously generated L2 C shim and exported a GDExtension initialization symbol.
+
+A host harness loaded the shared library, supplied the real GDExtension procedure-address signature, exposed `get_godot_version2`, ran initialization and called the generated shim.
+
+Observed:
+
+```text
+godot-entry-init: PASS
+godot-version-discovery: 0x040702
+generated-shim-surface: PASS
+```
+
+This is deliberately classified **ABI_HOST_HARNESS_PASS**, not `GODOT_RUNTIME_PASS`: the Godot executable itself was not launched in this pass.
+
+The target also exposes an important boundary. A bare engine extension can report its host integration surface, but it cannot truthfully claim to know a particular game's controls, terrain or presentation hooks. Those belong in a project/game-specific shim.
+
+---
+
+# 20. Real-target test B: Signet's documented Minecraft gateway
+
+Signet's current public gateway documentation provides a qualitatively different integration mode: an unmodified Minecraft client connects to a local official server, and a separate gateway drives that controlled server through RCON.
+
+Observed Signet source state:
+
+`kian-cx/signetprotocol@2ddb136ee941705d3e1c020eaddad93be65026f2`
+
+The documented gateway responsibilities include:
+
+- world construction with `/fill`;
+- player position/rotation observation with `/data get entity`;
+- right-click observation through statistic scoreboards;
+- actor movement and authority correction with `/tp`;
+- damage with `/damage`;
+- death with `/kill` plus messaging.
+
+Fixture:
+
+`Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Verifiable-Translation-Prototype/targets/minecraft-rcon-gateway/`
+
+The observed public Signet tree does not contain the beta gateway implementation source, so this experiment does not claim to reconstruct it.
+
+Instead it validates two separate things:
+
+1. Source-RCON-compatible framing for representative documented commands;
+2. whether the first generated L2 shim can express the documented gateway responsibility surface.
+
+Transport result:
+
+```text
+source-rcon-framing: PASS
+commands-roundtripped: 5
+```
+
+Contract result:
+
+```text
+v0-shim-coverage: NO=5, PARTIAL=2
+v0-shim-sufficiency: FAIL_EXPECTED
+```
+
+This is the most useful result of the implementation pass so far.
+
+The code-generation mechanism worked, but the first logical interface was wrong.
+
+---
+
+# 21. Falsification result: revise the descriptor, not the evidence
+
+The correct response to the Minecraft result is not to stretch `present_choice` until it means world construction, actor teleportation, damage, death and reconciliation.
+
+That would make the interface superficially pass while destroying its meaning.
+
+L2 therefore introduces a second descriptor model:
+
+`Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Verifiable-Translation-Prototype/adapter-role-contract-v1/`
+
+Instead of starting from convenient function names, v1 describes operations by translator responsibility:
+
+- `HOST`;
+- `IMPORTER`;
+- `WORLD`;
+- `INPUT`;
+- `PRESENTATION`;
+- `AUTHORITY`.
+
+Each operation records:
+
+- direction;
+- local integration mechanism;
+- authority class;
+- evidence class;
+- an optional external semantic-contract reference.
+
+The semantic payload remains external on purpose. L2 is describing how a target exposes operations; it is not taking ownership of the shared intent/archetype vocabulary.
+
+The Minecraft example now maps every documented responsibility:
+
+```text
+minecraft-responsibility-coverage: 7/7
+minecraft-role-contract: PASS
+```
+
+The generic Godot example makes only one claim—the host/version boundary—and therefore avoids fabricating game-level capabilities:
+
+```text
+godot-generic-gameplay-claims: 0
+godot-engine-vs-game-boundary: PASS
+```
+
+This changes the paper's implementation recommendation.
+
+The useful generatable object is not one universal handwritten list of adapter functions.
+
+It is:
+
+> **a versioned descriptor of the operations a target legitimately exposes, from which bindings, manifests, evidence checks and target-specific wrappers can be generated.**
+
+Real targets should be allowed to falsify the descriptor model before the descriptor becomes a standard.
