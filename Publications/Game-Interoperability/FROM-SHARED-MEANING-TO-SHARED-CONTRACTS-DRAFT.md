@@ -262,6 +262,98 @@ ruleset:
 
 A shared vocabulary should not silently become a shared game implementation.
 
+## 3.2 We tried to falsify that core outside FPS games
+
+After drafting the small core, we applied it to four deliberately different domain shapes:
+
+1. a turn-based board/tactics game;
+2. a deckbuilder/card game with hidden information;
+3. a city-builder/management simulation;
+4. a user-defined tabletop/game-within-game environment.
+
+This was a **design falsification pass**, not an implementation benchmark.
+
+The result was mostly positive: none of the fixtures required movement, health, weapons, continuous 3D position, or one player body in the universal core.
+
+But the test did expose two FPS-shaped assumptions in our own first draft.
+
+### Ordering cannot mean “tick”
+
+A turn-based game naturally orders state as:
+
+~~~text
+turn
+phase
+action index
+~~~
+
+A city simulation may use fixed ticks.
+
+An event-driven tabletop module may need only a monotonic event sequence.
+
+Therefore the core should negotiate an **ordering model**, not standardize one universal tick field.
+
+Examples:
+
+~~~yaml
+ordering:
+  model: fixed-tick@1
+  value:
+    tick: 18442
+    substep: 3
+~~~
+
+~~~yaml
+ordering:
+  model: turn-sequence@1
+  value:
+    turn: 42
+    phase: action
+    action_index: 1
+~~~
+
+This is a useful correction to our own earlier draft.
+
+### Authority and visibility are different
+
+The card-game fixture exposed a second missing distinction.
+
+A server can authoritatively know a player's hand without being allowed to disclose it to the opponent.
+
+So:
+
+~~~text
+who may assert this fact?
+~~~
+
+and:
+
+~~~text
+who may observe this fact?
+~~~
+
+are separate questions.
+
+The core therefore needs a generic reference to the session/profile's visibility/disclosure policy, while concrete concepts such as hand, fog-of-war and secret objectives remain domain-profile semantics.
+
+The falsification pass strengthens the central claim rather than weakening it:
+
+> the universal core should standardize coordination semantics, while genre meaning belongs in negotiated profiles.
+
+A useful Signet 2 reframing is therefore:
+
+~~~text
+semantic core
+  +
+action/FPS profile v0
+  +
+presentation/archetype profile v0
+  +
+doom-deathmatch ruleset
+~~~
+
+The version-0 vocabulary can stay small and practical without being mistaken for the forever-core of cross-game interoperability.
+
 ---
 
 # 4. Archetype, authoritative state, rules, and appearance are different layers
@@ -808,11 +900,18 @@ Two adapters pass only if they make the same distinction.
 - client cannot self-assign authoritative state ownership;
 - local presentation cannot mutate shared truth.
 
-### TIME — causality
+### ORDER — ordering and causality
 
-- replay preserves authoritative ordering;
+- fixed-tick, turn-sequence and event-sequence participants can use the same core with different negotiated ordering models;
+- replay preserves authoritative ordering independently from transport framing;
 - duplicates do not repeat exactly-once effects;
 - receipt and application remain distinct.
+
+### VIS — disclosure
+
+- authoritative knowledge is not automatically visible to every participant;
+- hidden semantic state obeys the negotiated disclosure policy;
+- spectator/observer visibility is explicit rather than assumed.
 
 ### PROFILE — modularity
 
@@ -1059,17 +1158,24 @@ That is exactly the kind of artifact a community can improve through Git.
 
 ---
 
-# 19. Three experiments we would run next
+# 19. What should be implemented next
 
-Before expanding the vocabulary, we would run three falsification-oriented experiments.
+We have now completed the paper-design version of the non-FPS falsification across board/turn, card/hidden-information, city-simulation and user-defined tabletop domains.
 
-## Experiment 1 — non-FPS core
+The next step is to convert that into executable evidence.
 
-Implement the proposed semantic core in a game with no natural gun, health pickup or continuous player body.
+## Experiment 1 — cross-domain core implementation
 
-**Pass:** no dummy FPS concepts are required.
+Implement the same core negotiation machinery in:
 
-**Failure:** core concepts turn out to be genre vocabulary.
+- the current Signet FPS path; and
+- one small turn-based card/board fixture.
+
+Use different activated profiles and different ordering models.
+
+**Pass:** both use the same core without dummy domain fields.
+
+**Failure:** genre-specific exceptions leak back into core semantics.
 
 ## Experiment 2 — incomplete capability matrix
 
