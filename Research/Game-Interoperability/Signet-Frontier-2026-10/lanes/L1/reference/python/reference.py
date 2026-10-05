@@ -191,6 +191,35 @@ def compose(inp: dict) -> dict:
         result["visibility_policy"] = visibility
     return result
 
+def negotiate_optional(inp: dict) -> dict:
+    selected = list(inp["selected_profiles"])
+    baseline_input = dict(inp)
+    baseline_input["selected_profiles"] = selected
+    composition = compose(baseline_input)
+
+    activated = []
+    skipped = []
+
+    for candidate in inp.get("optional_profile_preferences", []):
+        trial = dict(inp)
+        trial["selected_profiles"] = selected + [candidate]
+        try:
+            trial_composition = compose(trial)
+        except CompositionError as exc:
+            skipped.append({"profile": candidate, "reason": exc.reason})
+            continue
+
+        selected.append(candidate)
+        activated.append(candidate)
+        composition = trial_composition
+
+    return {
+        "composition": composition,
+        "activated_optional": activated,
+        "skipped_optional": skipped,
+    }
+
+
 def run_vectors(vector_dir: Path) -> None:
     failures = []
 
@@ -226,6 +255,13 @@ def run_vectors(vector_dir: Path) -> None:
     if sha256_jcs(negotiation_result) != negotiation_vector["expected_profile_set_hash"]:
         failures.append("NEGOTIATION-VECTOR-001 digest mismatch")
 
+    optional_vector = json.loads((vector_dir / "optional-negotiation-vector-001.json").read_text())
+    optional_result = negotiate_optional(optional_vector["input"])
+    if optional_result != optional_vector["expected_result"]:
+        failures.append("OPTIONAL-NEGOTIATION-VECTOR-001 result mismatch")
+    if sha256_jcs(optional_result) != optional_vector["expected_result_hash"]:
+        failures.append("OPTIONAL-NEGOTIATION-VECTOR-001 digest mismatch")
+
     contract_vector = json.loads((vector_dir / "contract-vector-001.json").read_text())
     contract_jcs = canonicalize(contract_vector["contract"])
     contract_hash = sha256_jcs(contract_vector["contract"])
@@ -251,6 +287,7 @@ def run_vectors(vector_dir: Path) -> None:
     print("PASS: HASH-VECTOR-001")
     print("PASS: COMP-VECTOR-001")
     print("PASS: NEGOTIATION-VECTOR-001")
+    print("PASS: OPTIONAL-NEGOTIATION-VECTOR-001")
     print("PASS: CONTRACT-VECTOR-001")
     print(f"PASS: {len(additional)} additional composition vectors")
     print(f"PASS: {len(negatives)} negative composition vectors")
