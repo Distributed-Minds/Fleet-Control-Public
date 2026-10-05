@@ -1,0 +1,17 @@
+{
+  "schema": "signet-adapter-generated-operations@1",
+  "generator": "l2-role-contract-generator@1",
+  "descriptor_sha256": "026c4d2dc9b3f4686c9e7ea67685535ead8c25e0791c6bd0e947618428b21312",
+  "target": "Signet documented Minecraft Java gateway",
+  "integration_mode": "CONTROLLED_SERVER_GATEWAY",
+  "surface_fingerprint": "signet-docs@2ddb136e:gateway.mdx@00dd8db6",
+  "operations": [
+    {"id":"authority.drift_correction","role":"AUTHORITY","direction":"WRITE_LOCAL","local_mechanism":"RCON /tp after threshold check","semantic_contract_ref":null,"authority_class":"AUTHORITY_CORRECTION","evidence":"DOCS"},
+    {"id":"input.position_rotation","role":"INPUT","direction":"READ_LOCAL","local_mechanism":"RCON /data get entity","semantic_contract_ref":null,"authority_class":"LOCAL_OBSERVATION","evidence":"DOCS"},
+    {"id":"input.right_click","role":"INPUT","direction":"READ_LOCAL","local_mechanism":"statistic scoreboard","semantic_contract_ref":null,"authority_class":"LOCAL_OBSERVATION","evidence":"DOCS"},
+    {"id":"presentation.actor_move","role":"PRESENTATION","direction":"WRITE_LOCAL","local_mechanism":"RCON /tp","semantic_contract_ref":null,"authority_class":"LOCAL_PRESENTATION","evidence":"DOCS"},
+    {"id":"presentation.damage","role":"PRESENTATION","direction":"WRITE_LOCAL","local_mechanism":"RCON /damage","semantic_contract_ref":null,"authority_class":"LOCAL_PRESENTATION","evidence":"DOCS"},
+    {"id":"presentation.death","role":"PRESENTATION","direction":"WRITE_LOCAL","local_mechanism":"RCON /kill + message","semantic_contract_ref":null,"authority_class":"LOCAL_PRESENTATION","evidence":"DOCS"},
+    {"id":"world.fill","role":"WORLD","direction":"WRITE_LOCAL","local_mechanism":"RCON /fill","semantic_contract_ref":null,"authority_class":"SEMANTIC_MAPPING","evidence":"DOCS"}
+  ]
+}
