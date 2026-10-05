@@ -195,3 +195,22 @@ Public response manuscript:
 - `Publications/Game-Interoperability/RESPONSE-TO-SIGNET-2-ARCHITECTURE-DRAFT.md`
 
 The response keeps the Signet 2 core direction and concentrates on the remaining engineering boundary: typed authority inside profiles, evidence-bearing locks, calibration observability, resolver abstention/OOD handling, drift invalidation, generated adapter glue, and a stronger staged benchmark.
+
+### Executable profile/drift experiment
+
+The empirical pass has started with a deliberately small contract test:
+
+- `Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Verifiable-Translation-Prototype/`
+
+Observed local result:
+
+```text
+typed profile: PASS
+semantic mapping fire-primary: SUSPECT
+changed dependency: integration_surface_digest
+changed dependency: game_version
+```
+
+This proves the proposed state distinction is executable: `pinned` keeps the choice deterministic while changed evidence moves the mapping out of `VALID`.
+
+Next L2 implementation seam: machine-readable adapter ABI descriptor → deterministic generated glue, followed by replay fixtures.
