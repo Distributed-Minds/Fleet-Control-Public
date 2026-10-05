@@ -1428,3 +1428,79 @@ It is:
 > **a versioned descriptor of the operations a target legitimately exposes, from which bindings, manifests, evidence checks and target-specific wrappers can be generated.**
 
 Real targets should be allowed to falsify the descriptor model before the descriptor becomes a standard.
+
+
+---
+
+# 22. Descriptor v1 is now executable
+
+The revised role-based descriptor has now been taken through the same reproducibility discipline as the earlier fixed shim.
+
+Generator:
+
+`Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Verifiable-Translation-Prototype/adapter-role-contract-v1/generate.py`
+
+For each target, it emits:
+
+- a canonical generated operation manifest;
+- a C operation surface;
+- a Rust trait surface.
+
+The generated operation surface carries target operation identity and role/authority metadata, while request and response payloads remain opaque at L2.
+
+That is deliberate.
+
+L2 can generate the **adapter operation boundary** without pretending to own the meaning of the semantic payload. The payload schema can be supplied by the protocol/profile package that owns that semantic concept.
+
+## Reproducibility result
+
+Two clean runs for both the Minecraft gateway descriptor and the Godot descriptor produced byte-identical generated artifacts.
+
+```text
+minecraft-deterministic-generation: PASS
+godot-deterministic-generation: PASS
+generated-c-header-syntax: PASS
+```
+
+The generator also rejects structurally misleading contracts:
+
+```text
+negative duplicate-operation-id: PASS(rejected)
+negative role-authority-mismatch: PASS(rejected)
+negative invalid-operation-id: PASS(rejected)
+```
+
+This is a stronger result than the original v0 code-generation demonstration.
+
+The first experiment showed only that a fixed interface could be generated reproducibly.
+
+The current experiment shows that:
+
+1. a real target can falsify the original logical interface;
+2. the descriptor model can be revised from that evidence;
+3. the revised descriptor still generates reproducible artifacts;
+4. invalid role/authority combinations can be rejected before adapter code is written.
+
+## Live Godot execution remains unclaimed
+
+The upstream Godot 4.7.2 Linux release asset was identified, but the current execution environment has no Godot executable and cannot materialize binary release assets through the available repository connector.
+
+The paper therefore continues to classify the native result as:
+
+`ABI_HOST_HARNESS_PASS`
+
+not:
+
+`GODOT_RUNTIME_PASS`.
+
+This distinction is intentional. Lack of access to the engine binary is an experiment-environment limitation; it must not be converted into a successful runtime claim.
+
+The next live-runtime experiment remains simple and well specified:
+
+1. load the built `.gdextension` in Godot 4.7.2;
+2. verify the engine invokes the entry symbol;
+3. record the actual engine version returned through `get_godot_version2`;
+4. add one project-specific Godot hook operation;
+5. capture that operation in replay/conformance evidence.
+
+Until that test runs, the engine boundary is ABI-validated but not runtime-validated.
