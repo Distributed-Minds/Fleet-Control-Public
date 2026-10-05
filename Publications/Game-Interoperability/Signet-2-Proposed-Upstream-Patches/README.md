@@ -154,9 +154,10 @@ The series does not depend on upstream accepting the two new proposal documents.
 For the shortest path through the Fleet-Control response:
 
 1. `../SIGNET-2-RESPONSE-HANDOFF.md`
-2. `../SIGNET-2-PROPOSAL-DELTA-MATRIX.md`
-3. this patch series
-4. `../RESPONSE-TO-SIGNET-2-ARCHITECTURE-DRAFT.md`
+2. `../SIGNET-2-UPSTREAM-PROTOCOL-PROPOSAL-DRAFT.md`
+3. `../SIGNET-2-PROPOSAL-DELTA-MATRIX.md`
+4. this patch series
+5. `../RESPONSE-TO-SIGNET-2-ARCHITECTURE-DRAFT.md`
 
 ## Evidence boundaries
 
