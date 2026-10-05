@@ -199,9 +199,16 @@ Unknown optional features are ignored **as capabilities**, not silently interpre
 
 Unknown required features produce `REQUIRED_CONCEPT_UNSUPPORTED`.
 
-## N4 — Time model
+## N4 — Ordering model
 
-Require an explicit compatible time model.
+Require an explicit compatible ordering model.
+
+The core must not assume that every session uses fixed ticks. A session may negotiate, for example:
+
+- fixed-tick ordering;
+- turn/phase/action ordering;
+- logical-step ordering;
+- monotonic event-sequence ordering.
 
 For current Signet-style play, a participant that cannot provide numbered commands may be:
 
@@ -211,7 +218,20 @@ For current Signet-style play, a participant that cannot provide numbered comman
 
 Which result is valid is a session policy decision, but the outcome must be deterministic.
 
-## N5 — Authority roles
+## N5 — Visibility / disclosure policy
+
+If the activated profiles/ruleset contain selectively visible authoritative state, require a compatible disclosure policy.
+
+Examples include:
+
+- private card hands;
+- team-private state;
+- fog-of-war observations;
+- hidden objectives.
+
+A participant must not receive a semantic fact merely because it is authoritative. Authority answers **who may assert it**; visibility answers **who may observe it**.
+
+## N6 — Authority roles
 
 Check whether the participant can perform the roles expected by the session.
 
@@ -223,7 +243,7 @@ Example:
 
 This is a semantic authority check. Authentication of the issuer belongs to L3.
 
-## N6 — Derive result
+## N7 — Derive result
 
 Return exactly one top-level result:
 
@@ -497,23 +517,49 @@ After authority transfer to epoch N+1, claims from epoch N beyond the transfer b
 
 A valid player intent cannot be accepted as authoritative state/effect merely because its fields resemble the result.
 
-## TIME family — ordering and causality
+## ORDER family — ordering and causality
 
-### TIME01 — Replay-order independence from transport framing
+### ORDER01 — Replay-order independence from transport framing
 
 The same ordered semantic event set reproduces the same authoritative result across live JSONL and replay-file framing.
 
-### TIME02 — Wall clock is not simulation order
+### ORDER02 — Wall clock is not simulation order
 
 Perturbing observation timestamps does not change authoritative tick/sequence ordering.
 
-### TIME03 — Duplicate event identity
+### ORDER03 — Duplicate event identity
 
 Replaying the same authoritative event ID cannot produce the effect twice where exactly-once effect semantics are specified.
 
-### TIME04 — Cause references survive replay
+### ORDER04 — Cause references survive replay
 
 `caused_by` references remain resolvable and stable in captured replay fixtures.
+
+### ORDER05 — Ordering-model independence
+
+A turn-based participant can conform to the same core without inventing fixed simulation ticks.
+
+A fixed-tick participant can conform without inventing turn/phase fields.
+
+The negotiated ordering-model semantic ID determines the shape and interpretation of ordering values.
+
+## VIS family — visibility / disclosure
+
+### VIS01 — Authority does not imply visibility
+
+A fact may be authoritatively known by the server without being disclosed to every participant.
+
+### VIS02 — Hidden state stays hidden
+
+A participant not authorized by the negotiated disclosure policy cannot receive hidden semantic state through the normal shared-state surface.
+
+### VIS03 — Observer policy is explicit
+
+Observer/spectator access to hidden information is determined by the session policy rather than assumed from the observer role.
+
+### VIS04 — Replay disclosure is policy-aware
+
+Replay/conformance artifacts that contain hidden authoritative outcomes must distinguish full-authority test artifacts from participant-visible replays.
 
 ## PROFILE family — modularity
 
@@ -657,7 +703,7 @@ handoff:
 handoff:
   from_lane: L1
   to_lane: L4
-  finding: The ID/NEG/MAP/AUTH/TIME/PROFILE/LEGACY properties above are the exact semantic conformance surface.
+  finding: The ID/NEG/MAP/AUTH/ORDER/VIS/PROFILE/LEGACY properties above are the exact semantic conformance surface.
   evidence:
     - deterministic vectors V1-V5
   why_material: Turns semantic interoperability claims into independent reproducible evidence.
