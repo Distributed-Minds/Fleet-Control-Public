@@ -105,6 +105,13 @@ def compose(inp: dict) -> dict:
     for selected in inp["selected_profiles"]:
         visit(selected)
 
+    for definition in closure.values():
+        for optional in definition.get("optional_requires", []):
+            if optional["id"] in closure:
+                active_hash = closure[optional["id"]]["semantic"]["definition_hash"]
+                if active_hash != optional["definition_hash"]:
+                    raise CompositionError("SEMANTIC_DEFINITION_CONFLICT")
+
     active_ids = set(closure)
     for definition in closure.values():
         for conflict in definition.get("conflicts", []):
@@ -172,6 +179,14 @@ def run_vectors(vector_dir: Path) -> None:
     if sha256_jcs(actual) != cv["expected_profile_set_hash"]:
         failures.append("COMP-VECTOR-001 digest mismatch")
 
+    additional = json.loads((vector_dir / "composition-additional-vectors.json").read_text())
+    for vector in additional:
+        actual = compose(vector["input"])
+        if actual != vector["expected_composition"]:
+            failures.append(f'{vector["vector_id"]} composition mismatch')
+        if sha256_jcs(actual) != vector["expected_profile_set_hash"]:
+            failures.append(f'{vector["vector_id"]} digest mismatch')
+
     contract_vector = json.loads((vector_dir / "contract-vector-001.json").read_text())
     contract_jcs = canonicalize(contract_vector["contract"])
     contract_hash = sha256_jcs(contract_vector["contract"])
@@ -197,6 +212,7 @@ def run_vectors(vector_dir: Path) -> None:
     print("PASS: HASH-VECTOR-001")
     print("PASS: COMP-VECTOR-001")
     print("PASS: CONTRACT-VECTOR-001")
+    print(f"PASS: {len(additional)} additional composition vectors")
     print(f"PASS: {len(negatives)} negative composition vectors")
 
 if __name__ == "__main__":
