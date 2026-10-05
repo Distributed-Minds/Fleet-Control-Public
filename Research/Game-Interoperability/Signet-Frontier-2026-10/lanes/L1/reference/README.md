@@ -21,7 +21,9 @@ Expected output from both:
 ~~~text
 PASS: HASH-VECTOR-001
 PASS: COMP-VECTOR-001
-PASS: 7 negative composition vectors
+PASS: CONTRACT-VECTOR-001
+PASS: 5 additional composition vectors
+PASS: 9 negative composition vectors
 ~~~
 
 ## What is implemented
