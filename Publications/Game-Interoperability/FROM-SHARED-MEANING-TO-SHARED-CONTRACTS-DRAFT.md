@@ -1300,7 +1300,7 @@ Only the normative member is hashed.
 For example, L1 now publishes a fixed canonicalization vector whose normative object hashes to:
 
 ~~~text
-sha256:f03c2be7809a1890c0ed986644c81a000b4549328f9c4934313858d304dd16b8
+sha256:2ba8cba596be0c3cc843d9f35441a93513df8179952d15e1539332c50fac6989
 ~~~
 
 Independent implementations should reproduce the same canonical bytes and digest.
