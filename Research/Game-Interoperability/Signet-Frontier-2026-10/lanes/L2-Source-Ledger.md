@@ -257,3 +257,39 @@ Material new observations:
 L2 uses these as primary project claims and responds in:
 
 `Publications/Game-Interoperability/RESPONSE-TO-SIGNET-2-ARCHITECTURE-DRAFT.md`
+
+## J. Expanded Forge documentation and executable profile fixture
+
+Signet main advanced again to:
+
+`2ddb136ee941705d3e1c020eaddad93be65026f2`
+
+Commit:
+
+`Docs: full Signet 2 / Signet Forge design document under /forge`
+
+Additional primary pages checked:
+
+- `docs/content/forge/architecture.mdx`
+- `docs/content/forge/how-the-model-decides.mdx`
+- `docs/content/forge/reliability-and-limits.mdx`
+- `docs/content/forge/roadmap.mdx`
+
+**NO MATERIAL REVERSAL:** the expanded docs preserve the proposal's core claims used by L2: one ranked translation API, player-pin/profile/model/default precedence, model outside the game loop, pinned in-match decisions, server-authoritative physics, and an unvalidated 30-case resolver pilot.
+
+The clearer global precedence statement strengthens L2's typed-authority question rather than resolving it: local appearance/input choices and simulation-relevant semantic mappings are still represented near one translation-profile abstraction.
+
+L2 therefore added an executable research fixture:
+
+`Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Verifiable-Translation-Prototype/`
+
+Local validation result:
+
+```text
+typed profile: PASS
+semantic mapping fire-primary: SUSPECT
+changed dependency: integration_surface_digest
+changed dependency: game_version
+```
+
+The fixture is **PROPOSED research design**, not a claim that Signet has adopted these schemas.
