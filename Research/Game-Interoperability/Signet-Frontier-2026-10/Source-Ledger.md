@@ -330,3 +330,42 @@ Evidence class: **primary specification/project source**.
 The JSON Schema project currently identifies Draft 2020-12 as its latest published specification.
 
 L1 use: structural encoding for the candidate semantic envelope, capability declaration, session requirements and negotiated contract. This source supports the schema dialect only; it does **not** establish semantic interoperability or replace L1 conformance tests.
+
+
+---
+
+## L1 canonicalization and composition sources — 2026-10-05
+
+### RFC 8785 — JSON Canonicalization Scheme
+
+https://www.rfc-editor.org/rfc/rfc8785.html
+
+Evidence class: **primary Internet specification**.
+
+L1 use:
+
+- deterministic JSON primitive serialization;
+- recursive object-property ordering;
+- preserved array ordering;
+- canonical UTF-8 bytes suitable for hashing/signing.
+
+Important qualification: JCS does **not** canonicalize semantically unordered arrays. L1 therefore requires schema-declared set arrays to be source-canonical (sorted + unique) before JCS.
+
+### HLA Evolved Modular FOM composition
+
+Möller, Löfstrand, Karlsson.  
+**An Overview of the HLA Evolved Modular FOMs**. 2007 Spring Simulation Interoperability Workshop.
+
+Primary public copy from Pitch Technologies:  
+https://pitchtechnologies.com/wp-content/uploads/2020/09/07s-siw-108-1.pdf
+
+Evidence class: **technical paper by HLA standards/tooling participants**.
+
+L1 use:
+
+- exact equivalence for duplicated singleton/table definitions;
+- union of distinct elements while requiring duplicate identifiers to be equivalent;
+- structural extension instead of mutating an already-defined class;
+- selected FOM-module loads fail atomically on hard composition conflicts.
+
+The paper explicitly states that full normative merge rules live in the HLA OMT standard; L1 uses these principles as precedent rather than claiming the paper itself is the complete standard.
