@@ -317,3 +317,16 @@ Public timestamps relevant to this response:
 - Signet 2 proposal/PDF commit: `490dfa9423841a45f2917d8d013e010ca0eb5548` — 2026-10-05T16:31:40Z
 
 This chronology is retained for research provenance only. It does **not** establish or claim priority, independence, or upstream awareness.
+
+
+### JSON Schema structural encoding
+
+**JSON Schema Draft 2020-12**  
+https://json-schema.org/specification  
+https://json-schema.org/draft/2020-12/schema
+
+Evidence class: **primary specification/project source**.
+
+The JSON Schema project currently identifies Draft 2020-12 as its latest published specification.
+
+L1 use: structural encoding for the candidate semantic envelope, capability declaration, session requirements and negotiated contract. This source supports the schema dialect only; it does **not** establish semantic interoperability or replace L1 conformance tests.
