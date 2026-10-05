@@ -293,3 +293,36 @@ changed dependency: game_version
 ```
 
 The fixture is **PROPOSED research design**, not a claim that Signet has adopted these schemas.
+
+## K. Godot 4.7.2 concrete target
+
+Current stable target selected for the empirical native-engine pass:
+
+- Godot `4.7.2-stable`;
+- release commit `ed1daf0bf001b61586d9930840f2f1394092c079`;
+- `core/extension/gdextension_interface.json` blob `9b55cc9810d458940acf7659dfac879abbcb8949`;
+- interface JSON format version `1`.
+
+Primary Godot documentation states that `gdextension_interface.json` is the low-level C-interface source of truth and is intended for language-binding code generation.
+
+L2 extracted only the ABI subset required by the harness. No performance or runtime-compatibility claim is inferred from documentation alone.
+
+## L. Minecraft gateway and RCON concrete target
+
+Signet primary sources at `2ddb136ee941705d3e1c020eaddad93be65026f2`:
+
+- `docs/content/guides/gateway.mdx` blob `00dd8db68b6bb123a6c3295ce822ea505e388bcf`;
+- `docs/content/concepts/translators.mdx` blob `6f537cffac65da1287106e2fdcf222aa0e3348a5`;
+- `CHANGELOG.md` blob `9aebc95baf742890fc2decf71a07adbe9f748044`.
+
+These support the documented Minecraft mechanisms and the known unnumbered-intent gap.
+
+Independent RCON implementation evidence:
+
+- `gorcon/rcon`;
+- `packet.go` blob `168527b1866a0e0ca19558c1df46edcba18e877a`;
+- MIT license.
+
+Its packet implementation corroborates little-endian size/id/type fields, ASCII body and two NUL terminators.
+
+L2's fake-server roundtrip is an executed transport fixture, not evidence of a live Minecraft-server test.
