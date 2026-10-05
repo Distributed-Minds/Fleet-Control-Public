@@ -6,6 +6,7 @@
 
 Full response: Publications/Game-Interoperability/RESPONSE-TO-SIGNET-2-ARCHITECTURE-DRAFT.md
 Short handoff: Publications/Game-Interoperability/SIGNET-2-RESPONSE-HANDOFF.md
+Patch-ready upstream series: Publications/Game-Interoperability/Signet-2-Proposed-Upstream-Patches/README.md
 
 ## Evidence language
 
