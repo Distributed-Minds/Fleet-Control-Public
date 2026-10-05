@@ -717,3 +717,23 @@ negative invalid-operation-id: PASS(rejected)
 **LIMIT:** generated Rust was not compiler-validated because `rustc` was unavailable in the test environment.
 
 **LIMIT:** live Godot 4.7.2 execution remains untested because the binary could not be materialized in the execution environment. The existing native result remains `ABI_HOST_HARNESS_PASS`.
+
+# Resolver pilot: raw accuracy can be a candidate-order artifact
+
+L2 now has a source-anchored seed harness at:
+
+`Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Resolver-Pilot/`
+
+Observed baseline result:
+
+```text
+lookup:  base_accuracy=1.000 no_match=1.000 order_stability=1.000
+lexical: base_accuracy=1.000 no_match=0.000 order_stability=0.167
+first:   base_accuracy=1.000 no_match=0.000 order_stability=0.000
+```
+
+**OBSERVED:** a deliberately bad first-candidate baseline can achieve 100% top-1 accuracy on the unperturbed seed because the source candidate lists place expected answers first.
+
+**DERIVED:** the proposed 30-case experiment needs candidate-order perturbation and no-match/abstention tests before model accuracy is meaningful.
+
+**LIMIT:** only six source-anchored semantic mappings are in the current seed. Synthetic distractors are explicitly marked and are not treated as Signet facts.
