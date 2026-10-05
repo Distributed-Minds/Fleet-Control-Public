@@ -91,12 +91,12 @@
     "composition": {
       "profiles": [
         {
-          "id": "https://example.org/sem/profile/required/1",
-          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-        },
-        {
           "id": "https://example.org/sem/profile/optional-event/1",
           "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        {
+          "id": "https://example.org/sem/profile/required/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         }
       ],
       "concepts": [],
@@ -128,5 +128,5 @@
       }
     ]
   },
-  "expected_result_hash": "sha256:1561bfee42f90c966b8d1142b2419c29095234bb2fc3c84d6f14e9f952370595"
+  "expected_result_hash": "sha256:5df2fb5f3c1660aa844027f1980d0a0a9165d539650c9414a7e698b307860dd2"
 }
