@@ -185,3 +185,13 @@ The current design delta is:
 The next high-value step is an empirical adapter-generator prototype against at least one native engine/plugin target and one gateway/reimplementation target, followed by the closed-set mapping benchmark defined in the findings.
 
 Independent public benchmark execution belongs to L4.
+
+### Signet 2 response
+
+Signet subsequently published a concrete Signet 2 draft that converges with the lane's deterministic-core/adaptive-edge direction.
+
+Public response manuscript:
+
+- `Publications/Game-Interoperability/RESPONSE-TO-SIGNET-2-ARCHITECTURE-DRAFT.md`
+
+The response keeps the Signet 2 core direction and concentrates on the remaining engineering boundary: typed authority inside profiles, evidence-bearing locks, calibration observability, resolver abstention/OOD handling, drift invalidation, generated adapter glue, and a stronger staged benchmark.
