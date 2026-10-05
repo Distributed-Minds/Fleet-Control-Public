@@ -620,3 +620,26 @@ This materially narrows the disagreement surface.
 The public response manuscript develops these points:
 
 `Publications/Game-Interoperability/RESPONSE-TO-SIGNET-2-ARCHITECTURE-DRAFT.md`
+
+---
+
+# Executable proof: pinned choice versus stale evidence
+
+L2 now has a checked research fixture at:
+
+`Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Verifiable-Translation-Prototype/`
+
+The profile schema gives local input, calibration evidence, semantic mappings, local appearance, and server/session policy different authority classes.
+
+A semantic mapping begins `VALID` and `pinned: true`. The drift fixture changes the integration-surface digest and game version while leaving the pinned choice unchanged.
+
+Observed execution:
+
+```text
+typed profile: PASS
+semantic mapping fire-primary: SUSPECT
+changed dependency: integration_surface_digest
+changed dependency: game_version
+```
+
+**DERIVED:** determinism and currency are orthogonal properties. A lock/profile format should encode both the frozen decision and enough dependency identity to know when that decision requires revalidation.
