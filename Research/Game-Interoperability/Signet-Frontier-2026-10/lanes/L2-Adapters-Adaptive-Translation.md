@@ -257,3 +257,25 @@ Replacement research fixture:
 v1 describes target operations by translator role and validates 7/7 documented Minecraft responsibilities while making zero generic Godot gameplay claims.
 
 **Current status:** empirical implementation pass active. Code-generation mechanism retained; logical contract revised from evidence.
+
+
+### Role-contract v1 generation pass
+
+The corrected descriptor is now executable rather than schema-only.
+
+Results:
+
+```text
+minecraft-deterministic-generation: PASS
+godot-deterministic-generation: PASS
+generated-c-header-syntax: PASS
+negative descriptor tests: 3/3 rejected as expected
+```
+
+This closes the immediate falsification loop:
+
+`v0 generated API -> real gateway mismatch -> role-based v1 -> deterministic generated artifacts`.
+
+The remaining Godot runtime step is explicitly blocked by binary availability in this execution environment, so no `GODOT_RUNTIME_PASS` claim is made.
+
+Next L2 decision point: either execute the live Godot loader test when a runtime binary is available, or move to the resolver pilot using the now evidence-derived adapter operation model.
