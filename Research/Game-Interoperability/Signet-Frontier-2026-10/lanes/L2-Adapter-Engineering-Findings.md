@@ -693,3 +693,27 @@ godot-engine-vs-game-boundary: PASS
 ```
 
 **DERIVED:** the stable code-generation input should describe a target's legitimate operation surface, rather than assuming all integrations share one fixed calibration-oriented API.
+
+
+# Executable proof: role-based descriptor generation
+
+The corrected v1 descriptor now feeds an executable generator.
+
+Observed:
+
+```text
+minecraft-deterministic-generation: PASS
+godot-deterministic-generation: PASS
+generated-c-header-syntax: PASS
+negative duplicate-operation-id: PASS(rejected)
+negative role-authority-mismatch: PASS(rejected)
+negative invalid-operation-id: PASS(rejected)
+```
+
+**OBSERVED:** the revised target-operation model can generate deterministic artifacts for two materially different integration modes.
+
+**OBSERVED:** basic role/authority invariants can be enforced before adapter implementation.
+
+**LIMIT:** generated Rust was not compiler-validated because `rustc` was unavailable in the test environment.
+
+**LIMIT:** live Godot 4.7.2 execution remains untested because the binary could not be materialized in the execution environment. The existing native result remains `ABI_HOST_HARNESS_PASS`.
