@@ -1,0 +1,11 @@
+{
+  "schema": "signet-drift-event@0",
+  "game": {"id": "minecraft-java", "version": "illustrative+1"},
+  "current": {
+    "integration_surface_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+    "semantic_profile_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "transform_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "candidate_set_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "changed": ["integration_surface_digest", "game_version"]
+}
