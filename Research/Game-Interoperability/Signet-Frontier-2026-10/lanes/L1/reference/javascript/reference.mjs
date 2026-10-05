@@ -155,6 +155,12 @@ function runVectors(vectorDir) {
   if (canonicalize(actual) !== cv.expected_jcs) failures.push("COMP-VECTOR-001 JCS mismatch");
   if (sha256Jcs(actual) !== cv.expected_profile_set_hash) failures.push("COMP-VECTOR-001 digest mismatch");
 
+  const contractVector = readJson(path.join(vectorDir, "contract-vector-001.json"));
+  const contractJcs = canonicalize(contractVector.contract);
+  const contractHash = sha256Jcs(contractVector.contract);
+  if (contractJcs !== contractVector.expected_jcs) failures.push("CONTRACT-VECTOR-001 JCS mismatch");
+  if (contractHash !== contractVector.expected_contract_hash) failures.push("CONTRACT-VECTOR-001 digest mismatch");
+
   const negatives = readJson(path.join(vectorDir, "composition-negative-vectors.json"));
   for (const vector of negatives) {
     try {
@@ -172,6 +178,7 @@ function runVectors(vectorDir) {
   }
   console.log("PASS: HASH-VECTOR-001");
   console.log("PASS: COMP-VECTOR-001");
+  console.log("PASS: CONTRACT-VECTOR-001");
   console.log(`PASS: ${negatives.length} negative composition vectors`);
 }
 
