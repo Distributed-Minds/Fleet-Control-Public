@@ -1886,12 +1886,14 @@ These legal sources are included only to support the narrow proposition that int
 
 ## Reproducibility material
 
-The four supporting research lanes remain intact in Distributed-Minds/Fleet-Control-Public:
+The four supporting research lanes remain intact in Distributed-Minds/Fleet-Control-Public.
 
-- **L1 — Protocol & Semantic Interoperability:** research/signet-l1-protocol-semantics (including executable deterministic pre-selection and optional-profile negotiation vectors)
-- **L2 — Adapter Engineering & Adaptive Translation:** research/signet-l2-adapters-ai
-- **L3 — Trust, Distribution, Privacy, Legal & Governance:** research/signet-l3-trust-distribution
-- **L4 — Validation, Ecosystem & Adoption:** research/signet-l4-validation-ecosystem
+Exact lane heads observed for this synthesis revision:
+
+- **L1 — Protocol & Semantic Interoperability:** research/signet-l1-protocol-semantics @ `b8f47a332fcb0aa641cfe676e22b49a801731628` (including executable deterministic pre-selection and optional-profile negotiation vectors)
+- **L2 — Adapter Engineering & Adaptive Translation:** research/signet-l2-adapters-ai @ `a5a677f7bf3e80d2face8f2185b27fcb8e394ab3`
+- **L3 — Trust, Distribution, Privacy, Legal & Governance:** research/signet-l3-trust-distribution @ `821d13fe33f293281c85dc9da3a32e2a3fb47148`
+- **L4 — Validation, Ecosystem & Adoption:** research/signet-l4-validation-ecosystem @ `22cdaf37b08d940a518c4a6a9dcea51553cd7256`
 
 Important supporting artifacts include:
 
