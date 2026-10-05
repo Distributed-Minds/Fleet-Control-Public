@@ -1,0 +1,30 @@
+{
+  "kind": "signet.negotiated-contract",
+  "contract_id": "contract:example-card-001",
+  "result": "SUPPORTED",
+  "core": {
+    "id": "https://signetprotocol.io/sem/core/session/1",
+    "definition_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "ordering_model": {
+    "id": "https://signetprotocol.io/sem/ordering/turn-sequence/1",
+    "definition_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "ruleset": {
+    "id": "https://example.org/sem/ruleset/example-card-game/1",
+    "definition_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+  },
+  "visibility_policy": {
+    "id": "https://example.org/sem/visibility/private-hands/1",
+    "definition_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+  },
+  "activated_profiles": [
+    {
+      "id": "https://signetprotocol.io/sem/profile/card-zones/1",
+      "definition_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    }
+  ],
+  "fallbacks": [],
+  "disabled_optional": [],
+  "reason_codes": []
+}
