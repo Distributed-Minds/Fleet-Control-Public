@@ -39,7 +39,9 @@ Both implementations produced:
 ~~~text
 PASS: HASH-VECTOR-001
 PASS: COMP-VECTOR-001
-PASS: 7 negative composition vectors
+PASS: CONTRACT-VECTOR-001
+PASS: 5 additional composition vectors
+PASS: 9 negative composition vectors
 ~~~
 
 ## Positive evidence
@@ -78,7 +80,7 @@ This is stronger evidence than simply hashing a preconstructed expected object b
 
 ## Negative evidence
 
-Seven negative vectors require exact machine-readable failures.
+Nine negative vectors require exact machine-readable failures.
 
 ### COMP-NEG-001
 
@@ -136,7 +138,7 @@ Required profile dependency is unavailable:
 REQUIRED_PROFILE_UNSUPPORTED
 ~~~
 
-Both implementations returned the exact expected reason for all seven vectors.
+Both implementations returned the exact expected reason for all nine vectors.
 
 ## Important limitation: this is a restricted JCS subset
 
@@ -192,20 +194,41 @@ It does **not** prove the design is complete or correct.
 
 It does prove that the currently tested subset is not dependent on one hidden implementation.
 
+## Additional composition evidence
+
+Five additional positive vectors now cover:
+
+1. selection-order invariance;
+2. duplicate required-dependency paths coalescing one exact profile;
+3. optional dependencies remaining inactive merely because they are available;
+4. explicit activation of an optional dependency;
+5. valid explicit concept extension through a distinct semantic ID.
+
+Two additional negative vectors cover:
+
+- active optional dependency with the wrong declared definition hash;
+- extension to a missing parent semantic concept.
+
+The full negotiated contract is also canonically hashed. Both implementations reproduce:
+
+~~~text
+sha256:49539b9e09a204fe8d1a5a44f247247a19c591f66d902623d62695e2819fe2b0
+~~~
+
+for a contract binding core, profiles, ordering model, ruleset, visibility policy, fallbacks, and authority assignments.
+
 ## Remaining implementation gaps
 
-The strongest next vectors are:
+The strongest next vectors are now:
 
-1. selection-order invariance with three or more profiles;
-2. duplicate dependency paths coalescing the same profile;
-3. valid explicit concept extension;
-4. invalid extension target rejection;
-5. ordering-model intersection where several models remain possible before session selection;
-6. visibility-policy intersection;
-7. optional dependency activation/non-activation;
-8. full negotiated `contract_hash`, not only `profile_set_hash`;
-9. Unicode edge cases from RFC 8785;
-10. a second canonicalizer implementation using a mature external JCS library as an external cross-check.
+1. ordering-model intersection where several models remain possible before session selection;
+2. visibility-policy intersection before session selection;
+3. optional dependency activation chosen by negotiation rather than preselected roots;
+4. ruleset dependency composition;
+5. Unicode edge cases from RFC 8785;
+6. explicit set-array source-canonicality rejection;
+7. a second canonicalizer using a mature external JCS library as an external cross-check;
+8. third independent implementation that does not copy either reference algorithm.
 
 ## L4 handoff
 
