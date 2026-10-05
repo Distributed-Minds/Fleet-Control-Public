@@ -1250,6 +1250,125 @@ It cannot prove that two independent implementations attach the same meaning to 
 
 That remains the job of the conformance and replay tests proposed above.
 
+## 19.5 Canonical definitions and deterministic profile composition
+
+The machine-readable layer also needs a precise answer to two questions:
+
+1. when do two copies of a semantic definition count as exactly the same definition?
+2. when can several independently authored profiles be activated together?
+
+### Definition hashing
+
+We propose:
+
+~~~text
+normative semantic JSON
+    ->
+schema-defined set arrays already sorted + unique
+    ->
+RFC 8785 JSON Canonicalization Scheme
+    ->
+UTF-8 canonical bytes
+    ->
+SHA-256
+~~~
+
+RFC 8785 exists specifically so hashing/signing endpoints can derive invariant JSON bytes.[11]
+
+The important qualification is that JCS preserves array order. Therefore a profile schema must say which arrays are ordered sequences and which are semantic sets. Set-valued arrays such as dependencies or exported semantic references should be required to appear in canonical sorted order before hashing.
+
+Human material should not affect the semantic digest.
+
+A semantic-definition file can therefore separate:
+
+~~~text
+normative
+  machine meaning
+  dependencies
+  exported concepts
+  constraints
+
+annotations
+  labels
+  translations
+  examples
+  explanatory prose
+~~~
+
+Only the normative member is hashed.
+
+For example, L1 now publishes a fixed canonicalization vector whose normative object hashes to:
+
+~~~text
+sha256:f03c2be7809a1890c0ed986644c81a000b4549328f9c4934313858d304dd16b8
+~~~
+
+Independent implementations should reproduce the same canonical bytes and digest.
+
+### Profile composition
+
+The HLA Evolved modular-FOM work offers a mature precedent for composing independently maintained semantic modules. Its useful rules include unioning distinct definitions, requiring duplicate identifiers to be equivalent, extending structures without silently changing an existing definition, and failing selected module loads atomically on hard conflicts.[12]
+
+Applied to Signet profiles:
+
+~~~text
+same profile ID + same hash
+  -> coalesce
+
+same profile ID + different hash
+  -> reject
+
+same exported concept ID + same hash
+  -> coalesce
+
+same exported concept ID + different hash
+  -> reject
+
+need to extend an imported concept
+  -> create a new semantic ID with an explicit relation
+
+required dependency missing
+  -> reject
+
+required dependency cycle
+  -> reject
+
+profile ordering constraints
+  -> intersect
+
+profile visibility constraints
+  -> intersect
+
+empty required intersection
+  -> reject
+
+hard conflict
+  -> do not partially activate the remaining required profiles
+~~~
+
+The selected required profile closure is therefore deterministic and atomic.
+
+Once composition succeeds, the canonical profile-set record can itself be JCS-canonicalized and hashed. L1 now publishes a composition fixture whose expected profile-set hash is:
+
+~~~text
+sha256:a9ca960cc1eec57fb925e44c3cf720ad7bd79ccd69828ae11cbf7d03ba7624b0
+~~~
+
+A full negotiated session can similarly record a contract hash covering the exact:
+
+- profile definitions;
+- ruleset;
+- ordering model;
+- visibility policy;
+- accepted fallbacks;
+- authority assignments.
+
+This gives bug reports and replays a much stronger statement than “we were both running Signet 2.”
+
+They can state:
+
+> we were running the exact same semantic contract.
+
 ---
 
 # 20. Conclusion
@@ -1329,6 +1448,12 @@ https://www.sisostandards.org/page/DataFiles
 [10] **JSON Schema.** Specification and Draft 2020-12 meta-schema. The project currently identifies 2020-12 as its latest published specification.  
 https://json-schema.org/specification  
 https://json-schema.org/draft/2020-12/schema
+
+[11] **Rundgren, Anders; Jordan, Bret; Erdtman, Samuel.** RFC 8785: JSON Canonicalization Scheme (JCS). 2020.  
+https://www.rfc-editor.org/rfc/rfc8785.html
+
+[12] **Möller, Björn; Löfstrand, Björn; Karlsson, Mikael.** “An Overview of the HLA Evolved Modular FOMs.” 2007 Spring Simulation Interoperability Workshop.  
+https://pitchtechnologies.com/wp-content/uploads/2020/09/07s-siw-108-1.pdf
 
 ---
 
