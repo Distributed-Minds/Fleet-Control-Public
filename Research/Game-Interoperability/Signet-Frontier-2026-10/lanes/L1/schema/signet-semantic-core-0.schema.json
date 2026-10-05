@@ -466,17 +466,24 @@
           "items": {
             "type": "string",
             "enum": [
-              "PROTOCOL_MAJOR_MISMATCH",
-              "SEMANTIC_DEFINITION_CONFLICT",
-              "REQUIRED_PROFILE_UNSUPPORTED",
-              "REQUIRED_CONCEPT_UNSUPPORTED",
               "AUTHORITY_MODEL_UNSUPPORTED",
-              "ORDERING_MODEL_UNSUPPORTED",
-              "VISIBILITY_POLICY_UNSUPPORTED",
-              "WORLD_REPRESENTATION_UNSUPPORTED",
-              "NO_SAFE_FALLBACK",
+              "CONCEPT_DEFINITION_CONFLICT",
+              "INVALID_EXTENSION_TARGET",
               "LEGACY_SEMANTICS_ONLY",
-              "OPTIONAL_CONCEPT_DISABLED"
+              "NO_SAFE_FALLBACK",
+              "OPTIONAL_CONCEPT_DISABLED",
+              "ORDERING_MODEL_CONFLICT",
+              "ORDERING_MODEL_UNSUPPORTED",
+              "PROFILE_CONFLICT",
+              "PROTOCOL_MAJOR_MISMATCH",
+              "REQUIRED_CONCEPT_UNSUPPORTED",
+              "REQUIRED_PROFILE_CYCLE",
+              "REQUIRED_PROFILE_UNSUPPORTED",
+              "RULESET_DEPENDENCY_CONFLICT",
+              "SEMANTIC_DEFINITION_CONFLICT",
+              "VISIBILITY_POLICY_CONFLICT",
+              "VISIBILITY_POLICY_UNSUPPORTED",
+              "WORLD_REPRESENTATION_UNSUPPORTED"
             ]
           }
         }
