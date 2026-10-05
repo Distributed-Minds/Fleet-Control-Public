@@ -187,3 +187,85 @@ The paper explicitly connects games/agents with HLA simulator interoperability a
 4. Treat model/vendor benchmarks as `CLAIMED` until reproduced.
 5. Record access limitations instead of converting “not found” into “does not exist.”
 6. Use jurisdiction-specific qualified sources before making prescriptive legal claims.
+
+
+---
+
+## L1 continuation sources — 2026-10-05
+
+### Current capability/extension standards
+
+**OpenXR 1.1.63 specification**  
+https://registry.khronos.org/OpenXR/specs/1.1/html/xrspec.html
+
+**OpenXR extension process**  
+https://registry.khronos.org/OpenXR/specs/1.1/extprocess.html
+
+Evidence class: **primary standards organization**.
+
+L1 use: query-available-then-enable semantics; controlled extension namespaces; support is not activation.
+
+### glTF extension/versioning model
+
+**glTF 2.0 specification**  
+https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
+
+Evidence class: **primary standards organization**.
+
+L1 use: `extensionsUsed` versus `extensionsRequired`; minor evolution must not change existing behavior.
+
+### Current IEEE HLA family
+
+**IEEE 1516-2025 — HLA Framework and Rules**  
+https://standards.ieee.org/ieee/1516/6687/
+
+**IEEE 1516.1-2025 — Federate Interface Specification**  
+https://standards.ieee.org/ieee/1516.1/6688/
+
+**IEEE 1516.2-2025 — Object Model Template Specification**  
+https://standards.ieee.org/ieee/1516.2/6689/
+
+Evidence class: **primary standard metadata**.
+
+L1 use: federation contract/services; OMT separates object-model format/syntax from domain content.
+
+### SISO HLA data files
+
+https://www.sisostandards.org/page/DataFiles
+
+Evidence class: **primary standards organization**.
+
+L1 use: public modular FOM examples, reference enumeration artifacts, evidence that composable object-model modules are a deployed HLA pattern.
+
+### Conceptual interoperability
+
+Tolk & Muguira, **The Levels of Conceptual Interoperability Model**  
+https://www.researchgate.net/publication/240319008_The_Levels_of_Conceptual_Interoperability_Model
+
+Tolk, **Conceptual alignment for simulation interoperability: lessons learned from 30 years of interoperability research**  
+https://journals.sagepub.com/doi/full/10.1177/00375497231216471
+
+Evidence class: **research literature**.
+
+L1 use: technical/syntactic/semantic/pragmatic distinction; conceptual alignment as separate from transport/schema compatibility.
+
+### URI / URN identity mechanics
+
+**IANA URN namespace registry**  
+https://www.iana.org/assignments/urn-namespaces
+
+**RFC 8141 — Uniform Resource Names**  
+https://www.rfc-editor.org/rfc/rfc8141.html
+
+**RFC 3986 — URI Generic Syntax**  
+https://www.rfc-editor.org/rfc/rfc3986.html
+
+Evidence class: **primary Internet standards/registry**.
+
+L1 use: a `urn:signet:...` identifier is not a valid public URN unless a `signet` namespace is registered; draft semantic IDs therefore use project-controlled URI space instead.
+
+### Native-language recursion disposition
+
+Spanish SCFHLA material already present in this ledger was re-evaluated and remains material: it explicitly separates HLA/FOM syntactic structure from semantic agreement and favors a modular ontology network.
+
+Chinese/Japanese searches in this pass mostly rediscovered already-ledgered HLA adapter/distributed-simulation material. Disposition: **NO MATERIAL DELTA**; no duplicate source entries added.
