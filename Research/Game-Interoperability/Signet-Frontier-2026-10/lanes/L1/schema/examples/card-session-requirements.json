@@ -1,0 +1,36 @@
+{
+  "kind": "signet.session-requirements",
+  "core": {
+    "id": "https://signetprotocol.io/sem/core/session/1",
+    "definition_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "required_profiles": [
+    {
+      "semantic": {
+        "id": "https://signetprotocol.io/sem/profile/card-zones/1",
+        "definition_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "required": [
+        "https://signetprotocol.io/sem/profile/card-zones/1#intent/play-card",
+        "https://signetprotocol.io/sem/profile/card-zones/1#state/zones"
+      ],
+      "optional": [
+        "https://signetprotocol.io/sem/profile/card-zones/1#event/reveal"
+      ]
+    }
+  ],
+  "ordering_model": {
+    "id": "https://signetprotocol.io/sem/ordering/turn-sequence/1",
+    "definition_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "ruleset": {
+    "id": "https://example.org/sem/ruleset/example-card-game/1",
+    "definition_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+  },
+  "visibility_policy": {
+    "id": "https://example.org/sem/visibility/private-hands/1",
+    "definition_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+  },
+  "allowed_fallbacks": [],
+  "observers_allowed": true
+}
