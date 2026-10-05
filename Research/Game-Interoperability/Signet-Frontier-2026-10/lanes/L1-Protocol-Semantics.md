@@ -161,3 +161,34 @@ Material design changes from this pass:
 - hand L4 exact ID/NEG/MAP/AUTH/TIME/PROFILE/LEGACY conformance properties.
 
 The next L1 recursion should test the proposed core against at least one non-spatial/non-FPS domain and specify canonical definition hashing/profile-composition conflict rules.
+
+
+---
+
+## Continuation pass 2 — Signet 2 response — 2026-10-05
+
+New upstream primary source:
+
+- Signet Protocol commit `490dfa9423841a45f2917d8d013e010ca0eb5548`
+- *Signet 2: intents, archetypes and translation profiles*, draft proposal v0.1
+- upstream proposal: https://github.com/kian-cx/signetprotocol/blob/490dfa9423841a45f2917d8d013e010ca0eb5548/docs/content/proposals/translation-profiles.mdx
+- upstream PDF: https://github.com/kian-cx/signetprotocol/blob/490dfa9423841a45f2917d8d013e010ca0eb5548/docs/public/signet-2-architecture.pdf
+
+Durable outputs:
+
+1. [Signet 2 response analysis](L1/04-Signet-2-Response-Analysis.md)
+2. [Public response draft: From Shared Meaning to Shared Contracts](../../../Publications/Game-Interoperability/FROM-SHARED-MEANING-TO-SHARED-CONTRACTS-DRAFT.md)
+
+Material synthesis:
+
+- **accept** Signet 2's game→meaning→game architecture, server authority, capabilities, calibration, pinned profiles, and AI-outside-authority boundary;
+- strengthen “shared meaning” into stable semantic identity + definitions + versions/hashes;
+- keep the universal core smaller than the proposed global FPS/action vocabulary;
+- separate semantic profiles, authoritative instance state, rulesets, and local presentation roles;
+- replace automatic “common subset” semantics with session requirements plus typed `SUPPORTED`, `SUPPORTED_WITH_FALLBACKS`, `OBSERVE_ONLY`, and `INCOMPATIBLE` outcomes;
+- extend translation profiles from deterministic decision caches into provenance/evidence-bearing mapping manifests;
+- treat motion calibration as adapter/transduction evidence, not an alternate physics authority;
+- require semantic ambiguity/conformance vectors before claiming independent interoperability;
+- preserve Signet/1 through an explicit legacy bridge rather than requiring a rewrite.
+
+The next L1 falsification target remains a non-FPS/non-spatial domain. Signet 2 makes this test more urgent because its proposed version-0 intent/archetype vocabulary is deliberately action/FPS shaped.
