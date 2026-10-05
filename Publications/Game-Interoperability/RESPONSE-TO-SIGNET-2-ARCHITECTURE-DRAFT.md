@@ -5,7 +5,7 @@
 **Status:** unaffiliated public draft / technical response  
 **Date:** 2026-10-05  
 **Response target:** Signet Protocol draft proposal, document version 0.1  
-**Observed Signet source state:** `kian-cx/signetprotocol@490dfa9423841a45f2917d8d013e010ca0eb5548`  
+**Observed Signet source state:** proposal PDF introduced at `kian-cx/signetprotocol@490dfa9423841a45f2917d8d013e010ca0eb5548`; expanded Forge documentation checked through `2ddb136ee941705d3e1c020eaddad93be65026f2`  
 **Authors:** Distributed Minds / Fleet-Control research contribution  
 **Scope:** adapter engineering, adaptive translation, calibration, profile evidence, drift, and evaluation
 
@@ -1154,13 +1154,61 @@ That would make Signet 2 not only scalable in number of games, but scalable in m
 
 ---
 
+# 17. Executable prototype: pinned is deterministic, not permanently valid
+
+To make the profile-authority argument falsifiable, the companion L2 branch now includes a small executable research fixture:
+
+`Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Verifiable-Translation-Prototype/`
+
+The prototype does **not** define Signet's intent/archetype vocabulary. It keeps semantic identifiers opaque and tests only the authority/evidence boundary proposed in this paper.
+
+It defines five entry classes:
+
+- `INPUT_BINDING`;
+- `MOTION_OBSERVATION`;
+- `SEMANTIC_MAPPING`;
+- `APPEARANCE_MAPPING`;
+- `SESSION_POLICY`.
+
+A JSON Schema validates that each class carries a different owner/effect shape. The example profile contains all five in one file without granting them the same authority.
+
+The semantic-mapping fixture records:
+
+- integration-surface digest;
+- semantic-profile digest;
+- transform digest;
+- candidate-set digest;
+- replay/conformance acceptance evidence;
+- explicit invalidation dependencies.
+
+A deterministic drift checker then changes the integration-surface fingerprint and game version.
+
+Validated result on 2026-10-05:
+
+```text
+typed profile: PASS
+semantic mapping fire-primary: SUSPECT
+changed dependency: integration_surface_digest
+changed dependency: game_version
+```
+
+The checker returns a distinct nonzero status for `SUSPECT`, making the condition usable as a CI/revalidation gate.
+
+This is intentionally small. It establishes one concrete property before adapter code generation is attempted:
+
+> **a mapping can remain perfectly pinned while its compatibility evidence becomes stale.**
+
+The next prototype should add a machine-readable adapter ABI description and deterministic generation of the repetitive Rust/C/C#/engine-facing glue described earlier in this paper.
+
+---
+
 # References
 
 ## Signet Protocol
 
-1. Signet Protocol. *Signet 2: intents, archetypes and translation profiles*. Draft proposal, document version 0.1, 2026-10-05. Added to `kian-cx/signetprotocol` at commit `490dfa9423841a45f2917d8d013e010ca0eb5548`.
+1. Signet Protocol. *Signet 2: intents, archetypes and translation profiles*. Draft proposal, document version 0.1, 2026-10-05. Architecture PDF/proposal introduced at `490dfa9423841a45f2917d8d013e010ca0eb5548`; expanded Forge documentation checked through `2ddb136ee941705d3e1c020eaddad93be65026f2`.
 2. Signet Protocol. `docs/content/proposals/translation-profiles.mdx`, same commit.
-3. Signet Protocol. Signet Forge documentation: `docs/content/forge/`, same commit.
+3. Signet Protocol. Signet Forge documentation: `docs/content/forge/`, including architecture, model-decision, reliability/limits, and roadmap pages checked at `2ddb136ee941705d3e1c020eaddad93be65026f2`.
 4. Signet Protocol. Translator traits: `crates/signet-sdk/src/traductor.rs`.
 5. Signet Protocol. C SDK interface: `docs/content/sdk/c.mdx` and `crates/signet-ffi/include/signet.h`.
 6. Signet Protocol. C# and TypeScript SDK documentation.
@@ -1191,4 +1239,5 @@ Relevant supporting files:
 - `Research/Game-Interoperability/Signet-Frontier-2026-10/lanes/L2-Adapter-Engineering-Findings.md`
 - `Research/Game-Interoperability/Signet-Frontier-2026-10/lanes/L2-Source-Ledger.md`
 - `Research/Game-Interoperability/Signet-Frontier-2026-10/lanes/L2-Adapters-Adaptive-Translation.md`
+- `Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Verifiable-Translation-Prototype/README.md`
 
