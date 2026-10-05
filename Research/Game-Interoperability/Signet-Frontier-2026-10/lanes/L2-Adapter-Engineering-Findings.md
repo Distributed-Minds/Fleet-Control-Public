@@ -584,3 +584,39 @@ handoff:
 - debugging/replay tooling proposal — **DONE**
 
 Empirical implementation and benchmark execution remain open.
+
+---
+
+# Signet 2 response delta — 2026-10-05
+
+After the first L2 pass, Signet published its Signet 2 draft at `kian-cx/signetprotocol@490dfa9423841a45f2917d8d013e010ca0eb5548`.
+
+## Material convergence
+
+The new proposal independently adopts several L2 directions:
+
+- game -> shared meaning -> game rather than pairwise game bridges;
+- explicit intents and archetypes;
+- capabilities;
+- closed-set resolver ranking;
+- human confirmation;
+- pinned translation profiles;
+- calibration for obvious/measurable cases before model use;
+- adaptive models outside the per-tick simulation loop;
+- a separate Forge/development tool.
+
+This materially narrows the disagreement surface.
+
+## New L2 findings caused by the proposal
+
+1. **Profile authority must be typed.** A universal `player pin > translator > model > default` precedence is safe for local appearance/input preferences but ambiguous for simulation-relevant semantic mappings.
+2. **Pinned is not equivalent to valid.** A lock needs source/version/integration/profile/transform identity plus evidence and invalidation conditions.
+3. **Candidate closure needs `NO_MATCH`.** A closed list prevents invention but can still force a wrong answer if the correct semantic is absent.
+4. **Calibration needs an adapter observation contract.** A wizard cannot measure motion properties the integration surface cannot legitimately observe.
+5. **Approved decisions need label scope.** Local appearance preference, translator default, semantic mapping and capability classification should not become one undifferentiated training label.
+6. **The proposed 30-case test is a good Stage-A pilot.** Architecture-level dependence on a model should wait for held-out games/versions/OOD/abstention tests.
+7. **Drift must be first-class.** Game/API/profile changes should move evidence from VALID to SUSPECT until targeted replay/conformance revalidates it.
+
+The public response manuscript develops these points:
+
+`Publications/Game-Interoperability/RESPONSE-TO-SIGNET-2-ARCHITECTURE-DRAFT.md`
