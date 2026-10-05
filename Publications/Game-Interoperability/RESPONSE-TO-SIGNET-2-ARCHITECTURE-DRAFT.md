@@ -1504,3 +1504,62 @@ The next live-runtime experiment remains simple and well specified:
 5. capture that operation in replay/conformance evidence.
 
 Until that test runs, the engine boundary is ABI-validated but not runtime-validated.
+
+# 23. Resolver pilot: freeze the benchmark before adding models
+
+Signet 2 proposes an approximately 30-case experiment comparing hand-written rules, text similarity and a contrastive ranker.
+
+Before introducing a learned resolver, L2 now has a source-anchored seed harness:
+
+`Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Resolver-Pilot/`
+
+The seed contains six appearance mappings explicitly stated by the Signet 2 draft:
+
+- Minecraft: `weapon.ranged -> bow`;
+- Minecraft: `health_pickup -> golden_apple`;
+- Doom: `weapon.ranged -> pistol`;
+- Doom: `health_pickup -> medikit`;
+- OpenArena: `weapon.ranged -> machinegun`;
+- OpenArena: `health_pickup -> health_orb`.
+
+The Minecraft ranged-weapon candidate list is also explicit in the proposal. Candidate distractors not supplied by the proposal are marked synthetic in the fixture rather than silently treated as Signet facts.
+
+Each semantic case is evaluated under three conditions:
+
+1. stored candidate order;
+2. every candidate-order rotation;
+3. removal of the correct candidate, requiring `__NO_MATCH__`.
+
+Three mechanism baselines are implemented:
+
+- explicit lookup;
+- naive lexical token overlap;
+- deliberately bad first-candidate selection.
+
+Observed:
+
+```text
+lookup:  base_accuracy=1.000 no_match=1.000 order_stability=1.000
+lexical: base_accuracy=1.000 no_match=0.000 order_stability=0.167
+first:   base_accuracy=1.000 no_match=0.000 order_stability=0.000
+```
+
+This is a benchmark-design result, not a model-performance result.
+
+Both the naive lexical resolver and the intentionally useless first-candidate resolver achieve 100% base accuracy because the source examples place the intended answer first.
+
+Candidate-order perturbation exposes the artifact immediately.
+
+The pilot therefore strengthens one recommendation from this paper:
+
+> **top-1 accuracy on the original candidate ordering is not a sufficient resolver metric.**
+
+At minimum, the eventual 30-case experiment should also report:
+
+- candidate-order stability;
+- `NO_MATCH`/abstention behavior;
+- candidate-set provenance.
+
+Perturbations must not be counted as independent semantic cases when reporting sample size.
+
+No CLM/Laya/LLM result is claimed yet. The harness exists specifically so those systems can later be plugged into a frozen evaluation shape.
