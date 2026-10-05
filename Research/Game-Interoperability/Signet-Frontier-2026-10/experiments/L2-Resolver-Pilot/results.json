@@ -1,0 +1,25 @@
+{
+  "schema": "signet-resolver-pilot-results@0",
+  "case_count": 6,
+  "results": [
+    {
+      "backend": "lookup",
+      "base_accuracy": 1.0,
+      "no_match_abstention_accuracy": 1.0,
+      "candidate_order_stability": 1.0
+    },
+    {
+      "backend": "lexical",
+      "base_accuracy": 1.0,
+      "no_match_abstention_accuracy": 0.0,
+      "candidate_order_stability": 0.16666666666666666
+    },
+    {
+      "backend": "first",
+      "base_accuracy": 1.0,
+      "no_match_abstention_accuracy": 0.0,
+      "candidate_order_stability": 0.0
+    }
+  ],
+  "note": "Compact checked-in summary. Re-run benchmark.py to regenerate per-case details."
+}
