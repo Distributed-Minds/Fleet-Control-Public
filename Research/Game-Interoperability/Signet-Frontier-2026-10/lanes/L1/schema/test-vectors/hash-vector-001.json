@@ -1,21 +1,29 @@
 {
   "vector_id": "HASH-VECTOR-001",
-  "rule": "Hash only definition.normative after RFC 8785 JCS. exports/requires are schema-declared set arrays and are already source-canonical.",
+  "rule": "Hash only definition.normative after RFC 8785 JCS. requires/optional_requires/conflicts/exports are schema-declared set arrays and are already source-canonical.",
   "definition": {
     "kind": "signet.semantic-definition",
     "normative": {
       "semantic_id": "https://example.org/sem/profile/example/1",
-      "kind": "profile",
+      "definition_kind": "profile",
+      "requires": [],
+      "optional_requires": [],
+      "conflicts": [],
       "exports": [
-        "https://example.org/sem/profile/example/1#intent/a",
-        "https://example.org/sem/profile/example/1#state/b"
-      ],
-      "requires": []
+        {
+          "id": "https://example.org/sem/profile/example/1#intent/a",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "id": "https://example.org/sem/profile/example/1#state/b",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ]
     },
     "annotations": {
       "label": "This annotation is excluded from the hash."
     }
   },
-  "expected_jcs": "{\"exports\":[\"https://example.org/sem/profile/example/1#intent/a\",\"https://example.org/sem/profile/example/1#state/b\"],\"kind\":\"profile\",\"requires\":[],\"semantic_id\":\"https://example.org/sem/profile/example/1\"}",
-  "expected_definition_hash": "sha256:f03c2be7809a1890c0ed986644c81a000b4549328f9c4934313858d304dd16b8"
+  "expected_jcs": "{\"conflicts\":[],\"definition_kind\":\"profile\",\"exports\":[{\"definition_hash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"id\":\"https://example.org/sem/profile/example/1#intent/a\"},{\"definition_hash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"id\":\"https://example.org/sem/profile/example/1#state/b\"}],\"optional_requires\":[],\"requires\":[],\"semantic_id\":\"https://example.org/sem/profile/example/1\"}",
+  "expected_definition_hash": "sha256:2ba8cba596be0c3cc843d9f35441a93513df8179952d15e1539332c50fac6989"
 }
