@@ -279,3 +279,21 @@ This closes the immediate falsification loop:
 The remaining Godot runtime step is explicitly blocked by binary availability in this execution environment, so no `GODOT_RUNTIME_PASS` claim is made.
 
 Next L2 decision point: either execute the live Godot loader test when a runtime binary is available, or move to the resolver pilot using the now evidence-derived adapter operation model.
+
+### Resolver pilot started
+
+A source-anchored seed harness now exists:
+
+- `Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Resolver-Pilot/`
+
+Initial result:
+
+```text
+lookup:  1.000 base / 1.000 no-match / 1.000 order-stability
+lexical: 1.000 base / 0.000 no-match / 0.167 order-stability
+first:   1.000 base / 0.000 no-match / 0.000 order-stability
+```
+
+The 100% base score for the deliberately bad first-candidate baseline demonstrates why the final benchmark cannot rely on top-1 accuracy under one candidate ordering.
+
+The harness is intentionally pre-model. CLM/Laya/LLM backends remain open until the case set and evaluation mechanics are frozen enough to make their results meaningful.
