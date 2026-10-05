@@ -135,3 +135,29 @@ Hand off to:
 ## Success condition
 
 L1 is useful when two teams can read its candidate contract and independently implement adapters without needing private verbal clarification about what the shared state means.
+
+
+---
+
+## Continuation pass 1 — 2026-10-05
+
+Durable outputs:
+
+1. [Candidate Semantic Contract](L1/01-Semantic-Contract-Draft.md)
+2. [Negotiation, Mapping Provenance, and Conformance Vectors](L1/02-Negotiation-Mapping-and-Conformance.md)
+3. [Standards Delta, Contradictions, and Lane Handoffs](L1/03-Standards-Delta-and-Handoffs.md)
+
+Material design changes from this pass:
+
+- shrink `core@1` to coordination semantics rather than FPS/spatial gameplay concepts;
+- move spatial transforms, lifecycle and FPS vocabulary into separately negotiated profiles;
+- separate semantic profiles from deterministic rulesets/modes;
+- replace placeholder `urn:signet:...` identifiers with a draft URI strategy that does not assume an unregistered URN namespace;
+- distinguish implemented capability, activated capability and required capability;
+- add definition hashes to detect semantic-ID collisions/drift;
+- define deterministic compatibility outcomes and reason codes;
+- make authority/time/causality explicit without importing full HLA runtime complexity;
+- define durable semantic mapping provenance;
+- hand L4 exact ID/NEG/MAP/AUTH/TIME/PROFILE/LEGACY conformance properties.
+
+The next L1 recursion should test the proposed core against at least one non-spatial/non-FPS domain and specify canonical definition hashing/profile-composition conflict rules.
