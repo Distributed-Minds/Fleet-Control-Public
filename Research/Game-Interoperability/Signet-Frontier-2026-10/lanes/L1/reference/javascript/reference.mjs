@@ -78,6 +78,17 @@ function compose(inp) {
 
   for (const selected of inp.selected_profiles) visit(selected);
 
+  for (const definition of closure.values()) {
+    for (const optional of definition.optional_requires ?? []) {
+      if (closure.has(optional.id)) {
+        const activeHash = closure.get(optional.id).semantic.definition_hash;
+        if (activeHash !== optional.definition_hash) {
+          throw new CompositionError("SEMANTIC_DEFINITION_CONFLICT");
+        }
+      }
+    }
+  }
+
   const activeIds = new Set(closure.keys());
   for (const definition of closure.values()) {
     for (const conflict of definition.conflicts ?? []) {
@@ -155,6 +166,17 @@ function runVectors(vectorDir) {
   if (canonicalize(actual) !== cv.expected_jcs) failures.push("COMP-VECTOR-001 JCS mismatch");
   if (sha256Jcs(actual) !== cv.expected_profile_set_hash) failures.push("COMP-VECTOR-001 digest mismatch");
 
+  const additional = readJson(path.join(vectorDir, "composition-additional-vectors.json"));
+  for (const vector of additional) {
+    const actual = compose(vector.input);
+    if (canonicalize(actual) !== canonicalize(vector.expected_composition)) {
+      failures.push(`${vector.vector_id} composition mismatch`);
+    }
+    if (sha256Jcs(actual) !== vector.expected_profile_set_hash) {
+      failures.push(`${vector.vector_id} digest mismatch`);
+    }
+  }
+
   const contractVector = readJson(path.join(vectorDir, "contract-vector-001.json"));
   const contractJcs = canonicalize(contractVector.contract);
   const contractHash = sha256Jcs(contractVector.contract);
@@ -179,6 +201,7 @@ function runVectors(vectorDir) {
   console.log("PASS: HASH-VECTOR-001");
   console.log("PASS: COMP-VECTOR-001");
   console.log("PASS: CONTRACT-VECTOR-001");
+  console.log(`PASS: ${additional.length} additional composition vectors`);
   console.log(`PASS: ${negatives.length} negative composition vectors`);
 }
 
