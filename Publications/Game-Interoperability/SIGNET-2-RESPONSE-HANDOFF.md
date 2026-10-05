@@ -3,6 +3,7 @@
 **Status:** concise entry point to the full Distributed Minds / Fleet-Control technical response  
 **Date:** 2026-10-05  
 **Full paper:** `Publications/Game-Interoperability/RESPONSE-TO-SIGNET-2-ARCHITECTURE-DRAFT.md`  
+**Proposal delta / review matrix:** `Publications/Game-Interoperability/SIGNET-2-PROPOSAL-DELTA-MATRIX.md`  
 **Upstream checked through:** `kian-cx/signetprotocol@2ddb136ee941705d3e1c020eaddad93be65026f2`
 
 > This is independent technical feedback. It is not official Signet documentation.
