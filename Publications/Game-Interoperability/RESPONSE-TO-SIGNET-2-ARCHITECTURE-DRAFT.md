@@ -1202,6 +1202,64 @@ The next prototype should add a machine-readable adapter ABI description and det
 
 ---
 
+# 18. Executable prototype: generate the contract, not the game integration
+
+The second executable fixture tests the other central L2 claim:
+
+> repetitive adapter contract glue can be generated mechanically while engine/game behavior remains explicit handwritten code.
+
+Fixture:
+
+`Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Verifiable-Translation-Prototype/adapter-shim-generation/`
+
+One small descriptor references the draft Signet semantic contracts opaquely and defines only four shim operations:
+
+- integration-surface version;
+- local-control capture;
+- calibration-metric observation;
+- presentation of an already-resolved local choice.
+
+The generator produces:
+
+- a C header;
+- a Rust trait;
+- a C# interface;
+- a TypeScript interface.
+
+It embeds the canonical descriptor digest into every generated file.
+
+Two clean generation runs produced byte-identical outputs:
+
+```text
+descriptor-sha256: 29663431523e65018681c1644020750af03edc4d82bf478c97966960da0981a5
+ISignetAdapterShim.cs: sha256:74ed97fde58bb717b665bc80fb03d495aea8489a8e80321bcf750e70bde169bc
+signet-adapter-shim.ts: sha256:366253479f7073a66bf65c8c7b2712c16f77f90c357d3e91804bdec48e4332a4
+signet_adapter_shim.h: sha256:1750f7f62e7b36868183166a06f488449aa76e6d5ebeda2359c21e0ad06559bb
+signet_adapter_shim.rs: sha256:4b0308e7efb754b3f83655c392ece5327ff1588cf321624cce37b6813417461f
+deterministic-generation: PASS
+c-header-syntax: PASS
+typescript-syntax: PASS
+```
+
+The C surface was syntax-checked with `cc -std=c11 -fsyntax-only`; the TypeScript surface with `tsc --noEmit`.
+
+Rust and C# compilers were not present in the execution environment, so those targets are **generated but not claimed compiler-validated** in this pass.
+
+This experiment intentionally leaves out the difficult part.
+
+A game/engine shim must still implement:
+
+- callbacks and lifecycle;
+- mod/plugin API calls;
+- RCON or console interactions;
+- coordinate and unit transforms;
+- local file-format parsing;
+- version-specific behavior.
+
+That is precisely the boundary the paper argues for: **generate the stable interface shape; keep irreducibly local behavior visible and testable.**
+
+---
+
 # References
 
 ## Signet Protocol
@@ -1240,4 +1298,5 @@ Relevant supporting files:
 - `Research/Game-Interoperability/Signet-Frontier-2026-10/lanes/L2-Source-Ledger.md`
 - `Research/Game-Interoperability/Signet-Frontier-2026-10/lanes/L2-Adapters-Adaptive-Translation.md`
 - `Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Verifiable-Translation-Prototype/README.md`
+- `Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Verifiable-Translation-Prototype/adapter-shim-generation/README.md`
 
