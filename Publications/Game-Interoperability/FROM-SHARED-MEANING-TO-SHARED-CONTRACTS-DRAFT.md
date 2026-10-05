@@ -906,6 +906,8 @@ Add optional capability/profile metadata to the greeting.
 
 Treat current Signet/1 gameplay as an explicitly named legacy profile/ruleset combination.
 
+Signet/1's append-only optional-field rule can preserve **syntactic** compatibility while this metadata is introduced. It should not be treated as proof of **semantic** compatibility: an old client that ignores a new capability field may still be unable to satisfy a session's required meaning. Parser compatibility and session admission are separate decisions.
+
 ## Stage B — negotiate before authoritative participation
 
 Before a player body is admitted, derive one typed compatibility result.
@@ -1171,13 +1173,10 @@ https://www.w3.org/TR/skos-reference/#mapping
 https://www.rfc-editor.org/rfc/rfc8141.html
 
 [8] **IEEE.** IEEE 1516.2-2025, *High Level Architecture (HLA) — Object Model Template (OMT) Specification*.  
-https://standards.ieee.org/ieee/1516/6687/
+https://standards.ieee.org/ieee/1516.2/6689/
 
 [9] **Simulation Interoperability Standards Organization (SISO).** Data Files, including HLA Evolved modular FOM examples and reference modules.  
 https://www.sisostandards.org/page/DataFiles
-
-[10] **QUDT.org.** Quantities, Units, Dimensions and Types (QUDT) ontology/schema.  
-https://www.qudt.org/catalog/qudt-catalog.html
 
 ---
 
