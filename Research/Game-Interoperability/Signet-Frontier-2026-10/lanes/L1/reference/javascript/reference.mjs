@@ -182,6 +182,34 @@ function compose(inp) {
   return result;
 }
 
+function negotiateOptional(inp) {
+  const selected = [...inp.selected_profiles];
+  let composition = compose({ ...inp, selected_profiles: selected });
+  const activatedOptional = [];
+  const skippedOptional = [];
+
+  for (const candidate of inp.optional_profile_preferences ?? []) {
+    try {
+      const trialComposition = compose({
+        ...inp,
+        selected_profiles: [...selected, candidate],
+      });
+      selected.push(candidate);
+      activatedOptional.push(candidate);
+      composition = trialComposition;
+    } catch (err) {
+      if (!(err instanceof CompositionError)) throw err;
+      skippedOptional.push({ profile: candidate, reason: err.reason });
+    }
+  }
+
+  return {
+    composition,
+    activated_optional: activatedOptional,
+    skipped_optional: skippedOptional,
+  };
+}
+
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, "utf8"));
 }
@@ -220,6 +248,15 @@ function runVectors(vectorDir) {
     failures.push("NEGOTIATION-VECTOR-001 digest mismatch");
   }
 
+  const optionalVector = readJson(path.join(vectorDir, "optional-negotiation-vector-001.json"));
+  const optionalResult = negotiateOptional(optionalVector.input);
+  if (canonicalize(optionalResult) !== canonicalize(optionalVector.expected_result)) {
+    failures.push("OPTIONAL-NEGOTIATION-VECTOR-001 result mismatch");
+  }
+  if (sha256Jcs(optionalResult) !== optionalVector.expected_result_hash) {
+    failures.push("OPTIONAL-NEGOTIATION-VECTOR-001 digest mismatch");
+  }
+
   const contractVector = readJson(path.join(vectorDir, "contract-vector-001.json"));
   const contractJcs = canonicalize(contractVector.contract);
   const contractHash = sha256Jcs(contractVector.contract);
@@ -244,6 +281,7 @@ function runVectors(vectorDir) {
   console.log("PASS: HASH-VECTOR-001");
   console.log("PASS: COMP-VECTOR-001");
   console.log("PASS: NEGOTIATION-VECTOR-001");
+  console.log("PASS: OPTIONAL-NEGOTIATION-VECTOR-001");
   console.log("PASS: CONTRACT-VECTOR-001");
   console.log(`PASS: ${additional.length} additional composition vectors`);
   console.log(`PASS: ${negatives.length} negative composition vectors`);
