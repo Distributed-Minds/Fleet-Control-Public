@@ -3,15 +3,73 @@
   "input": {
     "selected_profiles": [
       {
-        "id": "https://example.org/sem/profile/turn-taking/1",
-        "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-      },
-      {
         "id": "https://example.org/sem/profile/card-zones/1",
         "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
       }
     ],
-    "note": "Selected order is intentionally not canonical; composition output must be canonical."
+    "ordering_model": {
+      "id": "https://example.org/sem/ordering/turn-sequence/1",
+      "definition_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    "catalog": [
+      {
+        "semantic": {
+          "id": "https://example.org/sem/profile/turn-taking/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "requires": [],
+        "conflicts": [],
+        "exports": [
+          {
+            "id": "https://example.org/sem/profile/turn-taking/1#intent/move",
+            "definition_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          }
+        ],
+        "extends": [],
+        "ordering_constraints": {
+          "accepted": [
+            {
+              "id": "https://example.org/sem/ordering/turn-sequence/1",
+              "definition_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+            }
+          ]
+        },
+        "visibility_constraints": {
+          "accepted": []
+        }
+      },
+      {
+        "semantic": {
+          "id": "https://example.org/sem/profile/card-zones/1",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "requires": [
+          {
+            "id": "https://example.org/sem/profile/turn-taking/1",
+            "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "conflicts": [],
+        "exports": [
+          {
+            "id": "https://example.org/sem/profile/card-zones/1#state/zones",
+            "definition_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          }
+        ],
+        "extends": [],
+        "ordering_constraints": {
+          "accepted": [
+            {
+              "id": "https://example.org/sem/ordering/turn-sequence/1",
+              "definition_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+            }
+          ]
+        },
+        "visibility_constraints": {
+          "accepted": []
+        }
+      }
+    ]
   },
   "expected_composition": {
     "profiles": [
