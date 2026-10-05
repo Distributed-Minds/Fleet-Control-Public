@@ -214,3 +214,23 @@ changed dependency: game_version
 This proves the proposed state distinction is executable: `pinned` keeps the choice deterministic while changed evidence moves the mapping out of `VALID`.
 
 Next L2 implementation seam: machine-readable adapter ABI descriptor → deterministic generated glue, followed by replay fixtures.
+
+### Deterministic generated-glue experiment
+
+The second executable L2 fixture is:
+
+- `Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Verifiable-Translation-Prototype/adapter-shim-generation/`
+
+Observed result:
+
+```text
+deterministic-generation: PASS
+c-header-syntax: PASS
+typescript-syntax: PASS
+```
+
+The same descriptor generated C, Rust, C# and TypeScript contract surfaces with stable hashes across two clean runs.
+
+This advances L2.2 from design prose to a proof-of-mechanism. It does **not** prove the proposed shim API is the right final Signet API; it proves the repetitive interface layer can be made machine-readable and reproducible while target-specific behavior remains handwritten.
+
+Next empirical step: implement one generated surface against a real engine/plugin or controlled gateway and drive it through replay/conformance evidence.
