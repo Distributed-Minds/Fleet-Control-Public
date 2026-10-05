@@ -117,7 +117,24 @@ function compose(inp) {
     }
   }
 
-  const ordering = inp.ordering_model;
+  let ordering = inp.ordering_model;
+  if (ordering === undefined && Object.hasOwn(inp, "ordering_preferences")) {
+    for (const candidate of inp.ordering_preferences) {
+      const wanted = refKey(candidate);
+      const compatible = [...closure.values()].every((definition) => {
+        const accepted = definition.ordering_constraints?.accepted ?? [];
+        return !accepted.length || new Set(accepted.map(refKey)).has(wanted);
+      });
+      if (compatible) {
+        ordering = candidate;
+        break;
+      }
+    }
+    if (inp.ordering_preferences.length && ordering === undefined) {
+      throw new CompositionError("ORDERING_MODEL_CONFLICT");
+    }
+  }
+
   if (ordering) {
     const wanted = refKey(ordering);
     for (const definition of closure.values()) {
@@ -128,7 +145,24 @@ function compose(inp) {
     }
   }
 
-  const visibility = inp.visibility_policy;
+  let visibility = inp.visibility_policy;
+  if (visibility === undefined && Object.hasOwn(inp, "visibility_preferences")) {
+    for (const candidate of inp.visibility_preferences) {
+      const wanted = refKey(candidate);
+      const compatible = [...closure.values()].every((definition) => {
+        const accepted = definition.visibility_constraints?.accepted ?? [];
+        return !accepted.length || new Set(accepted.map(refKey)).has(wanted);
+      });
+      if (compatible) {
+        visibility = candidate;
+        break;
+      }
+    }
+    if (inp.visibility_preferences.length && visibility === undefined) {
+      throw new CompositionError("VISIBILITY_POLICY_CONFLICT");
+    }
+  }
+
   if (visibility) {
     const wanted = refKey(visibility);
     for (const definition of closure.values()) {
@@ -177,6 +211,15 @@ function runVectors(vectorDir) {
     }
   }
 
+  const negotiationVector = readJson(path.join(vectorDir, "negotiation-vector-001.json"));
+  const negotiationResult = compose(negotiationVector.input);
+  if (canonicalize(negotiationResult) !== canonicalize(negotiationVector.expected_composition)) {
+    failures.push("NEGOTIATION-VECTOR-001 composition mismatch");
+  }
+  if (sha256Jcs(negotiationResult) !== negotiationVector.expected_profile_set_hash) {
+    failures.push("NEGOTIATION-VECTOR-001 digest mismatch");
+  }
+
   const contractVector = readJson(path.join(vectorDir, "contract-vector-001.json"));
   const contractJcs = canonicalize(contractVector.contract);
   const contractHash = sha256Jcs(contractVector.contract);
@@ -200,6 +243,7 @@ function runVectors(vectorDir) {
   }
   console.log("PASS: HASH-VECTOR-001");
   console.log("PASS: COMP-VECTOR-001");
+  console.log("PASS: NEGOTIATION-VECTOR-001");
   console.log("PASS: CONTRACT-VECTOR-001");
   console.log(`PASS: ${additional.length} additional composition vectors`);
   console.log(`PASS: ${negatives.length} negative composition vectors`);
