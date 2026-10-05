@@ -234,3 +234,26 @@ The same descriptor generated C, Rust, C# and TypeScript contract surfaces with 
 This advances L2.2 from design prose to a proof-of-mechanism. It does **not** prove the proposed shim API is the right final Signet API; it proves the repetitive interface layer can be made machine-readable and reproducible while target-specific behavior remains handwritten.
 
 Next empirical step: implement one generated surface against a real engine/plugin or controlled gateway and drive it through replay/conformance evidence.
+
+### Real-target empirical correction
+
+The empirical pass now includes two different integration modes:
+
+1. **OPEN_ENGINE / Godot 4.7.2 GDExtension**
+   - real ABI-source subset;
+   - compiled shared library;
+   - host-harness initialization/version test PASS.
+
+2. **CONTROLLED_SERVER_GATEWAY / documented Signet Minecraft gateway**
+   - Source-RCON framing PASS;
+   - v0 logical shim coverage FAIL_EXPECTED.
+
+The negative gateway result invalidated the first fixed logical shim as a candidate generic adapter API.
+
+Replacement research fixture:
+
+- `Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Verifiable-Translation-Prototype/adapter-role-contract-v1/`
+
+v1 describes target operations by translator role and validates 7/7 documented Minecraft responsibilities while making zero generic Godot gameplay claims.
+
+**Current status:** empirical implementation pass active. Code-generation mechanism retained; logical contract revised from evidence.
