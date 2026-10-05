@@ -779,6 +779,8 @@ Both reference implementations consume the same published vectors and independen
 ~~~text
 PASS: HASH-VECTOR-001
 PASS: COMP-VECTOR-001
+PASS: NEGOTIATION-VECTOR-001
+PASS: OPTIONAL-NEGOTIATION-VECTOR-001
 PASS: CONTRACT-VECTOR-001
 PASS: 5 additional composition vectors
 PASS: 9 negative composition vectors
@@ -811,6 +813,14 @@ The nine negative vectors require exact agreement on:
 - invalid extension target.
 
 Both implementations return the same required reason codes.
+
+They additionally agree on deterministic pre-selection policy:
+
+- the session supplies ordered ordering-model and visibility-policy preferences;
+- negotiation chooses the first candidate accepted by every activated profile;
+- optional profiles are attempted in explicit preference order;
+- an optional is retained only when the complete tentative contract remains valid;
+- rejected optionals remain visible in the negotiated result with exact reasons.
 
 They also reproduce the full negotiated contract hash:
 
