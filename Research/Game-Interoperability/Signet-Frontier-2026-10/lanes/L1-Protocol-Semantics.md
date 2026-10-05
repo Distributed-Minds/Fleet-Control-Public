@@ -298,3 +298,43 @@ The detailed technical response now has a shorter paper-form synthesis:
 - [Shared Meaning Needs Shared Contracts](../../../Publications/Game-Interoperability/SHARED-MEANING-NEEDS-SHARED-CONTRACTS-PAPER-DRAFT.md)
 
 It keeps the Signet 2 response constructive, states the methodology/falsification explicitly, and moves schema-level detail into the L1 appendices.
+
+
+---
+
+## Continuation pass 6 — independent reference implementations — 2026-10-05
+
+New durable outputs:
+
+- [Cross-Language Reference Evidence](L1/08-Cross-Language-Reference-Evidence.md)
+- [Reference implementation README](L1/reference/README.md)
+- [Python reference](L1/reference/python/reference.py)
+- [JavaScript reference](L1/reference/javascript/reference.mjs)
+- [Negative composition vectors](L1/schema/test-vectors/composition-negative-vectors.json)
+
+Local execution before commit:
+
+~~~text
+Python 3.13.5:
+PASS: HASH-VECTOR-001
+PASS: COMP-VECTOR-001
+PASS: 7 negative composition vectors
+
+Node v22.16.0:
+PASS: HASH-VECTOR-001
+PASS: COMP-VECTOR-001
+PASS: 7 negative composition vectors
+~~~
+
+This is the first executable cross-language evidence for the L1 contract.
+
+Current deliberate limitation: both references implement the RFC-8785-compatible subset needed by the semantic fixtures and reject floating-point normative values rather than claiming incomplete full-JCS numeric support.
+
+Next implementation targets:
+
+1. full negotiated `contract_hash`;
+2. optional dependency activation;
+3. valid/invalid extension edges;
+4. selection-order and duplicate-path invariance;
+5. Unicode/JCS edge vectors;
+6. third-party/third-language independent implementation.
