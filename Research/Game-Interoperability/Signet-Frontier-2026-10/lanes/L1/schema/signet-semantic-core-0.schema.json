@@ -339,7 +339,6 @@
         "kind",
         "core",
         "required_profiles",
-        "ordering_model",
         "ruleset"
       ],
       "properties": {
@@ -396,8 +395,50 @@
         },
         "observers_allowed": {
           "type": "boolean"
+        },
+        "ordering_preferences": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Ordered session preference list. Negotiation selects the first model accepted by every activated profile.",
+          "items": {
+            "$ref": "#/$defs/semanticRef"
+          }
+        },
+        "visibility_preferences": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Ordered session preference list. Negotiation selects the first policy accepted by every activated profile.",
+          "items": {
+            "$ref": "#/$defs/semanticRef"
+          }
         }
-      }
+      },
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "required": [
+                "ordering_model"
+              ]
+            },
+            {
+              "required": [
+                "ordering_preferences"
+              ]
+            }
+          ]
+        },
+        {
+          "not": {
+            "required": [
+              "visibility_policy",
+              "visibility_preferences"
+            ]
+          }
+        }
+      ]
     },
     "negotiatedContract": {
       "type": "object",
