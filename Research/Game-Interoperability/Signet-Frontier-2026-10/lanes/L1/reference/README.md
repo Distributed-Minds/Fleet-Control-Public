@@ -21,6 +21,8 @@ Expected output from both:
 ~~~text
 PASS: HASH-VECTOR-001
 PASS: COMP-VECTOR-001
+PASS: NEGOTIATION-VECTOR-001
+PASS: OPTIONAL-NEGOTIATION-VECTOR-001
 PASS: CONTRACT-VECTOR-001
 PASS: 5 additional composition vectors
 PASS: 9 negative composition vectors
@@ -40,7 +42,10 @@ Both references independently implement:
 - extension-edge validation;
 - ordering-model constraint checks;
 - visibility-policy constraint checks;
-- deterministic canonical profile/concept ordering.
+- deterministic canonical profile/concept ordering;
+- ordered session preference negotiation for ordering/visibility models;
+- deterministic optional-profile preference activation/skipping;
+- full negotiated contract hashing.
 
 ## Deliberate restriction
 
