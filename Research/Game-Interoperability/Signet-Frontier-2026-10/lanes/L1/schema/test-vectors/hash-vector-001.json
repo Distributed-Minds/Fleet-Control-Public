@@ -1,0 +1,21 @@
+{
+  "vector_id": "HASH-VECTOR-001",
+  "rule": "Hash only definition.normative after RFC 8785 JCS. exports/requires are schema-declared set arrays and are already source-canonical.",
+  "definition": {
+    "kind": "signet.semantic-definition",
+    "normative": {
+      "semantic_id": "https://example.org/sem/profile/example/1",
+      "kind": "profile",
+      "exports": [
+        "https://example.org/sem/profile/example/1#intent/a",
+        "https://example.org/sem/profile/example/1#state/b"
+      ],
+      "requires": []
+    },
+    "annotations": {
+      "label": "This annotation is excluded from the hash."
+    }
+  },
+  "expected_jcs": "{\"exports\":[\"https://example.org/sem/profile/example/1#intent/a\",\"https://example.org/sem/profile/example/1#state/b\"],\"kind\":\"profile\",\"requires\":[],\"semantic_id\":\"https://example.org/sem/profile/example/1\"}",
+  "expected_definition_hash": "sha256:f03c2be7809a1890c0ed986644c81a000b4549328f9c4934313858d304dd16b8"
+}
