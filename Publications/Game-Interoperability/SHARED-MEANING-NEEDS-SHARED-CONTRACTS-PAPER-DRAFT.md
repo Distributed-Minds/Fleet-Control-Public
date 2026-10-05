@@ -772,14 +772,51 @@ These are not proposed as finished Signet specifications.
 
 Their purpose is falsifiability.
 
-Two independent implementations should be able to consume the same inputs and derive the same:
+We have now also implemented the current hashing/composition subset independently in **Python 3.13.5** and **Node.js 22.16.0**.
 
-- dependency closure;
-- activated profiles;
-- compatibility result;
-- reason codes;
-- canonical bytes;
-- hashes.
+Both reference implementations consume the same published vectors and independently produce:
+
+~~~text
+PASS: HASH-VECTOR-001
+PASS: COMP-VECTOR-001
+PASS: 7 negative composition vectors
+~~~
+
+The positive composition vector does not merely hash a preconstructed expected result: it begins with the selected `card-zones@1` profile, resolves the required `turn-taking@1` dependency, unions the concept exports, checks the selected ordering model, canonicalizes the result, and derives:
+
+~~~text
+sha256:a9ca960cc1eec57fb925e44c3cf720ad7bd79ccd69828ae11cbf7d03ba7624b0
+~~~
+
+The seven negative vectors require exact agreement on:
+
+- semantic definition conflict;
+- required dependency cycle;
+- concept definition conflict;
+- ordering-model conflict;
+- explicit profile conflict;
+- visibility-policy conflict;
+- unavailable required dependency.
+
+Both implementations return the same required reason codes.
+
+This remains deliberately narrower than a general RFC 8785 library: floating-point normative values are rejected. The current semantic fixtures use strings, booleans, null, arrays/objects, and safe integers. That restriction prevents an incomplete numeric serializer from being mistaken for full JCS conformance.
+
+The executable evidence changes the status of the proposal:
+
+~~~text
+prose contract
+    ->
+machine-readable schemas
+    ->
+fixed vectors
+    ->
+two independent implementations
+    ->
+same bytes, hashes, closures and failures
+~~~
+
+A third implementation can now challenge the contract without needing private clarification.
 
 ---
 
