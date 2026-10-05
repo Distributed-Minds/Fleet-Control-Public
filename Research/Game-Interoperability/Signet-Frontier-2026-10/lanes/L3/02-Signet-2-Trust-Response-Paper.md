@@ -1012,3 +1012,158 @@ handoff:
   why_material: These claims are only useful if independent implementations can reproduce PASS/fail behavior.
   requested_followup: Add these cases to the conformance/compatibility validation matrix.
 ~~~
+
+
+---
+
+## 15. Real-target trust consequence: integration mode changes the security claim
+
+The current L2 implementation pass materially strengthens one L3 conclusion.
+
+The public response now includes two real-target experiments:
+
+1. a Godot 4.7.2 GDExtension ABI target;
+2. Signet's documented Minecraft controlled-server/RCON gateway.
+
+These targets implement different integration mechanisms and therefore have different trust surfaces.
+
+### Godot GDExtension
+
+The generic Godot experiment correctly claims only the host/version boundary and zero game-specific gameplay capabilities.
+
+That same discipline should apply to confinement.
+
+A native engine extension executes in the host application's process. Its useful trust classification is therefore approximately:
+
+~~~text
+HOST_PROCESS_CODE
+~~~
+
+rather than SEPARATE_SANDBOX_ENFORCED.
+
+The extension may still be:
+
+- signed;
+- reproducibly built;
+- provenance-bearing;
+- reviewed;
+- constrained by a narrow host API.
+
+Those are real claims.
+
+They do not create a kernel/process isolation boundary that is not present.
+
+### Minecraft controlled-server/RCON gateway
+
+The documented Minecraft gateway can issue commands that:
+
+- construct or modify the world;
+- inspect player/actor state;
+- teleport or reconcile actors;
+- apply damage;
+- kill actors;
+- observe selected gameplay signals.
+
+This is a high-impact controlled-server administration surface.
+
+The trust record should therefore expose the actual authority instead of treating gateway as one generic safe category.
+
+Illustratively:
+
+~~~yaml
+integration:
+  mechanism: RCON_GATEWAY
+
+authority:
+  controlled_server_command: true
+  world_mutation: true
+  actor_reposition: true
+  damage_application: true
+  death_application: true
+~~~
+
+The gateway's RCON credential is also a separate secret-bearing boundary.
+
+Where practical:
+
+- use a dedicated credential;
+- keep it out of package files;
+- redact it from logs/crash reports;
+- deliver it only to the process or broker that needs it;
+- do not let possession of the RCON secret imply access to unrelated launcher credentials.
+
+### Link to the new L2 role contract
+
+The revised L2 descriptor classifies target operations under roles such as:
+
+~~~text
+HOST
+IMPORTER
+WORLD
+INPUT
+PRESENTATION
+AUTHORITY
+~~~
+
+This is a useful source for generating or reviewing requested permissions.
+
+It is not itself an enforcement system.
+
+~~~text
+ROLE_CONTRACT != SANDBOX_POLICY
+~~~
+
+A useful implementation pipeline is:
+
+~~~text
+target role contract
+    -> declared authority/permission request
+    -> launcher/broker resolution
+    -> platform enforcement
+    -> measured enforcement evidence
+~~~
+
+This gives the real-target experiments a direct trust consequence:
+
+> **Integration mode is part of the trust subject. Two adapters can be equally conformant while requiring radically different local authority.**
+
+That claim should survive into the final public paper.
+
+---
+
+## 16. Response-paper synthesis direction
+
+The emerging response is now strongest when treated as one argument rather than four lane reports:
+
+~~~text
+L1:
+  shared labels need versioned/testable semantic meaning
+
+L2:
+  mappings need typed authority, evidence, drift detection,
+  generated contract glue and explicit local hooks
+
+L3:
+  durable mappings and installable translators need
+  ownership, permissions, current authorization,
+  privacy boundaries and separated governance
+
+L4:
+  all compatibility claims need independent,
+  replayable and freshness-bound evidence
+~~~
+
+The resulting thesis is:
+
+> **Signet 2 has selected the right scaling architecture. The remaining work is to make every semantic, behavioral, trust and evidence boundary explicit enough that independent implementations can reproduce or falsify the claim.**
+
+The compact architecture is:
+
+~~~text
+deterministic core
++ adaptive edge
++ explicit trust boundary
++ reproducible evidence
+~~~
+
+This is now a stronger target than any lane-specific paper alone.
