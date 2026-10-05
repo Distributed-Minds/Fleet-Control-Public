@@ -779,7 +779,9 @@ Both reference implementations consume the same published vectors and independen
 ~~~text
 PASS: HASH-VECTOR-001
 PASS: COMP-VECTOR-001
-PASS: 7 negative composition vectors
+PASS: CONTRACT-VECTOR-001
+PASS: 5 additional composition vectors
+PASS: 9 negative composition vectors
 ~~~
 
 The positive composition vector does not merely hash a preconstructed expected result: it begins with the selected `card-zones@1` profile, resolves the required `turn-taking@1` dependency, unions the concept exports, checks the selected ordering model, canonicalizes the result, and derives:
@@ -788,7 +790,15 @@ The positive composition vector does not merely hash a preconstructed expected r
 sha256:a9ca960cc1eec57fb925e44c3cf720ad7bd79ccd69828ae11cbf7d03ba7624b0
 ~~~
 
-The seven negative vectors require exact agreement on:
+The additional positive vectors also exercise:
+
+- selection-order invariance;
+- duplicate dependency-path coalescing;
+- optional dependency non-activation;
+- explicit optional dependency activation;
+- valid semantic concept extension.
+
+The nine negative vectors require exact agreement on:
 
 - semantic definition conflict;
 - required dependency cycle;
@@ -796,9 +806,19 @@ The seven negative vectors require exact agreement on:
 - ordering-model conflict;
 - explicit profile conflict;
 - visibility-policy conflict;
-- unavailable required dependency.
+- unavailable required dependency;
+- optional dependency version mismatch;
+- invalid extension target.
 
 Both implementations return the same required reason codes.
+
+They also reproduce the full negotiated contract hash:
+
+~~~text
+sha256:49539b9e09a204fe8d1a5a44f247247a19c591f66d902623d62695e2819fe2b0
+~~~
+
+which binds the exact core, profiles, ordering model, ruleset, visibility policy, fallbacks, and authority assignments.
 
 This remains deliberately narrower than a general RFC 8785 library: floating-point normative values are rejected. The current semantic fixtures use strings, booleans, null, arrays/objects, and safe integers. That restriction prevents an incomplete numeric serializer from being mistaken for full JCS conformance.
 
