@@ -187,3 +187,108 @@ The paper explicitly connects games/agents with HLA simulator interoperability a
 4. Treat model/vendor benchmarks as `CLAIMED` until reproduced.
 5. Record access limitations instead of converting “not found” into “does not exist.”
 6. Use jurisdiction-specific qualified sources before making prescriptive legal claims.
+
+
+---
+
+## L4 validation, conformance, ecosystem, and adoption sources
+
+### W3C implementation experience
+
+- W3C Process Document, §6.3.2 Implementation Experience  
+  https://www.w3.org/policies/process/#implementation-experience
+
+Evidence class: **primary standards-process source**.
+
+L4 relevance: explicitly asks about independent interoperable implementations, implementations by non-authors, public deployment, ecosystem-wide implementation experience, and implementation difficulties.
+
+### IETF standards maturity
+
+- RFC 6410 — Reducing the Standards Track to Two Maturity Levels  
+  https://www.rfc-editor.org/rfc/rfc6410.html
+
+Evidence class: **primary standards-process source**.
+
+L4 relevance: Internet Standard advancement requires at least two independent interoperating implementations with widespread deployment and successful operational experience, plus checks for interoperability-breaking errata and unused complexity.
+
+### Khronos conformance
+
+- OpenXR CTS Usage Instructions and Developer Guide  
+  https://registry.khronos.org/OpenXR/conformance/cts_usage.html
+- OpenXR conformance overview / ecosystem  
+  https://www.khronos.org/openxr/
+- OpenXR conformant products  
+  https://www.khronos.org/conformance/adopters/conformant-products/openxr
+- Vulkan CTS documentation  
+  https://github.khronos.org/Vulkan-Site/guide/latest/vulkan_cts.html
+- Vulkan conformant products  
+  https://www.khronos.org/conformance/adopters/conformant-products/vulkan
+
+Evidence class: **primary standards-organization / conformance sources**.
+
+L4 relevance: public CTS, exact suite/revision evidence, formal adopter/conformance claims, and versioned public implementation records.
+
+### OpenID conformance and pairwise interoperability
+
+- OpenID Foundation certification and conformance overview  
+  https://openid.net/certification/
+- OpenID Conformance Suite  
+  https://openid.net/certification/about-conformance-suite/
+- 2026 OpenID4VP/OpenID4VCI conformance launch with 2025 pairwise interoperability results  
+  https://openid.net/openid4vp-and-openid4vci-conformance-tests-are-complete-and-open-for-self-certification/
+
+Evidence class: **primary standards-organization / interoperability-event source**.
+
+L4 relevance: combines self-conformance with real pairwise testing and reports tested/possible pairings plus pass rates. The 2025 OpenID4VP event reports 153 of 224 possible pairings tested with more than 90% passing; the July 2025 OpenID4VCI event reports 47 pairs tested with 87% passing.
+
+### Web Platform Tests / Interop
+
+- Web Platform Tests documentation  
+  https://web-platform-tests.org/
+- Interop project  
+  https://github.com/web-platform-tests/interop
+- Interop 2026 README  
+  https://github.com/web-platform-tests/interop/blob/main/2026/README.md
+
+Evidence class: **primary open test-suite / implementation-collaboration source**.
+
+L4 relevance: one shared test corpus runs continuously across independent implementations; public per-engine and shared scores expose differential compatibility rather than only one implementation's test total.
+
+### OGC compliance testing
+
+- OGC Compliance Testing Program Policies & Procedures  
+  https://docs.ogc.org/pol/08-134r11.html
+- OGC TEAM Engine  
+  https://cite.ogc.org/teamengine/
+- OGC developer compliance overview  
+  https://developer.ogc.org/
+
+Evidence class: **primary standards-organization / compliance-program source**.
+
+L4 relevance: separates Abstract Test Suites (ATS), Executable Test Suites (ETS), and conformance classes. This is a useful model for mapping Signet normative assertions to executable tests and profile-scoped conformance.
+
+### HLA / SpaceFOM semantic-interoperability evidence
+
+- NASA NTRS — Promoting A-Priori Interoperability of HLA-Based Simulations in the Space Domain: The SISO Space Reference FOM Initiative  
+  https://ntrs.nasa.gov/citations/20160006730
+- NASA NTRS — On the Execution Control of HLA Federations using the SISO Space Reference FOM  
+  https://ntrs.nasa.gov/citations/20170005623
+- Fraunhofer — Towards a new NATO certification capability for HLA interoperability  
+  https://publica.fraunhofer.de/entities/publication/b3a0cb70-2a1a-4d39-983c-c6286549c66d
+
+Evidence class: **institutional technical literature / interoperability-program evidence**.
+
+L4 relevance: common HLA use did not automatically yield a-priori interoperability because organizations used incompatible Federation Object Models. Shared reference models, federation agreements, and explicit certification/testing were needed.
+
+### Metaverse Standards Forum implementation programs
+
+- Projects  
+  https://metaverse-standards.org/projects/
+- Forum Labs initiative  
+  https://metaverse-standards.org/forum-labs/
+- FAQ / operating model  
+  https://metaverse-standards.org/faq/
+
+Evidence class: **primary industry-forum source**.
+
+L4 relevance: emphasizes implementation prototyping, pilots, testbeds, plugfests, open tooling, and validation as adoption mechanisms. Membership/community size is therefore not treated as interoperability evidence by itself.
