@@ -192,3 +192,39 @@ Material synthesis:
 - preserve Signet/1 through an explicit legacy bridge rather than requiring a rewrite.
 
 The next L1 falsification target remains a non-FPS/non-spatial domain. Signet 2 makes this test more urgent because its proposed version-0 intent/archetype vocabulary is deliberately action/FPS shaped.
+
+
+---
+
+## Continuation pass 3 — non-FPS falsification — 2026-10-05
+
+New durable output:
+
+- [Non-FPS Core Falsification](L1/05-Non-FPS-Core-Falsification.md)
+
+Tested the proposed core conceptually against four non-FPS domain shapes:
+
+1. turn-based board/tactics;
+2. deckbuilder/card game with hidden information;
+3. city-builder/management simulation;
+4. user-defined tabletop/game-within-game.
+
+Results:
+
+- **PASS** on removing movement/body/weapon/health/world-geometry concepts from the universal core;
+- **CORRECTION**: fixed `tick` must not look universal — the core now negotiates ordering models such as fixed-tick, turn-sequence, or event-sequence;
+- **CORRECTION**: authority and visibility are distinct — hidden-information domains require an explicit disclosure-policy reference;
+- **PASS** on intent/state/event separation outside FPS gameplay;
+- **PASS** on scope-based authority without a player-body assumption;
+- **PASS** on modular profiles as the mechanism for radically different game semantics.
+
+The public Signet 2 response draft now includes these falsification results rather than only proposing the experiment.
+
+Next implementation-grade falsification:
+
+- one current Signet/FPS fixture;
+- one minimal turn/card fixture;
+- same core negotiation machinery;
+- different profiles + ordering models;
+- no dummy domain fields;
+- exact cross-implementation conformance outcomes.
