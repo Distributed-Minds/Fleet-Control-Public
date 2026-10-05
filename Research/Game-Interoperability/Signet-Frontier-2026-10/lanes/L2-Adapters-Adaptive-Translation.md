@@ -168,3 +168,20 @@ Hand off to:
 ## Success condition
 
 L2 is useful when a new adapter can be built mostly by filling a well-defined contract, and any AI assistance produces inspectable artifacts rather than hidden runtime semantics.
+
+## Current pass — 2026-10-05
+
+**Status: first design/research pass complete; empirical implementation pass remains open.**
+
+Durable outputs:
+
+- [Adapter Engineering Findings](L2-Adapter-Engineering-Findings.md)
+- [L2 Source Ledger](L2-Source-Ledger.md)
+
+The current design delta is:
+
+> **generated contract glue + thin handwritten game/engine hook shim + explicit frozen semantic mappings + replay/conformance evidence**
+
+The next high-value step is an empirical adapter-generator prototype against at least one native engine/plugin target and one gateway/reimplementation target, followed by the closed-set mapping benchmark defined in the findings.
+
+Independent public benchmark execution belongs to L4.
