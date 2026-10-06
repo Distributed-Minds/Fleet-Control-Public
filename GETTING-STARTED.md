@@ -1,6 +1,8 @@
-# Getting Started — no Git or ChatGPT experience required
+# Getting Started with FREE ENERGY — no Git or ChatGPT experience required
 
 This guide assumes you are starting from zero. You do **not** need to understand Git, branches, pull requests, state machines, or multi-agent systems before you begin.
+
+**FREE ENERGY** is the public project. **Fleet-Control Phase0** is the current repository-local orchestration layer you are installing.
 
 ## What you are setting up
 
@@ -29,6 +31,8 @@ Create an account at https://github.com/ and sign in.
 ### 2. Make your own copy
 
 Open https://github.com/Distributed-Minds/Fleet-Control-Public and choose **Fork** near the top-right.
+
+That URL currently uses the legacy repository slug while the project migrates to the **FREE ENERGY** name.
 
 Choose your own GitHub account or organization and create the fork. Your fleet should work on **your fork**, not on `Distributed-Minds/Fleet-Control-Public`.
 
@@ -66,7 +70,7 @@ A newly created or newly authorized repository may take some time to appear.
 
 ### 5. Create a ChatGPT Project
 
-In ChatGPT, choose **New project** in the sidebar. Name it anything you like, for example `My Agent Fleet`.
+In ChatGPT, choose **New project** in the sidebar. Name it anything you like, for example `FREE ENERGY — My Game Fleet`.
 
 Open the project menu (`...`) → **Project settings**.
 
@@ -140,7 +144,7 @@ Important: scheduled ChatGPT tasks may not be able to access files uploaded dire
 
 ### 8. Give the fleet real work
 
-Open a normal chat inside your Fleet Project and ask for the outcome you want.
+Open a normal chat inside your FREE ENERGY / Fleet Project and ask for the outcome you want.
 
 Examples:
 

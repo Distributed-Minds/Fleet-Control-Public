@@ -1,6 +1,6 @@
-# README FIRST — Fleet-Control Public starter pack
+# README FIRST — FREE ENERGY starter pack
 
-This release ZIP contains the exact files a new user needs to install the Markdown fleet state machine.
+**FREE ENERGY** is the public project. This release ZIP contains the current **Fleet-Control Phase0** bootstrap used to create a persistent repository-backed agent fleet.
 
 If GitHub or ChatGPT Projects are new to you, begin with `GETTING-STARTED.md` before copying anything.
 
