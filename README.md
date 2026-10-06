@@ -1,8 +1,24 @@
-# Fleet-Control Public
+# FREE ENERGY
 
-Fleet-Control Public is a Markdown-only bootstrap operating system for a persistent fleet of GitHub-connected AI agents.
+**Federated Remastering Ecosystem for Everyone — Engine for Networked Entertainment, Remixing, Games & You**
 
-It is designed to be copied or forked into a repository that the fleet will work on. The human can ask for work at very different levels — from “think about this” or “research this” through “fix this” or “build an application” — and the fleet uses repository-local policy to decide how much mutation is actually authorized, how agents coordinate, and what evidence is required before claiming progress.
+> **FREE ENERGY Remasters Everything.**
+
+FREE ENERGY is the public collaborative project built on the Fleet-Control orchestration model.
+
+The long-term goal is intentionally excessive: give people and AI-agent fleets a shared system for finding, repairing, remastering, porting, extending, remixing, and eventually combining games, engines, assets, tools, mods, and abandoned experiments instead of repeatedly rebuilding the same pieces in isolation.
+
+This repository currently contains the first public bootstrap layer: **Fleet-Control Phase0**, a Markdown-first operating system for persistent GitHub-connected AI agents.
+
+## FREE ENERGY vs. Fleet-Control
+
+- **FREE ENERGY** is the public project, community, future website, and user-facing ecosystem.
+- **Fleet-Control** is the orchestration substrate: the agent coordination, authority, lifecycle, state-machine, and repository-control machinery underneath it.
+- **Phase0** is the current public bootstrap implementation of that machinery.
+
+The current GitHub repository slug may still say `Fleet-Control-Public` during the migration. The canonical public name is **FREE ENERGY**.
+
+See [`BRANDING.md`](BRANDING.md) for the naming contract.
 
 ## What Phase0 provides
 
@@ -19,6 +35,14 @@ Phase0 gives a fleet:
 - a small scheduler/automation contract.
 
 The bootstrap is intentionally Markdown-only. It does not require a custom service, database, queue, or coordinator.
+
+## Why this exists
+
+A large collaborative game-remastering ecosystem cannot work if every human and every model starts from scratch in a private chat.
+
+FREE ENERGY is intended to turn useful work into durable shared artifacts: reusable research, source ports, compatibility fixes, build knowledge, assets, tools, remasters, mods, experiments, and eventually higher-level mashups across many game projects.
+
+The current Phase0 release is infrastructure for that larger system, not the final product.
 
 ## Core philosophy
 
@@ -48,6 +72,6 @@ For the normative machine read order, see [`Phase0/README.md`](Phase0/README.md)
 
 ## License
 
-Fleet-Control Public is licensed under the **MIT License**. See [`LICENSE`](LICENSE). You may use, copy, modify, merge, publish, distribute, sublicense, and sell copies subject to the MIT terms and preservation of the copyright/license notice.
+FREE ENERGY's current Fleet-Control Phase0 bootstrap is licensed under the **MIT License**. See [`LICENSE`](LICENSE).
 
-This branch is the initial public Phase0 preview. It is intentionally kept off `main` until the maintainer chooses to integrate it.
+This branch family is the initial public Phase0 preview. It is intentionally kept off `main` until the maintainer chooses to integrate it.
