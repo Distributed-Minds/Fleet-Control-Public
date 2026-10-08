@@ -26,3 +26,6 @@ jobs:
           rustup run 1.85.1 cargo test --manifest-path Phase0/rust-fixtures/Cargo.toml
           rustup run 1.85.1 cargo clippy --manifest-path Phase0/rust-fixtures/Cargo.toml --all-targets -- -D warnings
           rustup run 1.85.1 cargo run --manifest-path Phase0/rust-fixtures/Cargo.toml -- Phase0/fixtures/containment-spec3.json
+          echo 'PHASE0_CARGO_LOCK_BEGIN'
+          cat Phase0/rust-fixtures/Cargo.lock
+          echo 'PHASE0_CARGO_LOCK_END'
