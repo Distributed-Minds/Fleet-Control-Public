@@ -130,7 +130,12 @@ fn compute(c: &Case) -> Result<Computed<'_>, &'static str> {
         c.original_case_passes.is_some() || c.score_improved.is_some(),
         c.post_promotion_recurrence.is_some(),
     ];
-    if selector_groups.into_iter().filter(|selected| *selected).count() != 1 {
+    if selector_groups
+        .into_iter()
+        .filter(|selected| *selected)
+        .count()
+        != 1
+    {
         return Err("scenario must select exactly one semantic operation");
     }
 
@@ -492,12 +497,20 @@ mod selector_exclusivity_regressions {
 
     #[test]
     fn fixture_authority_cannot_smuggle_telemetry_admission() {
-        checked_mutation("fixture-authority-is-inert", "telemetry_present", json!(false));
+        checked_mutation(
+            "fixture-authority-is-inert",
+            "telemetry_present",
+            json!(false),
+        );
     }
 
     #[test]
     fn retry_evidence_cannot_smuggle_remediation_closure() {
-        checked_mutation("ack-loss-reconciles-first", "disposition", json!("PATCH-ACCEPTED"));
+        checked_mutation(
+            "ack-loss-reconciles-first",
+            "disposition",
+            json!("PATCH-ACCEPTED"),
+        );
     }
 
     #[test]
