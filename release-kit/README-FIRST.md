@@ -12,6 +12,8 @@ If GitHub or ChatGPT Projects are new to you, begin with the [current online Get
 
 Copy the complete top-level `Phase0/` folder into the root of the repository your agents should work on.
 
+**Historical v0.1.2 ZIP license fix:** The published ZIP predates the `Phase0/LICENSE` file added to the current online preview. If installing from that ZIP, copy the [current FREE ENERGY Phase0 MIT notice](https://github.com/Distributed-Minds/Fleet-Control-Public/blob/phase0/public-v0/LICENSE) into `Phase0/LICENSE` before committing. If installing from the current preview, preserve its existing `Phase0/LICENSE`. **Keep your own project's root `LICENSE` unchanged:** Phase0's MIT notice does not relicense unrelated project files. See the [current installation checklist](https://github.com/Distributed-Minds/Fleet-Control-Public/blob/phase0/public-v0/release-kit/INSTALL-CHECKLIST.md).
+
 Do not keep Phase0 only on your computer. Every persistent agent needs to read the same committed Phase0 files from GitHub.
 
 ### Into ChatGPT Project instructions
