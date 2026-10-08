@@ -5,18 +5,20 @@ This directory contains two deliberately independent implementations of the curr
 - `python/reference.py`
 - `javascript/reference.mjs`
 
+> **Historical research evidence, not maintained FREE ENERGY tooling.** These corrected L1 Python and JavaScript reference sources are preserved for provenance and optional reproduction. They are not an installed Phase0 validator, supported FREE ENERGY CI or a maintained executable dependency. Current maintained FREE ENERGY tooling must follow the compiled Rust/no-npm requirement in [issue #70](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/70); an equivalent Rust L1 conformance implementation has **not** been delivered or verified here. The commands and expected output below describe the historical research workflow, **not tests executed by this archive or a current CI PASS**.
+
 They consume the vectors in:
 
 `../schema/test-vectors/`
 
-Run:
+Optional historical reproduction (from this `reference/` directory, with Python 3 and Node.js already available; not an install step):
 
 ~~~bash
 python3 python/reference.py ../schema/test-vectors
 node javascript/reference.mjs ../schema/test-vectors
 ~~~
 
-Expected output from both:
+Expected historical output from both (not rerun for this documentation correction):
 
 ~~~text
 PASS: HASH-VECTOR-001
