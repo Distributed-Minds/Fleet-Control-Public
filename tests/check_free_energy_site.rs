@@ -743,16 +743,16 @@ data="x"></OBject><EMBED/>"#;
 
     #[test]
     fn attribute_names_cannot_be_spoofed_by_prefixes_or_quoted_text() {
-        assert_eq!(attribute(r#"a data-href="#main""#, "href"), None);
-        assert_eq!(attribute(r#"main data-id="main""#, "id"), None);
-        assert_eq!(attribute(r#"a title='fake href="#main"' data-href="#main""#, "href"), None);
-        assert_eq!(attribute(r#"a aria-label="fake id=main" data-id="main""#, "id"), None);
+        assert_eq!(attribute(r##"a data-href="#main""##, "href"), None);
+        assert_eq!(attribute(r##"main data-id="main""##, "id"), None);
+        assert_eq!(attribute(r##"a title='fake href="#main"' data-href="#main""##, "href"), None);
+        assert_eq!(attribute(r##"a aria-label="fake id=main" data-id="main""##, "id"), None);
         assert_eq!(
-            attribute(r#"a data-href="#wrong" HREF = "#main""#, "href"),
+            attribute(r##"a data-href="#wrong" HREF = "#main""##, "href"),
             Some("#main")
         );
         assert_eq!(
-            attribute(r#"a title='quoted attribute text' href="#main""#, "href"),
+            attribute(r##"a title='quoted attribute text' href="#main""##, "href"),
             Some("#main")
         );
     }
