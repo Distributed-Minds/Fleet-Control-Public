@@ -7,6 +7,91 @@
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 
+// JSON object names are authoritative manifest fields. Ordinary serde_json
+// Value/struct decoding keeps the last duplicate member, concealing a
+// contradictory upstream, rights, permission or provenance claim. Walk the
+// complete input with a streaming visitor *before* typed admission; no
+// canonicalization or last-wins interpretation is allowed at any nesting level.
+fn reject_duplicate_json_members(input: &str) -> Result<(), serde_json::Error> {
+    use serde::de::{DeserializeSeed, Error as _, MapAccess, SeqAccess, Visitor};
+    use std::fmt;
+
+    struct UniqueMembers;
+
+    impl<'de> DeserializeSeed<'de> for UniqueMembers {
+        type Value = ();
+
+        fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            deserializer.deserialize_any(self)
+        }
+    }
+
+    impl<'de> Visitor<'de> for UniqueMembers {
+        type Value = ();
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a JSON value without duplicate object member names")
+        }
+
+        fn visit_bool<E: serde::de::Error>(self, _: bool) -> Result<(), E> {
+            Ok(())
+        }
+
+        fn visit_i64<E: serde::de::Error>(self, _: i64) -> Result<(), E> {
+            Ok(())
+        }
+
+        fn visit_u64<E: serde::de::Error>(self, _: u64) -> Result<(), E> {
+            Ok(())
+        }
+
+        fn visit_f64<E: serde::de::Error>(self, _: f64) -> Result<(), E> {
+            Ok(())
+        }
+
+        fn visit_str<E: serde::de::Error>(self, _: &str) -> Result<(), E> {
+            Ok(())
+        }
+
+        fn visit_string<E: serde::de::Error>(self, _: String) -> Result<(), E> {
+            Ok(())
+        }
+
+        fn visit_unit<E: serde::de::Error>(self) -> Result<(), E> {
+            Ok(())
+        }
+
+        fn visit_none<E: serde::de::Error>(self) -> Result<(), E> {
+            Ok(())
+        }
+
+        fn visit_seq<S: SeqAccess<'de>>(self, mut values: S) -> Result<(), S::Error> {
+            while values.next_element_seed(UniqueMembers)?.is_some() {}
+            Ok(())
+        }
+
+        fn visit_map<M: MapAccess<'de>>(self, mut members: M) -> Result<(), M::Error> {
+            let mut names = HashSet::new();
+            while let Some(name) = members.next_key::<String>()? {
+                if !names.insert(name.clone()) {
+                    return Err(M::Error::custom(format!(
+                        "duplicate JSON object member: {name}"
+                    )));
+                }
+                members.next_value_seed(UniqueMembers)?;
+            }
+            Ok(())
+        }
+    }
+
+    let mut deserializer = serde_json::Deserializer::from_str(input);
+    UniqueMembers.deserialize(&mut deserializer)?;
+    deserializer.end()
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Project {
@@ -294,6 +379,16 @@ fn is_portable_repository_segment(part: &str) -> bool {
     )
 }
 
+// Invisible formatting characters can make two distinct Git paths look
+// identical in rights and pinned-evidence reviews. Do not normalize them:
+// repository identity and scoped license decisions require exact visible paths.
+fn is_invisible_path_format(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{00ad}' | '\u{034f}' | '\u{180e}' | '\u{200b}'..='\u{200d}' | '\u{2060}' | '\u{feff}'
+    )
+}
+
 fn is_relative_path(value: &str) -> bool {
     // Repository paths are identity-bearing, not URL paths. Until an
     // authoritative percent-decoding/canonicalization contract exists, reject
@@ -302,9 +397,9 @@ fn is_relative_path(value: &str) -> bool {
         && !value.starts_with('/')
         && !value.contains('%')
         && !value.contains('\\')
-        && !value
-            .chars()
-            .any(|ch| ch.is_control() || is_bidi_format_character(ch))
+        && !value.chars().any(|ch| {
+            ch.is_control() || is_bidi_format_character(ch) || is_invisible_path_format(ch)
+        })
         && value.split('/').all(|part| {
             !part.is_empty()
                 && part != "."
@@ -324,17 +419,13 @@ fn is_bidi_format(ch: char) -> bool {
     )
 }
 
-// An HTTPS link can look different after URL decoding when it contains
-// default-ignorable/invisible formatting. Reject these presentation aliases
-// for evidence and contributor destinations rather than normalizing them.
-// Ordinary visible Unicode path text remains permitted.
-fn is_invisible_url_format(ch: char) -> bool {
-    is_bidi_format(ch)
-        || matches!(
-            ch,
-            '\u{00ad}' | '\u{034f}' | '\u{180e}' | '\u{200b}'
-                ..='\u{200d}' | '\u{2060}' | '\u{feff}'
-        )
+// Percent escapes may encode controls and Unicode spaces even when the raw
+// source URL contains no forbidden whitespace. Check the decoded scalar values
+// with the same conservative policy used for unescaped characters.
+fn is_inadmissible_decoded(ch: char) -> bool {
+    (!ch.is_ascii() && (ch.is_control() || ch.is_whitespace()))
+        || is_bidi_format(ch)
+        || is_invisible_path_format(ch)
 }
 
 /// Conservative, offline admission for externally displayed links. This does
@@ -432,7 +523,7 @@ fn is_public_https_url(url: &str) -> bool {
     }
     // Reject invalid UTF-8 after decoding; its browser presentation is not
     // reliably equivalent to the evidence URL being reviewed.
-    if !std::str::from_utf8(&decoded_url).is_ok_and(|s| !s.chars().any(is_invisible_url_format)) {
+    if !std::str::from_utf8(&decoded_url).is_ok_and(|s| !s.chars().any(is_inadmissible_decoded)) {
         return false;
     }
     true
@@ -550,13 +641,187 @@ fn check_slug(problems: &mut Vec<String>, path: &str, value: &str) {
     }
 }
 
+// Serde Option<T> otherwise accepts a missing field as None. The published
+// schema requires these keys to be present even when their values are null.
+// Keep this shape gate separate from semantic rights/permission decisions.
+fn validate_required_nullable_presence(json: &str) -> Result<(), Vec<String>> {
+    use serde_json::Value;
+
+    reject_duplicate_json_members(json)
+        .map_err(|error| vec![format!("JSON/typed manifest: {error}")])?;
+
+    let root: Value = serde_json::from_str(json)
+        .map_err(|error| vec![format!("JSON/typed manifest: {error}")])?;
+
+    fn require_keys(value: Option<&Value>, path: &str, keys: &[&str], problems: &mut Vec<String>) {
+        if let Some(object) = value.and_then(Value::as_object) {
+            for key in keys {
+                if !object.contains_key(*key) {
+                    problems.push(format!("{path}.{key}: missing schema-required field"));
+                }
+            }
+        }
+    }
+
+    let mut problems = Vec::new();
+    require_keys(
+        root.get("upstream"),
+        "upstream",
+        &["source_revision", "source_revision_reason"],
+        &mut problems,
+    );
+    require_keys(
+        root.get("play"),
+        "play",
+        &["upstream_download_url", "local_test_evidence_id"],
+        &mut problems,
+    );
+    require_keys(
+        root.get("adapter"),
+        "adapter",
+        &["target_id", "test_evidence_id"],
+        &mut problems,
+    );
+    require_keys(
+        root.get("review"),
+        "review",
+        &["supersedes_record_revision"],
+        &mut problems,
+    );
+
+    for (collection, keys) in [
+        ("rights_claims", &["license_id"][..]),
+        ("permission_decisions", &["decided_at", "reviewer"][..]),
+        ("evidence", &["repository", "commit", "path"][..]),
+    ] {
+        if let Some(items) = root.get(collection).and_then(Value::as_array) {
+            for (index, item) in items.iter().enumerate() {
+                require_keys(
+                    Some(item),
+                    &format!("{collection}[{index}]"),
+                    keys,
+                    &mut problems,
+                );
+            }
+        }
+    }
+    if let Some(events) = root
+        .pointer("/review/claim_history")
+        .and_then(Value::as_array)
+    {
+        for (index, event) in events.iter().enumerate() {
+            require_keys(
+                Some(event),
+                &format!("review.claim_history[{index}]"),
+                &["new_claim_id"],
+                &mut problems,
+            );
+        }
+    }
+
+    problems.sort();
+    if problems.is_empty() {
+        Ok(())
+    } else {
+        Err(problems)
+    }
+}
+
+fn check_visible_text(problems: &mut Vec<String>, path: &str, value: &str) {
+    if value.chars().any(is_bidi_format_character) {
+        problems.push(format!(
+            "{path}: bidirectional formatting control in visible metadata"
+        ));
+    }
+}
+
+fn validate_visible_metadata(record: &Project, problems: &mut Vec<String>) {
+    check_visible_text(problems, "display_name", &record.display_name);
+    if let Some(reason) = &record.upstream.source_revision_reason {
+        check_visible_text(problems, "upstream.source_revision_reason", reason);
+    }
+    for (i, value) in record.play.content_requirements.iter().enumerate() {
+        check_visible_text(problems, &format!("play.content_requirements[{i}]"), value);
+    }
+    for (i, claim) in record.rights_claims.iter().enumerate() {
+        for (field, value) in [
+            ("scope", claim.scope.as_str()),
+            ("statement", claim.statement.as_str()),
+        ] {
+            check_visible_text(problems, &format!("rights_claims[{i}].{field}"), value);
+        }
+        if let Some(license) = &claim.license_id {
+            check_visible_text(problems, &format!("rights_claims[{i}].license_id"), license);
+        }
+        for (j, value) in claim.exceptions_or_restrictions.iter().enumerate() {
+            check_visible_text(
+                problems,
+                &format!("rights_claims[{i}].exceptions_or_restrictions[{j}]"),
+                value,
+            );
+        }
+    }
+    for (i, decision) in record.permission_decisions.iter().enumerate() {
+        for (field, value) in [
+            ("scope", decision.scope.as_str()),
+            ("decision_reason", decision.decision_reason.as_str()),
+        ] {
+            check_visible_text(
+                problems,
+                &format!("permission_decisions[{i}].{field}"),
+                value,
+            );
+        }
+        if let Some(value) = &decision.reviewer {
+            check_visible_text(
+                problems,
+                &format!("permission_decisions[{i}].reviewer"),
+                value,
+            );
+        }
+        if let Some(value) = &decision.decided_at {
+            check_visible_text(
+                problems,
+                &format!("permission_decisions[{i}].decided_at"),
+                value,
+            );
+        }
+    }
+    for (i, evidence) in record.evidence.iter().enumerate() {
+        for (field, value) in [
+            ("subject_scope", evidence.subject_scope.as_str()),
+            ("reviewer", evidence.reviewer.as_str()),
+            ("observed_at", evidence.observed_at.as_str()),
+        ] {
+            check_visible_text(problems, &format!("evidence[{i}].{field}"), value);
+        }
+    }
+    for (field, value) in [
+        ("review.reviewer", record.review.reviewer.as_str()),
+        ("review.reviewed_at", record.review.reviewed_at.as_str()),
+    ] {
+        check_visible_text(problems, field, value);
+    }
+    for (i, event) in record.review.claim_history.iter().enumerate() {
+        for (field, value) in [("reason", event.reason.as_str()), ("at", event.at.as_str())] {
+            check_visible_text(
+                problems,
+                &format!("review.claim_history[{i}].{field}"),
+                value,
+            );
+        }
+    }
+}
+
 /// Parse the closed object layout and reject a bounded set of dangerous
 /// cross-record claims. Success is NOT full JSON Schema or rights approval.
 pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
+    validate_required_nullable_presence(json)?;
     let record: Project =
         serde_json::from_str(json).map_err(|e| vec![format!("JSON/typed manifest: {e}")])?;
     let mut problems = Vec::new();
     validate_vocabulary(&record, &mut problems);
+    validate_visible_metadata(&record, &mut problems);
     // These cardinality rules are required by the checked-in v5 JSON Schema;
     // serde accepts an empty Vec, so typed decoding alone cannot enforce them.
     for (path, count) in [
@@ -942,6 +1207,49 @@ mod tests {
         let mut value: Value = serde_json::from_str(base).expect("valid test source");
         f(&mut value);
         serde_json::to_string(&value).expect("serializable mutated fixture")
+    }
+
+    #[test]
+    fn duplicate_json_members_fail_closed_at_every_manifest_depth() {
+        let canonical: Value = serde_json::from_str(LUANTI).expect("pilot JSON");
+        let valid = serde_json::to_string(&canonical).expect("serialize pilot");
+        for key in [
+            "id",
+            "canonical_source_url",
+            "status",
+            "claim_id",
+            "review_evidence_ids",
+            "evidence_kind",
+            "reviewed_at",
+        ] {
+            let marker = format!("\"{key}\":");
+            assert!(valid.contains(&marker), "missing test field {key}");
+            // A conflicting first value must not be silently discarded in
+            // favor of the later valid member by serde_json last-wins parsing.
+            let forged = valid.replacen(&marker, &format!("{marker}null,{marker}"), 1);
+            let errors = validate_manifest(&forged).expect_err("duplicate must fail");
+            assert!(
+                errors
+                    .iter()
+                    .any(|error| error.contains("duplicate JSON object member")
+                        && error.contains(key)),
+                "{key} was not rejected as a duplicate: {errors:?}"
+            );
+        }
+
+        // Decoded JSON member names, not raw escape spellings, carry identity.
+        let alias = r#"{"evidence":1,"\u0065vidence":2}"#;
+        assert!(reject_duplicate_json_members(alias)
+            .unwrap_err()
+            .to_string()
+            .contains("duplicate JSON object member: evidence"));
+        let nested = r#"{"outer":[{"inner":{"k":1,"k":2}}]}"#;
+        assert!(reject_duplicate_json_members(nested).is_err());
+
+        // Admission must still accept all three reviewed pilot shapes.
+        for pilot in [LUANTI, OPENRA, VELOREN] {
+            assert!(validate_manifest(pilot).is_ok());
+        }
     }
 
     #[test]

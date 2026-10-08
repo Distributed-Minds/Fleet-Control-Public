@@ -1,4 +1,0 @@
-# Cargo build output is local, not a source or release artifact.
-/target/
-
-# Intentionally keep Cargo.lock, fixtures and generated site files trackable.
