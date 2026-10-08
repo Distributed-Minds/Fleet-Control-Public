@@ -127,13 +127,24 @@ fn decide(c: &DecisionCase) -> Result<DecisionOutcome, String> {
     if requested >= Level::BlockAction && !c.authority_current {
         return Ok(outcome("AUTHORITY_MISSING", None));
     }
-    if requested >= Level::Isolate
-        && c.independent_lineages < c.required_independent_lineages.unwrap_or(2)
-    {
-        return Ok(outcome("INDEPENDENCE_INSUFFICIENT", None));
+    if requested >= Level::Isolate {
+        // A fixture cannot waive the independently governed evidence requirement
+        // by declaring zero or one lineage sufficient for high-impact action.
+        let required = c.required_independent_lineages.unwrap_or(2);
+        if required < 2 {
+            return Err("high-impact restriction requires at least two independent lineages".to_owned());
+        }
+        if c.independent_lineages < required {
+            return Ok(outcome("INDEPENDENCE_INSUFFICIENT", None));
+        }
     }
     if c.contradictory_evidence && requested >= Level::Isolate {
-        requested = c.max_level_with_contradiction.unwrap_or(Level::BlockAction);
+        let maximum = c.max_level_with_contradiction.unwrap_or(Level::BlockAction);
+        // Exculpatory evidence may narrow a restriction, never escalate it.
+        if maximum >= requested {
+            return Err("contradictory evidence cannot raise or preserve high-impact severity".to_owned());
+        }
+        requested = maximum;
     }
     let effective = c.narrowest_effective_level.unwrap_or(requested);
     if effective < requested && !c.broader_action_justified {
@@ -642,4 +653,44 @@ mod tests {
             .push(additional);
         assert_eq!(validate(&fixture(changed)), Ok(36));
     }
+
+    #[test]
+    fn high_impact_independence_floor_cannot_be_disabled_by_fixture_input() {
+        for threshold in [0, 1] {
+            let mut changed = original();
+            changed["decision_cases"][15]["required_independent_lineages"] = json!(threshold);
+            let typed = fixture(changed);
+            let decision = &typed.decision_cases[15];
+            assert!(decide(decision).is_err(), "threshold {threshold} admitted");
+            assert!(validate(&typed).is_err(), "threshold {threshold} passed fixtures");
+        }
+
+        let mut changed = original();
+        changed["decision_cases"][15]["required_independent_lineages"] = json!(3);
+        let typed = fixture(changed);
+        assert_eq!(
+            decide(&typed.decision_cases[15]),
+            Ok(outcome("INDEPENDENCE_INSUFFICIENT", None))
+        );
+    }
+
+    #[test]
+    fn contradictory_evidence_cannot_escalate_high_impact_restrictions() {
+        for maximum in ["ISOLATE", "TERMINATE", "DESTRUCTIVE_CLEANUP"] {
+            let mut changed = original();
+            changed["decision_cases"][12]["max_level_with_contradiction"] = json!(maximum);
+            let typed = fixture(changed);
+            assert!(decide(&typed.decision_cases[12]).is_err(), "cap {maximum} admitted");
+            assert!(validate(&typed).is_err(), "cap {maximum} passed fixtures");
+        }
+
+        let mut changed = original();
+        changed["decision_cases"][12]["max_level_with_contradiction"] = json!("FREEZE_NEW_AUTHORITY");
+        let typed = fixture(changed);
+        assert_eq!(
+            decide(&typed.decision_cases[12]),
+            Ok(outcome("AUTHORIZED", Some(Level::FreezeNewAuthority)))
+        );
+    }
+
 }
