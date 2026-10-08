@@ -7,6 +7,91 @@
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 
+// JSON object names are authoritative manifest fields. Ordinary serde_json
+// Value/struct decoding keeps the last duplicate member, concealing a
+// contradictory upstream, rights, permission or provenance claim. Walk the
+// complete input with a streaming visitor *before* typed admission; no
+// canonicalization or last-wins interpretation is allowed at any nesting level.
+fn reject_duplicate_json_members(input: &str) -> Result<(), serde_json::Error> {
+    use serde::de::{DeserializeSeed, Error as _, MapAccess, SeqAccess, Visitor};
+    use std::fmt;
+
+    struct UniqueMembers;
+
+    impl<'de> DeserializeSeed<'de> for UniqueMembers {
+        type Value = ();
+
+        fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            deserializer.deserialize_any(self)
+        }
+    }
+
+    impl<'de> Visitor<'de> for UniqueMembers {
+        type Value = ();
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a JSON value without duplicate object member names")
+        }
+
+        fn visit_bool<E: serde::de::Error>(self, _: bool) -> Result<(), E> {
+            Ok(())
+        }
+
+        fn visit_i64<E: serde::de::Error>(self, _: i64) -> Result<(), E> {
+            Ok(())
+        }
+
+        fn visit_u64<E: serde::de::Error>(self, _: u64) -> Result<(), E> {
+            Ok(())
+        }
+
+        fn visit_f64<E: serde::de::Error>(self, _: f64) -> Result<(), E> {
+            Ok(())
+        }
+
+        fn visit_str<E: serde::de::Error>(self, _: &str) -> Result<(), E> {
+            Ok(())
+        }
+
+        fn visit_string<E: serde::de::Error>(self, _: String) -> Result<(), E> {
+            Ok(())
+        }
+
+        fn visit_unit<E: serde::de::Error>(self) -> Result<(), E> {
+            Ok(())
+        }
+
+        fn visit_none<E: serde::de::Error>(self) -> Result<(), E> {
+            Ok(())
+        }
+
+        fn visit_seq<S: SeqAccess<'de>>(self, mut values: S) -> Result<(), S::Error> {
+            while values.next_element_seed(UniqueMembers)?.is_some() {}
+            Ok(())
+        }
+
+        fn visit_map<M: MapAccess<'de>>(self, mut members: M) -> Result<(), M::Error> {
+            let mut names = HashSet::new();
+            while let Some(name) = members.next_key::<String>()? {
+                if !names.insert(name.clone()) {
+                    return Err(M::Error::custom(format!(
+                        "duplicate JSON object member: {name}"
+                    )));
+                }
+                members.next_value_seed(UniqueMembers)?;
+            }
+            Ok(())
+        }
+    }
+
+    let mut deserializer = serde_json::Deserializer::from_str(input);
+    UniqueMembers.deserialize(&mut deserializer)?;
+    deserializer.end()
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Project {
@@ -559,6 +644,9 @@ fn check_slug(problems: &mut Vec<String>, path: &str, value: &str) {
 // Keep this shape gate separate from semantic rights/permission decisions.
 fn validate_required_nullable_presence(json: &str) -> Result<(), Vec<String>> {
     use serde_json::Value;
+
+    reject_duplicate_json_members(json)
+        .map_err(|error| vec![format!("JSON/typed manifest: {error}")])?;
 
     let root: Value = serde_json::from_str(json)
         .map_err(|error| vec![format!("JSON/typed manifest: {error}")])?;
@@ -1117,6 +1205,49 @@ mod tests {
         let mut value: Value = serde_json::from_str(base).expect("valid test source");
         f(&mut value);
         serde_json::to_string(&value).expect("serializable mutated fixture")
+    }
+
+    #[test]
+    fn duplicate_json_members_fail_closed_at_every_manifest_depth() {
+        let canonical: Value = serde_json::from_str(LUANTI).expect("pilot JSON");
+        let valid = serde_json::to_string(&canonical).expect("serialize pilot");
+        for key in [
+            "id",
+            "canonical_source_url",
+            "status",
+            "claim_id",
+            "review_evidence_ids",
+            "evidence_kind",
+            "reviewed_at",
+        ] {
+            let marker = format!("\"{key}\":");
+            assert!(valid.contains(&marker), "missing test field {key}");
+            // A conflicting first value must not be silently discarded in
+            // favor of the later valid member by serde_json last-wins parsing.
+            let forged = valid.replacen(&marker, &format!("{marker}null,{marker}"), 1);
+            let errors = validate_manifest(&forged).expect_err("duplicate must fail");
+            assert!(
+                errors
+                    .iter()
+                    .any(|error| error.contains("duplicate JSON object member")
+                        && error.contains(key)),
+                "{key} was not rejected as a duplicate: {errors:?}"
+            );
+        }
+
+        // Decoded JSON member names, not raw escape spellings, carry identity.
+        let alias = r#"{"evidence":1,"\u0065vidence":2}"#;
+        assert!(reject_duplicate_json_members(alias)
+            .unwrap_err()
+            .to_string()
+            .contains("duplicate JSON object member: evidence"));
+        let nested = r#"{"outer":[{"inner":{"k":1,"k":2}}]}"#;
+        assert!(reject_duplicate_json_members(nested).is_err());
+
+        // Admission must still accept all three reviewed pilot shapes.
+        for pilot in [LUANTI, OPENRA, VELOREN] {
+            assert!(validate_manifest(pilot).is_ok());
+        }
     }
 
     #[test]
