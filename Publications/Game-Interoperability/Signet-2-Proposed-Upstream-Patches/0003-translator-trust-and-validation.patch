@@ -1,0 +1,634 @@
+From: Distributed Minds / Fleet-Control research
+Subject: [PATCH 3/3] Add translator trust and validation proposal
+Base: kian-cx/signetprotocol@2ddb136ee941705d3e1c020eaddad93be65026f2
+Depends-on: [PATCH 2/3] Add semantic-contract and profile-composition proposal
+
+This additive proposal separates integration authority, package provenance,
+current authorization, effective profile identity, conformance, pairwise
+interoperability, independent reproduction and operational freshness.
+
+diff --git a/docs/content/proposals/translator-trust-and-validation.mdx b/docs/content/proposals/translator-trust-and-validation.mdx
+new file mode 100644
+--- /dev/null
++++ b/docs/content/proposals/translator-trust-and-validation.mdx
+@@ -0,0 +1,620 @@
++---
++title: Translator trust, distribution and interoperability evidence
++description: Draft companion proposal for integration trust boundaries, package provenance, revocation and scoped interoperability evidence in Signet 2.
++---
++
++import { Callout } from 'nextra/components'
++
++# Translator trust, distribution and interoperability evidence
++
++<Callout type="warning">
++**Draft companion proposal for Signet 2.** This document separates protocol conformance, package trust, integration authority and empirical game compatibility so they can be evaluated independently.
++</Callout>
++
++## Why this exists
++
++A public translator is executable integration software.
++
++Its trust story is broader than "the package is signed" and broader than "the translator passes the protocol tests".
++
++Several claims that sound similar require different evidence:
++
++~~~text
++ROLE_CONTRACT
++!= SANDBOX_POLICY
++
++DECLARED_PERMISSION
++!= ENFORCED_PERMISSION
++
++VALID_SIGNATURE
++!= CURRENT_AUTHORIZATION
++
++SAFE_ARTIFACT
++!= PROTOCOL_CONFORMANCE
++
++PROTOCOL_CONFORMANCE
++!= GAME_COMPATIBILITY
++
++SELF_CONFORMANCE
++!= PAIRWISE_INTEROPERABILITY
++!= INDEPENDENT_REPRODUCTION
++!= ECOSYSTEM_ADOPTION
++~~~
++
++This proposal gives each claim a separate place.
++
++## Integration mode is part of the trust subject
++
++A translator's authority depends on how it integrates with the target.
++
++Examples:
++
++~~~text
++HOST_PROCESS_EXTENSION
++SANDBOXED_WORKER
++CONTROLLED_SERVER_GATEWAY
++EXTERNAL_OFFICIAL_API
++REIMPLEMENTATION
++FULL_APPLICATION
++~~~
++
++These are not security-equivalent.
++
++A native engine extension can execute with the host process's authority.
++
++A controlled-server gateway may instead hold administrative network credentials.
++
++An external official API can have a narrower brokered surface.
++
++Package metadata should identify the integration mode being claimed.
++
++Compatibility evidence should be scoped to that mode.
++
++## Role contracts describe need, not enforcement
++
++An adapter contract can say that a translator needs operations such as:
++
++~~~text
++HOST
++IMPORTER
++WORLD
++INPUT
++PRESENTATION
++AUTHORITY
++~~~
++
++That is useful for review and code generation.
++
++It does not prove that the implementation is technically prevented from doing anything else.
++
++~~~text
++ROLE_CONTRACT != SANDBOX_POLICY
++~~~
++
++A complete deployment may use one or more enforcement layers:
++
++- a broker/API that exposes only approved operations;
++- a separate process;
++- an OS sandbox;
++- filesystem restrictions;
++- network restrictions;
++- scoped credentials;
++- platform-specific entitlements;
++- user-visible permission prompts.
++
++The protocol should report declared permissions and enforced confinement separately.
++
++## Package identity
++
++A published translator package should have an immutable artifact identity.
++
++At minimum:
++
++~~~text
++artifact_digest
++package_name
++package_version
++publisher_identity
++integration_mode
++target_game_identity
++target_integration_identity
++semantic_profile_compatibility
++~~~
++
++An artifact digest identifies bytes.
++
++It does not identify the full effective profile or prove current authorization.
++
++## Signature versus authorization
++
++A cryptographically valid signature answers:
++
++> which key signed these bytes?
++
++It does not always answer:
++
++> is that key still authorized to publish this package now?
++
++~~~text
++VALID_SIGNATURE != CURRENT_AUTHORIZATION
++~~~
++
++The distribution design should therefore support:
++
++- trust-root identity;
++- delegated publisher roles;
++- expiration;
++- revocation;
++- key rotation;
++- compromise recovery;
++- rollback protection where appropriate.
++
++A package can remain historically well-signed after the signing key loses current authorization.
++
++## Provenance and reproducibility
++
++Useful package claims include:
++
++- source revision;
++- build recipe;
++- builder identity;
++- dependency identities;
++- build provenance;
++- reproducibility status;
++- artifact digest.
++
++These claims should be displayed independently.
++
++A reproducible build can strengthen confidence that published bytes correspond to reviewed source.
++
++It does not replace runtime confinement or compatibility testing.
++
++## Effective profile identity
++
++Runtime behavior can change without package bytes changing.
++
++Examples:
++
++- participant overlay changes;
++- calibration changes;
++- semantic profile changes;
++- session policy changes;
++- a typed fallback becomes active.
++
++Therefore compatibility evidence should be able to reference:
++
++~~~text
++package artifact digest
+++
++effective profile digest
+++
++session/ruleset identity
+++
++integration mode
++~~~
++
++## Compatibility lifecycle
++
++"Latest" is not a sufficient package lifecycle.
++
++Useful states include:
++
++~~~text
++ACTIVE
++SUPERSEDED
++DEPRECATED
++YANKED_COMPATIBILITY
++COMPATIBILITY_INVALIDATED
++SECURITY_REVOKED
++PUBLISHER_REVOKED
++LEGAL_OR_POLICY_BLOCKED
++~~~
++
++These states mean different things.
++
++A compatibility regression is not necessarily malware.
++
++A key compromise is not the same as a policy disagreement.
++
++A legal support boundary is not a cryptographic failure.
++
++## Evidence scopes
++
++A single PASS label should not cover every interoperability claim.
++
++A useful evidence ladder is:
++
++~~~text
++V0  STRUCTURAL_VALIDITY
++V1  BEHAVIORAL_CONFORMANCE
++V2  INDEPENDENT_IMPLEMENTATION
++V3  PAIRWISE_INTEROPERABILITY
++V4  INDEPENDENT_REPRODUCTION
++V5  OPERATIONAL_FRESHNESS
++~~~
++
++### V0: structural validity
++
++Examples:
++
++- manifest parses;
++- schema validates;
++- required fields exist;
++- canonical digest reproduces.
++
++### V1: behavioral conformance
++
++The implementation passes normative semantic/adapter test vectors.
++
++### V2: independent implementation
++
++A separately developed implementation reproduces the normative behavior.
++
++This reduces the chance that one reference implementation accidentally defines the protocol by itself.
++
++### V3: pairwise interoperability
++
++Two real target integrations successfully exercise the same session contract together.
++
++### V4: independent reproduction
++
++A third party reproduces the claimed experiment from the published artifacts and procedure.
++
++### V5: operational freshness
++
++The evidence is still current for the declared game version, integration surface, profile cut and dependencies.
++
++## Mapping topology versus validation demand
++
++A semantic hub is valuable because translator implementation topology approaches:
++
++~~~text
++O(n)
++~~~
++
++rather than pairwise bridge authoring.
++
++That does not imply that all empirical validation becomes linear.
++
++~~~text
++O(n) mapping topology
++!=
++O(n) empirical validation demand
++~~~
++
++Two translators can each pass local conformance and still interact badly because of:
++
++- timing;
++- ordering;
++- visibility;
++- fallback composition;
++- lifecycle semantics;
++- authority boundaries;
++- target-specific bugs.
++
++The protocol should therefore distinguish architectural scaling from empirical evidence scope.
++
++## Scoped compatibility records
++
++A compatibility result should identify exactly what was tested.
++
++Illustrative record:
++
++~~~json
++{
++  "translator_artifact": "sha256:...",
++  "effective_profile": "sha256:...",
++  "target": {
++    "game": "example-game",
++    "version": "1.2.3",
++    "integration_mode": "CONTROLLED_SERVER_GATEWAY"
++  },
++  "semantic_contract": "sha256:...",
++  "evidence_level": "V3_PAIRWISE_INTEROPERABILITY",
++  "peer_target": {
++    "game": "other-game",
++    "version": "4.5.6"
++  },
++  "procedure": "https://example.org/reproduction/...",
++  "observed_at": "2026-10-05T00:00:00Z"
++}
++~~~
++
++Do not upgrade a narrow harness result into a wider runtime claim.
++
++For example:
++
++~~~text
++ABI_HOST_HARNESS_PASS
++!=
++FULL_RUNTIME_INTEROPERABILITY_PASS
++~~~
++
++## Preserve negative evidence
++
++Failed experiments are protocol evidence.
++
++Do not erase a failed result when a later design succeeds.
++
++Useful negative records include:
++
++- unsupported operation;
++- incomplete adapter role coverage;
++- semantic mismatch;
++- ordering conflict;
++- stale profile evidence;
++- pairwise regression;
++- no-match resolver case.
++
++A failed generic adapter interface can be more useful than an optimistic pass because it identifies what the abstraction omitted.
++
++## Profile-only changes are supply-chain changes
++
++A profile pull request can change behavior while executable package bytes stay identical.
++
++Review tooling should surface:
++
++- semantic subject;
++- changed authority class;
++- old/new semantic relation;
++- shared-state impact;
++- invalidated compatibility evidence;
++- required replay/conformance reruns;
++- new immutable profile digest.
++
++~~~text
++PACKAGE_BYTES != EFFECTIVE_PROFILE
++~~~
++
++## Forge should be local-first
++
++Signet Forge does not need to be part of the real-time protocol path.
++
++A conservative deployment model is:
++
++~~~text
++runtime:
++  deterministic pinned profile
++
++Forge:
++  local development/calibration tool by default
++
++remote resolver:
++  optional and explicit
++
++per-tick remote model:
++  not required
++~~~
++
++If a hosted resolver is used, its export boundary should be visible before data leaves the machine.
++
++## Remote export contract
++
++A hosted Forge/resolver request should be describable by an explicit schema.
++
++The user should be able to know whether the request contains:
++
++- semantic identifiers;
++- candidate identifiers;
++- descriptions;
++- game/version identity;
++- profile identity;
++- calibration summaries;
++- any participant-specific metadata.
++
++The default should minimize exported data.
++
++## Local approval versus dataset contribution
++
++A person can approve a local mapping without agreeing to publish it as training data.
++
++~~~text
++LOCAL_APPROVAL != DATASET_CONTRIBUTION
++~~~
++
++Dataset contribution should be a separate explicit action.
++
++A contributed example should record:
++
++- immutable example ID;
++- contribution license;
++- provenance;
++- semantic/profile version;
++- candidate set;
++- chosen value;
++- creation time;
++- supersession or invalidation lineage.
++
++## Dataset invalidation
++
++Mappings can later be found incorrect or stale.
++
++A dataset should be able to answer:
++
++- which training example came from that mapping;
++- whether it has been superseded;
++- which model builds included it;
++- whether a corrected replacement exists.
++
++Deleting history is usually less useful than explicit invalidation and lineage.
++
++## Resolver and dataset authority
++
++A model suggestion is not protocol authority.
++
++~~~text
++MODEL_SUGGESTION != AUTHORITY
++~~~
++
++Dataset popularity is also not protocol authority.
++
++A frequently selected mapping can still be semantically wrong for a particular version, integration surface or ruleset.
++
++Human review should resolve against the normative semantic contract, not merely majority frequency.
++
++## Governance roles
++
++As the ecosystem grows, several governance powers should remain distinguishable.
++
++### Protocol governance
++
++Owns:
++
++- wire contract;
++- normative semantic identity rules;
++- core versioning;
++- compatibility rules.
++
++### Semantic-profile governance
++
++Owns:
++
++- profile definitions;
++- conformance assertions;
++- profile versioning;
++- deprecation/supersession.
++
++### Translator/profile publisher authority
++
++Owns:
++
++- translator implementation;
++- publisher baseline;
++- integration-specific mappings;
++- release process.
++
++### Participant authority
++
++Owns:
++
++- participant overlay;
++- local input binding;
++- local appearance choices;
++- local privacy/export choices.
++
++### Package-directory authority
++
++Owns:
++
++- listing;
++- namespace policy;
++- evidence display;
++- compatibility yanks;
++- directory moderation.
++
++### Update-root authority
++
++Owns:
++
++- trust roots;
++- publisher delegation;
++- key recovery;
++- revocation infrastructure.
++
++### Security incident authority
++
++Owns:
++
++- emergency quarantine;
++- advisory publication;
++- security restoration criteria.
++
++### Forge/dataset/model governance
++
++Owns:
++
++- dataset admission;
++- contribution policy;
++- example invalidation;
++- model release identity.
++
++### Conformance authority
++
++Owns:
++
++- test-suite revisions;
++- PASS semantics;
++- evidence-level definitions;
++- reproduction requirements.
++
++The same people can initially occupy several roles.
++
++The artifacts should still identify which authority made which decision.
++
++## Legal and project-policy scope
++
++An official integration support policy is a project governance choice.
++
++It should not be presented as a universal conclusion about every jurisdiction, game license or interoperability exception.
++
++A useful state is:
++
++~~~text
++LEGAL_OR_POLICY_BLOCKED
++~~~
++
++with the scope/reason recorded separately from technical or security state.
++
++## First trust/validation experiment
++
++A small joint experiment can exercise these boundaries.
++
++Use two materially different target integrations, for example:
++
++- one open-engine native integration;
++- one controlled-server gateway.
++
++For each, publish:
++
++- package digest;
++- integration mode;
++- declared permissions;
++- enforced confinement where present;
++- semantic contract digest;
++- effective profile digest;
++- V0/V1 evidence.
++
++Then run:
++
++1. independent semantic-contract reproduction;
++2. pairwise runtime interoperability;
++3. dependency drift;
++4. profile-only behavior change;
++5. publisher update with participant-overlay preservation;
++6. current-authorization revocation;
++7. compatibility invalidation;
++8. independent reproduction.
++
++The experiment can succeed by finding a missing boundary.
++
++A falsified abstraction is useful if the result is preserved and the specification becomes narrower and more precise.
++
++## Compact invariants
++
++~~~text
++ROLE_CONTRACT
++!= SANDBOX_POLICY
++
++DECLARED_PERMISSION
++!= ENFORCED_PERMISSION
++
++VALID_SIGNATURE
++!= CURRENT_AUTHORIZATION
++
++PACKAGE_BYTES
++!= EFFECTIVE_PROFILE
++
++MODEL_SUGGESTION
++!= AUTHORITY
++
++LOCAL_APPROVAL
++!= DATASET_CONTRIBUTION
++
++SELF_CONFORMANCE
++!= PAIRWISE_INTEROPERABILITY
++!= INDEPENDENT_REPRODUCTION
++!= ECOSYSTEM_ADOPTION
++~~~
++
++Each distinction exists because the two sides require different evidence or different authority.
++

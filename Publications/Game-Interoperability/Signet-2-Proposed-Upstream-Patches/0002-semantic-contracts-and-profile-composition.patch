@@ -1,0 +1,514 @@
+From: Distributed Minds / Fleet-Control research
+Subject: [PATCH 2/3] Add semantic-contract and profile-composition proposal
+Base: kian-cx/signetprotocol@2ddb136ee941705d3e1c020eaddad93be65026f2
+Depends-on: [PATCH 1/3] Harden Signet 2 draft semantics before implementation
+
+This additive proposal specifies the missing deterministic boundary around
+shared semantic identity, session negotiation, optional-profile activation,
+typed fallback, profile authority and reproducible composition.
+
+diff --git a/docs/content/proposals/semantic-contracts.mdx b/docs/content/proposals/semantic-contracts.mdx
+new file mode 100644
+--- /dev/null
++++ b/docs/content/proposals/semantic-contracts.mdx
+@@ -0,0 +1,500 @@
++---
++title: Semantic contracts and deterministic profile composition
++description: Draft companion proposal for stable semantic identity, capability negotiation and reproducible translation-profile composition in Signet 2.
++---
++
++import { Callout } from 'nextra/components'
++
++# Semantic contracts and deterministic profile composition
++
++<Callout type="warning">
++**Draft companion proposal for Signet 2.** This document makes the "shared meaning" and translation-profile boundaries explicit enough for independent implementations to reproduce the same session contract. Names and fields remain open to revision.
++</Callout>
++
++## Why this exists
++
++Signet 2 proposes the right high-level direction:
++
++~~~text
++game
++-> shared meaning
++-> authoritative server
++-> shared meaning
++-> game
++~~~
++
++The remaining protocol problem is defining exactly what counts as the same "shared meaning".
++
++Human-readable labels are useful for documentation, but they are not enough for protocol identity.
++
++~~~text
++SHARED_LABELS != SHARED_SEMANTICS
++~~~
++
++Two implementations can both use the label `fire` while disagreeing about whether it means a request, an accepted action, a held state, a one-shot edge, an operation subject to cooldown, or an already authoritative effect.
++
++This proposal therefore treats shared meaning as a versioned semantic contract.
++
++## Semantic references
++
++Every normative semantic item has a stable reference.
++
++Illustrative shape:
++
++~~~json
++{
++  "namespace": "signet.core",
++  "id": "intent.fire",
++  "version": 1,
++  "definition_hash": "sha256:..."
++}
++~~~
++
++A semantic definition should publish:
++
++- a stable identity;
++- a version;
++- a canonical definition hash;
++- a prose definition;
++- examples;
++- non-examples;
++- authority assumptions;
++- ordering or visibility assumptions when relevant;
++- conformance assertions.
++
++A display label can change without changing protocol identity.
++
++A semantic definition cannot change incompatibly while retaining the same identity and version.
++
++## Core plus profiles
++
++The universal core should stay small.
++
++Game families can activate additional versioned semantic profiles:
++
++~~~text
++signet.core
++movement.realtime
++combat.ranged
++inventory.basic
++vehicle.basic
++turn-based.actions
++card-game.hidden-information
++...
++~~~
++
++A game does not need to implement unrelated profiles to participate.
++
++This avoids turning the first supported game family into the implicit ontology of every future game.
++
++## Archetype identity versus authoritative rules
++
++An archetype identifies semantic role or category.
++
++It does not by itself define every authoritative parameter.
++
++For example:
++
++~~~text
++archetype:
++  weapon.ranged
++
++authoritative ruleset instance:
++  damage = 20
++  range = 40
++  cooldown = 0.5
++~~~
++
++The server owns authoritative ruleset parameters and state.
++
++The local translator owns presentation of the archetype.
++
++## Capability offers
++
++A translator sends a capability offer.
++
++A capability offer describes what that participant can legitimately emit, observe or present.
++
++Illustrative shape:
++
++~~~json
++{
++  "profiles": [
++    {
++      "id": "https://signetprotocol.io/semantics/movement/realtime/1",
++      "definition_hash": "sha256:..."
++    }
++  ],
++  "can_emit": ["intent.move", "intent.turn", "intent.fire"],
++  "can_present": ["weapon.ranged", "health_pickup"],
++  "limitations": ["intent.jump"]
++}
++~~~
++
++A capability offer is not the negotiated session contract.
++
++## Session requirements
++
++The session or active ruleset declares what it needs.
++
++Illustrative shape:
++
++~~~json
++{
++  "required_profiles": [
++    {
++      "id": "https://signetprotocol.io/semantics/movement/realtime/1",
++      "definition_hash": "sha256:..."
++    }
++  ],
++  "required_capabilities": ["intent.move", "intent.turn"],
++  "optional_capabilities": ["intent.jump"],
++  "ordering_preferences": [
++    {
++      "id": "https://signetprotocol.io/semantics/ordering/fixed-tick/1",
++      "definition_hash": "sha256:..."
++    },
++    {
++      "id": "https://signetprotocol.io/semantics/ordering/event-sequence/1",
++      "definition_hash": "sha256:..."
++    }
++  ]
++}
++~~~
++
++## Negotiated session contract
++
++The server derives a deterministic contract from:
++
++~~~text
++participant capability offers
+++
++session requirements
+++
++active semantic profiles
+++
++explicit fallback policy
++~~~
++
++The result records at least:
++
++- exact semantic/profile identities;
++- required capabilities;
++- optional capabilities;
++- activated capabilities;
++- rejected capabilities;
++- typed fallbacks;
++- selected ordering model;
++- selected visibility policy when relevant;
++- ruleset identity;
++- authority model;
++- deterministic admission result.
++
++Useful capability outcomes include:
++
++~~~text
++SUPPORTED
++SUPPORTED_WITH_FALLBACK
++OBSERVE_ONLY
++INCOMPATIBLE
++~~~
++
++## Semantic acceptability versus session preference
++
++A reusable semantic profile should say which models preserve its semantics.
++
++The session should say which acceptable model it prefers.
++
++~~~text
++profile:
++  what is semantically acceptable?
++
++session:
++  among acceptable choices, what do we prefer?
++
++negotiation:
++  select the first session preference accepted by every activated profile
++~~~
++
++Example:
++
++~~~text
++session preferences:
++  fixed-tick@1
++  event-sequence@1
++  turn-sequence@1
++
++profile A accepts:
++  fixed-tick@1
++  event-sequence@1
++
++profile B accepts:
++  event-sequence@1
++  turn-sequence@1
++
++selected:
++  event-sequence@1
++~~~
++
++If no preference is accepted by every activated profile, negotiation fails with a machine-readable conflict.
++
++Implementations must not derive semantic policy from local enumeration order.
++
++## Optional profiles
++
++Optional semantics also need deterministic policy.
++
++"Optional" does not mean "enable it if installed".
++
++Activating one optional profile can:
++
++- introduce a dependency;
++- collide with another concept;
++- narrow an ordering-model intersection;
++- narrow a visibility-policy intersection;
++- conflict with an earlier optional profile.
++
++A simple deterministic algorithm is:
++
++1. compose the required baseline;
++2. iterate optional profiles in declared session preference order;
++3. tentatively add one candidate;
++4. resolve its required dependencies;
++5. rerun complete semantic composition;
++6. rerun ordering and visibility selection;
++7. keep the candidate if the full contract remains valid;
++8. otherwise skip it and record an exact reason.
++
++Earlier accepted optional profiles remain preferred.
++
++Example result:
++
++~~~text
++activated:
++  optional-event@1
++
++skipped:
++  optional-fixed@1
++    ORDERING_MODEL_CONFLICT
++
++  optional-missing@1
++    REQUIRED_PROFILE_UNSUPPORTED
++~~~
++
++This algorithm is deliberately policy-driven rather than mathematically maximal.
++
++The session's declared preference order is the objective.
++
++## Typed fallback
++
++A fallback that changes only local presentation is not the same as a fallback that changes shared simulation semantics.
++
++A fallback record should identify:
++
++- source semantic;
++- target semantic or no-op;
++- fallback class;
++- information loss;
++- whether shared simulation changes;
++- authority that approved it;
++- conformance evidence.
++
++Illustrative classes:
++
++~~~text
++PRESENTATION_SUBSTITUTION
++INPUT_REBIND
++LOSSY_OBSERVATION
++SIMULATION_SUBSTITUTION
++NO_OP
++~~~
++
++A simulation-affecting fallback must be explicitly allowed by the active semantic profile or session ruleset.
++
++Unknown is preferable to invented precision.
++
++## Translation-profile authority classes
++
++A translation profile can contain several classes of decision.
++
++They do not have one universal owner.
++
++| Class | Primary authority | Shared-state impact |
++|---|---|---:|
++| input binding | participant / adapter | indirect |
++| motion observation | measured adapter evidence | indirect |
++| semantic mapping | translator/profile authority | yes |
++| appearance mapping | participant/client | no |
++| session policy | server/session | yes |
++
++A player's appearance preference is not equivalent to unilateral authority to redefine an authoritative semantic mapping.
++
++## Publisher baseline and participant overlay
++
++Separate publisher-owned and participant-owned state:
++
++~~~text
++publisher_profile
++  immutable/versioned baseline distributed with translator
++
++participant_overlay
++  local participant-owned bindings, pins and explicit preferences
++
++session_resolution
++  derived effective profile for one exact dependency cut
++~~~
++
++A publisher update may change publisher defaults.
++
++It must not silently rewrite participant-owned decisions.
++
++If an old participant entry becomes incompatible with a new semantic definition, the correct result is explicit reconfirmation or invalidation.
++
++## Pinned versus current
++
++~~~text
++PINNED_CHOICE != CORRECT_CHOICE
++~~~
++
++Pinning establishes repeatability inside one profile revision.
++
++It does not prove that dependencies have not changed.
++
++A simulation-relevant mapping should bind to:
++
++- game/version identity;
++- integration surface identity or digest;
++- semantic definition;
++- transform identity;
++- candidate-set fingerprint when relevant;
++- resolver identity when relevant;
++- conformance or replay evidence.
++
++Suggested freshness states:
++
++~~~text
++VALID
++SUSPECT
++REVALIDATING
++INVALID
++~~~
++
++## Effective profile identity
++
++Installed package bytes are not the whole behavior-bearing state.
++
++~~~text
++PACKAGE_BYTES != EFFECTIVE_PROFILE
++~~~
++
++The effective profile can depend on:
++
++- publisher baseline;
++- participant overlay;
++- active semantic profiles;
++- session policy;
++- calibration results;
++- fallback approvals.
++
++A reproducible session should therefore have an `effective_profile_digest` over the resolved behavior-bearing profile cut.
++
++That digest can be referenced by:
++
++- replay metadata;
++- compatibility evidence;
++- incident reports;
++- support diagnostics.
++
++## Canonical composition
++
++If multiple artifacts compose into the effective contract, composition becomes protocol-relevant.
++
++The protocol should define:
++
++- canonical semantic reference ordering;
++- dependency resolution;
++- duplicate handling;
++- conflict handling;
++- optional activation order;
++- canonical serialization;
++- canonical hashing.
++
++Where array order is not semantic, canonicalization must not let input order change the digest.
++
++Where order is semantic, such as a declared preference list, canonicalization must preserve it.
++
++## Conformance vectors
++
++The semantic contract should ship executable test vectors for:
++
++- canonical hashing;
++- required profile composition;
++- deterministic ordering selection;
++- deterministic visibility selection;
++- deterministic optional activation;
++- exact failure reasons;
++- contract serialization;
++- negative conflict cases.
++
++Independent implementations should reproduce the same result hashes.
++
++A useful property is that vectors can also falsify the specification artifact itself.
++
++If an expected fixture is wrong, a correct reference implementation should expose that mismatch.
++
++## Resolver boundary
++
++Resolvers may assist development or calibration.
++
++They do not own protocol meaning.
++
++~~~text
++MODEL_SUGGESTION != AUTHORITY
++~~~
++
++Resolver output should be one of:
++
++~~~text
++ranked candidates
++NO_MATCH
++~~~
++
++A closed candidate set prevents out-of-list invention.
++
++It does not prove that the correct answer is present.
++
++Simulation-affecting unresolved mappings should fail closed or require explicit authority to pin them.
++
++## Minimal interoperability claim
++
++Two independent implementations should be able to start with the same:
++
++- semantic definitions;
++- participant capability offers;
++- session requirements;
++- profile dependencies;
++
++and derive the same:
++
++- activated semantic profiles;
++- selected ordering/visibility policy;
++- optional-profile decisions;
++- typed fallbacks;
++- effective contract hash.
++
++If they do not, the specification is missing a rule.
++
++## Open decisions
++
++This proposal intentionally leaves several choices open for Signet governance:
++
++- exact semantic-reference URI syntax;
++- exact canonical serialization format;
++- whether definition hashes use RFC 8785 JSON canonicalization or another fixed representation;
++- whether session contracts are signed;
++- which conflict reasons are mandatory in Signet 2;
++- which profiles belong in the initial core distribution;
++- migration rules for compatible semantic successors.
++
++Those are smaller questions once the authority and determinism boundaries are explicit.
++
