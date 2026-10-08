@@ -332,12 +332,8 @@ fn is_invisible_url_format(ch: char) -> bool {
     is_bidi_format(ch)
         || matches!(
             ch,
-            '\u{00ad}'
-                | '\u{034f}'
-                | '\u{180e}'
-                | '\u{200b}'..='\u{200d}'
-                | '\u{2060}'
-                | '\u{feff}'
+            '\u{00ad}' | '\u{034f}' | '\u{180e}' | '\u{200b}'
+                ..='\u{200d}' | '\u{2060}' | '\u{feff}'
         )
 }
 
