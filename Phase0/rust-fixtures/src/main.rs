@@ -49,6 +49,7 @@ struct Fixture {
 struct DecisionCase {
     id: String,
     requested_level: Option<Level>,
+    #[serde(default, deserialize_with = "deserialize_non_null_level")]
     narrowest_effective_level: Option<Level>,
     #[serde(default)]
     broader_action_justified: bool,
@@ -75,6 +76,13 @@ struct DecisionCase {
     contradictory_evidence: bool,
     max_level_with_contradiction: Option<Level>,
     expected: DecisionOutcome,
+}
+
+fn deserialize_non_null_level<'de, D>(deserializer: D) -> Result<Option<Level>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Level::deserialize(deserializer).map(Some)
 }
 
 #[derive(Debug, Deserialize, Eq, PartialEq)]
@@ -374,6 +382,40 @@ mod tests {
     fn actual_historical_containment_family_passes_35_semantic_cases() {
         let typed: Fixture = serde_json::from_str(BASELINE).expect("typed baseline");
         assert_eq!(validate(&typed), Ok(35));
+    }
+
+    #[test]
+    fn absent_narrowest_level_defaults_but_explicit_null_is_invalid() {
+        let mut absent = original();
+        let case = absent["decision_cases"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|case| case["id"] == "one-agent-human-independent-control")
+            .unwrap();
+        case.as_object_mut()
+            .unwrap()
+            .remove("narrowest_effective_level");
+        let typed: Fixture = serde_json::from_value(absent).expect("omitted optional level");
+        let case = typed
+            .decision_cases
+            .iter()
+            .find(|case| case.id == "one-agent-human-independent-control")
+            .unwrap();
+        assert_eq!(
+            decide(case),
+            Ok(outcome("AUTHORIZED", Some(Level::Isolate)))
+        );
+
+        let mut explicit_null = original();
+        let case = explicit_null["decision_cases"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|case| case["id"] == "one-agent-human-independent-control")
+            .unwrap();
+        case["narrowest_effective_level"] = json!(null);
+        assert!(serde_json::from_value::<Fixture>(explicit_null).is_err());
     }
 
     #[test]
