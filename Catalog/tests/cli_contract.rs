@@ -85,6 +85,46 @@ fn missing_inputs_and_unsupported_commands_fail_closed() {
 }
 
 #[test]
+fn project_directory_admits_all_pilot_manifests_in_sorted_order() {
+    let projects = manifest("projects");
+    let output = invoke(&["validate", &projects]);
+    assert!(output.status.success(), "project directory rejected: {output:?}");
+    assert!(output.stderr.is_empty(), "unexpected diagnostics: {output:?}");
+    let stdout = String::from_utf8(output.stdout).expect("UTF-8 output");
+    let paths: Vec<_> = stdout
+        .lines()
+        .map(|line| {
+            assert!(line.starts_with("TYPED-BOUNDARY-ONLY "), "{line}");
+            line.split_once(": ").expect("admitted manifest path").1
+        })
+        .collect();
+    assert_eq!(paths.len(), 3, "every pilot manifest should be admitted");
+    assert!(
+        paths.windows(2).all(|pair| pair[0] < pair[1]),
+        "directory iteration order must not affect output: {paths:?}"
+    );
+}
+
+#[test]
+fn project_directory_plus_single_manifest_rejects_duplicate_id_atomically() {
+    let projects = manifest("projects");
+    let luanti = manifest("projects/luanti.json");
+    let output = invoke(&["validate", &projects, &luanti]);
+    assert_no_partial_success(&output);
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("duplicate project ID"),
+        "missing duplicate-ID diagnosis: {output:?}"
+    );
+}
+
+#[test]
+fn directory_of_fixture_documents_cannot_masquerade_as_projects() {
+    let fixtures = manifest("fixtures");
+    let output = invoke(&["validate", &fixtures]);
+    assert_no_partial_success(&output);
+}
+
+#[test]
 fn deterministic_render_check_matches_committed_static_page() {
     let output = invoke(&["render", "--check"]);
     assert!(

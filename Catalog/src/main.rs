@@ -155,7 +155,7 @@ fn main() -> ExitCode {
         return render_command(args.collect());
     }
     if command.as_deref() != Some(std::ffi::OsStr::new("validate")) {
-        eprintln!("Usage: free-energy-catalog validate <manifest.json> [manifest.json ...]");
+        eprintln!("Usage: free-energy-catalog validate <manifest.json|project-directory> [more paths ...]");
         return ExitCode::FAILURE;
     }
     let paths: Vec<_> = args.collect();
@@ -164,12 +164,48 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let mut loaded = Vec::new();
+    // Expand direct JSON children of a project directory. Sorting makes
+    // success records and diagnostics independent of filesystem order.
+    let mut manifest_paths = Vec::new();
     let mut errors = Vec::new();
-    for path in paths {
+    for input in paths {
+        let path = std::path::PathBuf::from(input);
+        if path.is_dir() {
+            let mut count = 0;
+            match fs::read_dir(&path) {
+                Ok(entries) => {
+                    for entry in entries {
+                        match entry {
+                            Ok(entry) => {
+                                let child = entry.path();
+                                if child.extension().and_then(|ext| ext.to_str()) == Some("json") {
+                                    manifest_paths.push(child);
+                                    count += 1;
+                                }
+                            }
+                            Err(error) => errors.push(format!(
+                                "{}: directory entry: {error}",
+                                path.display()
+                            )),
+                        }
+                    }
+                    if count == 0 {
+                        errors.push(format!("{}: no JSON manifests found", path.display()));
+                    }
+                }
+                Err(error) => errors.push(format!("{}: {error}", path.display())),
+            }
+        } else {
+            manifest_paths.push(path);
+        }
+    }
+    manifest_paths.sort();
+
+    let mut loaded = Vec::new();
+    for path in manifest_paths {
         match fs::read_to_string(&path) {
             Ok(text) => loaded.push((path.to_string_lossy().into_owned(), text)),
-            Err(error) => errors.push(format!("{}: {error}", path.to_string_lossy())),
+            Err(error) => errors.push(format!("{}: {error}", path.display())),
         }
     }
 
@@ -186,6 +222,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Ok(_) => {
+            errors.sort();
             for error in errors {
                 eprintln!("{error}");
             }
@@ -193,6 +230,7 @@ fn main() -> ExitCode {
         }
         Err(mut validation_errors) => {
             errors.append(&mut validation_errors);
+            errors.sort();
             for error in errors {
                 eprintln!("{error}");
             }
