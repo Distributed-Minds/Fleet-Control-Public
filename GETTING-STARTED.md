@@ -49,6 +49,8 @@ This fork method copies **all** upstream branches, including historical/research
 
 Open [FREE ENERGY releases](https://github.com/Distributed-Minds/Fleet-Control-Public/releases), download the latest `FREE-ENERGY-Phase0-Starter-…-preview.zip`, and copy its entire `Phase0/` directory into the root of a repository you own; **commit** the files. Preserve any existing source code. This avoids copying upstream work-in-progress branches. The ZIP also contains the Project and automation prompt templates used in later steps.
 
+**Published ZIP version caveat:** The existing `v0.1.2-phase0-preview` release ZIP predates the corrected fork/default-branch instructions in this online guide. It is a historical starter package, **not** an archive of the current `phase0/public-v0` head. Follow these up-to-date online steps even if you use the ZIP, confirm `Phase0/05-FLEET-CONFIG.md` appears on **your repository's default branch**, and inspect the installed files before creating or enabling automations; do not rely on bundled older setup text alone.
+
 Either way, your fleet must target **your repository**, never the upstream `Distributed-Minds/Fleet-Control-Public` repository. Continue only once `Phase0/05-FLEET-CONFIG.md` is visible on **your repository's default branch**.
 
 ### 3. Write down your repository name
