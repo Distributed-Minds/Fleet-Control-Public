@@ -167,6 +167,16 @@ fn is_full_git_sha(value: &str) -> bool {
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
+// Unicode directional formatting can visually re-order repository paths while
+// leaving different exact bytes. Never use such display-spoofable strings as
+// identities for rights scopes or pinned evidence.
+fn is_bidi_format_character(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{061c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'
+    )
+}
+
 fn is_relative_path(value: &str) -> bool {
     // Repository paths are identity-bearing, not URL paths. Until an
     // authoritative percent-decoding/canonicalization contract exists, reject
@@ -175,7 +185,9 @@ fn is_relative_path(value: &str) -> bool {
         && !value.starts_with('/')
         && !value.contains('%')
         && !value.contains('\\')
-        && !value.chars().any(char::is_control)
+        && !value
+            .chars()
+            .any(|ch| ch.is_control() || is_bidi_format_character(ch))
         && value
             .split('/')
             .all(|part| !part.is_empty() && part != "." && part != ".." && part.trim() == part)
