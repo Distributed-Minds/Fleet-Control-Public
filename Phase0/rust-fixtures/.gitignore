@@ -1,0 +1,3 @@
+# Cargo-generated local build artifacts are not source or fixture evidence.
+# Keep Cargo.toml and the committed Cargo.lock under version control.
+/target/
