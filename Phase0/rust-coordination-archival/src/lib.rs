@@ -470,9 +470,8 @@ mod tests {
     #[test]
     fn bidi_formatting_cannot_spoof_replay_or_admission_identifiers() {
         for marker in [
-            '\u{061c}', '\u{200e}', '\u{200f}', '\u{202a}', '\u{202b}',
-            '\u{202c}', '\u{202d}', '\u{202e}', '\u{2066}', '\u{2067}',
-            '\u{2068}', '\u{2069}',
+            '\u{061c}', '\u{200e}', '\u{200f}', '\u{202a}', '\u{202b}', '\u{202c}', '\u{202d}',
+            '\u{202e}', '\u{2066}', '\u{2067}', '\u{2068}', '\u{2069}',
         ] {
             let bad = format!("record{marker}42");
             // Identical forged source IDs in all independent inputs must
