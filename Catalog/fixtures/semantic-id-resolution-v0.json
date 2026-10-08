@@ -1,0 +1,186 @@
+{
+  "fixture_schema": "free-energy.catalog-semantic-identity-links/v0",
+  "target_manifest": "Catalog/projects/luanti.json",
+  "base_manifest_blob_sha": "211abcce8568acb76a9923c37645f2236521fc18",
+  "semantic_contract": "issue #60 spec v5: validate current-manifest uniqueness/ID references after Draft 2020-12 structural validation",
+  "mutation_contract": "For each independent case, load target_manifest at the pinned blob, deep-copy JSON, apply ordered JSON Pointer replace operations to existing locations (RFC 6901 unescaping), then run the offline semantic validator. No input may authorize redistribution.",
+  "description": "Authored cross-field semantic test data, NOT executable Rust tests or schema keyword conformance. Valid means expected acceptance of these scoped ID/reference rules, not third-party rights/authenticity/current web state. Reject duplicates by ID even if objects differ; reject dangling evidence/supersession references and invalidated active citations. No historical append-only guarantee or reviewer authentication is implied.",
+  "cases": [
+    {
+      "id": "baseline-unique-ids",
+      "changes": [],
+      "expected_semantic_valid": true,
+      "reason": "Unchanged pinned Luanti DRAFT has unique claim and evidence IDs with resolvable local references."
+    },
+    {
+      "id": "rename-evidence-and-update-claim-reference",
+      "changes": [
+        {
+          "op": "replace",
+          "pointer": "/evidence/0/evidence_id",
+          "value": "license-snapshot-renamed"
+        },
+        {
+          "op": "replace",
+          "pointer": "/rights_claims/0/evidence_ids/0",
+          "value": "license-snapshot-renamed"
+        },
+        {
+          "op": "replace",
+          "pointer": "/rights_claims/1/evidence_ids/0",
+          "value": "license-snapshot-renamed"
+        }
+      ],
+      "expected_semantic_valid": true,
+      "reason": "Synchronized ID replacement remains referentially complete."
+    },
+    {
+      "id": "rename-claim-with-no-history",
+      "changes": [
+        {
+          "op": "replace",
+          "pointer": "/rights_claims/0/claim_id",
+          "value": "code-lgpl-renamed"
+        }
+      ],
+      "expected_semantic_valid": true,
+      "reason": "A unique current-snapshot claim ID is valid without fabricated historical continuity."
+    },
+    {
+      "id": "duplicate-evidence-id",
+      "changes": [
+        {
+          "op": "replace",
+          "pointer": "/evidence/1/evidence_id",
+          "value": "license-snapshot"
+        }
+      ],
+      "expected_semantic_valid": false,
+      "reason": "Two different evidence objects use the same evidence_id; object uniqueItems does not reject this."
+    },
+    {
+      "id": "duplicate-rights-claim-id",
+      "changes": [
+        {
+          "op": "replace",
+          "pointer": "/rights_claims/1/claim_id",
+          "value": "code-lgpl"
+        }
+      ],
+      "expected_semantic_valid": false,
+      "reason": "Distinct rights entries reuse one claim_id."
+    },
+    {
+      "id": "dangling-rights-evidence",
+      "changes": [
+        {
+          "op": "replace",
+          "pointer": "/rights_claims/0/evidence_ids/0",
+          "value": "missing-evidence"
+        }
+      ],
+      "expected_semantic_valid": false,
+      "reason": "A current rights claim cites absent evidence."
+    },
+    {
+      "id": "rename-evidence-without-updating-claims",
+      "changes": [
+        {
+          "op": "replace",
+          "pointer": "/evidence/0/evidence_id",
+          "value": "license-snapshot-renamed"
+        }
+      ],
+      "expected_semantic_valid": false,
+      "reason": "A source renaming alone invalidates existing claims."
+    },
+    {
+      "id": "dangling-permission-review-evidence",
+      "changes": [
+        {
+          "op": "replace",
+          "pointer": "/permission_decisions/0/review_evidence_ids",
+          "value": [
+            "missing-review-evidence"
+          ]
+        }
+      ],
+      "expected_semantic_valid": false,
+      "reason": "A permission review evidence pointer must resolve even when its decision is REVIEW_REQUIRED."
+    },
+    {
+      "id": "duplicate-permission-component-scope-use",
+      "changes": [
+        {
+          "op": "replace",
+          "pointer": "/permission_decisions/1/use",
+          "value": "BUNDLE"
+        }
+      ],
+      "expected_semantic_valid": false,
+      "reason": "Two CODE/project/BUNDLE decisions now have the same logical key."
+    },
+    {
+      "id": "invalidated-evidence-still-supports-current-claim",
+      "changes": [
+        {
+          "op": "replace",
+          "pointer": "/evidence/0/currentness",
+          "value": "INVALIDATED"
+        }
+      ],
+      "expected_semantic_valid": false,
+      "reason": "A current OBSERVED_AT license claim still cites an invalidated source."
+    },
+    {
+      "id": "engine-only-cites-license-as-playtest",
+      "changes": [
+        {
+          "op": "replace",
+          "pointer": "/play/local_test_evidence_id",
+          "value": "license-snapshot"
+        }
+      ],
+      "expected_semantic_valid": false,
+      "reason": "A publisher license snapshot is not FREE_ENERGY_LOCAL_TEST evidence."
+    },
+    {
+      "id": "dangling-supersession-old-claim",
+      "changes": [
+        {
+          "op": "replace",
+          "pointer": "/review/claim_history",
+          "value": [
+            {
+              "old_claim_id": "missing-old-claim",
+              "new_claim_id": "code-lgpl",
+              "reason": "Synthetic dangling supersession reference",
+              "at": "2026-10-08T00:00:00Z"
+            }
+          ]
+        }
+      ],
+      "expected_semantic_valid": false,
+      "reason": "A review note references an absent old claim in the current snapshot."
+    },
+    {
+      "id": "dangling-supersession-new-claim",
+      "changes": [
+        {
+          "op": "replace",
+          "pointer": "/review/claim_history",
+          "value": [
+            {
+              "old_claim_id": "code-lgpl",
+              "new_claim_id": "missing-new-claim",
+              "reason": "Synthetic dangling replacement reference",
+              "at": "2026-10-08T00:00:00Z"
+            }
+          ]
+        }
+      ],
+      "expected_semantic_valid": false,
+      "reason": "A review note references an absent new claim in the current snapshot."
+    }
+  ]
+}
