@@ -158,6 +158,10 @@ fn named(id: &str) -> bool {
                         | '\u{034f}'
                         | '\u{061c}'
                         | '\u{180e}'
+                        | '\u{115f}' // Hangul choseong filler
+                        | '\u{1160}' // Hangul jungseong filler
+                        | '\u{3164}' // Hangul compatibility filler
+                        | '\u{ffa0}' // Halfwidth Hangul filler
                         | '\u{200b}'..='\u{200f}'
                         | '\u{202a}'..='\u{202e}'
                         | '\u{2060}'..='\u{206f}'
@@ -472,6 +476,72 @@ mod tests {
                 "unsafe ordering ID admitted: {bad:?}"
             );
         }
+    }
+
+    #[test]
+    fn hangul_fillers_cannot_spoof_receipt_and_replay_identities() {
+        // These letter-category filler code points are visually empty but are
+        // not caught by control, whitespace, or variation-selector filters.
+        // Each forged witness is internally consistent to rule out mismatches.
+        for filler in ['\u{115f}', '\u{1160}', '\u{3164}', '\u{ffa0}'] {
+            let disguised = format!("R{filler}42");
+
+            let mut witness = fixture();
+            witness.observed_source.record_id = disguised.clone();
+            witness.archive.source.record_id = disguised.clone();
+            witness.authority.source.record_id = disguised.clone();
+            assert_eq!(
+                evaluate(&witness),
+                Verdict::Ineligible(Denial::SourceMoved),
+                "invisible filler disguised source ID: {filler:?}"
+            );
+
+            let mut witness = fixture();
+            witness.operation_id = disguised.clone();
+            witness.authority.operation_id = disguised.clone();
+            assert_eq!(
+                evaluate(&witness),
+                Verdict::Ineligible(Denial::AuthorityNotCurrent),
+                "invisible filler disguised operation ID: {filler:?}"
+            );
+
+            let mut witness = fixture();
+            witness.ordering.basis.identity = disguised.clone();
+            witness.snapshot.ordering.identity = disguised.clone();
+            assert_eq!(
+                evaluate(&witness),
+                Verdict::Ineligible(Denial::OrderNotProven),
+                "invisible filler disguised ordering ID: {filler:?}"
+            );
+
+            let mut forged = item("a", 10);
+            forged.stable_id = disguised.clone();
+            assert_eq!(
+                replay(&[forged, item("b", 11)], &[item("c", 12)], &cut()),
+                Err(ReplayFailure::UntrustedCut),
+                "invisible filler disguised replay record ID: {filler:?}"
+            );
+
+            let mut altered_cut = cut();
+            altered_cut.ordering.identity = disguised;
+            let mut archive = [item("a", 10), item("b", 11)];
+            let mut live = [item("c", 12)];
+            for record in archive.iter_mut().chain(live.iter_mut()) {
+                record.order_basis = altered_cut.ordering.clone();
+            }
+            assert_eq!(
+                replay(&archive, &live, &altered_cut),
+                Err(ReplayFailure::UntrustedCut),
+                "invisible filler disguised replay ordering ID: {filler:?}"
+            );
+        }
+
+        // This is narrow identity hardening, not a blanket Unicode exclusion.
+        let mut witness = fixture();
+        witness.observed_source.record_id = "한국어-42".into();
+        witness.archive.source.record_id = "한국어-42".into();
+        witness.authority.source.record_id = "한국어-42".into();
+        assert_eq!(evaluate(&witness), Verdict::EligibleModelOnly);
     }
 
     #[test]
