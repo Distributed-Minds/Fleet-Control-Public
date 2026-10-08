@@ -1,7 +1,54 @@
 //! Experimental offline catalog admission CLI (NOT the finished catalog).
 mod render;
 
-use std::{collections::HashSet, env, fs, process::ExitCode};
+use std::{
+    collections::HashSet,
+    env, fs,
+    io::{self, Write},
+    path::Path,
+    process::ExitCode,
+};
+
+/// Publish a fully written page with a same-directory rename. An interrupted
+/// write must not truncate the previously generated static page. This changes
+/// only the local preview file; it is not hosting or publication authority.
+fn write_complete_page(output: &Path, html: &str) -> io::Result<()> {
+    let parent = output
+        .parent()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "output has no parent"))?;
+    let filename = output
+        .file_name()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "output has no filename"))?;
+    for attempt in 0..16 {
+        let temporary = parent.join(format!(
+            ".{}.staging-{}-{attempt}",
+            filename.to_string_lossy(),
+            std::process::id()
+        ));
+        let mut file = match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+        {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        };
+        let written = file
+            .write_all(html.as_bytes())
+            .and_then(|_| file.sync_all());
+        drop(file);
+        let result = written.and_then(|_| fs::rename(&temporary, output));
+        if result.is_err() {
+            let _ = fs::remove_file(&temporary);
+        }
+        return result;
+    }
+    Err(io::Error::new(
+        io::ErrorKind::AlreadyExists,
+        "no unused same-directory staging filename",
+    ))
+}
 
 /// Validate readable manifests as one unit. Rejected input cannot emit
 /// a partial positive catalog admission result.
@@ -132,7 +179,7 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
                 return ExitCode::FAILURE;
             }
         }
-        match fs::write(&output, html) {
+        match write_complete_page(&output, &html) {
             Ok(()) => {
                 println!(
                     "Generated {} from typed pilot records (draft only)",
@@ -270,5 +317,75 @@ mod tests {
     #[test]
     fn malformed_later_record_does_not_return_partial_batch_success() {
         assert!(validate_loaded([("good.json", OPENRA), ("bad.json", "{}")]).is_err());
+    }
+}
+
+#[cfg(test)]
+mod atomic_render_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static NEXT_DIR: AtomicUsize = AtomicUsize::new(0);
+
+    fn sandbox() -> std::path::PathBuf {
+        let number = NEXT_DIR.fetch_add(1, Ordering::Relaxed);
+        let dir = env::temp_dir().join(format!(
+            "free-energy-catalog-atomic-{}-{number}",
+            std::process::id()
+        ));
+        fs::create_dir(&dir).expect("create unique test output directory");
+        dir
+    }
+
+    #[test]
+    fn complete_page_replaces_old_contents_without_staging_debris() {
+        let dir = sandbox();
+        let target = dir.join("index.html");
+        fs::write(&target, "previous complete page").expect("seed page");
+
+        write_complete_page(&target, "<html>replacement & safe</html>")
+            .expect("publish whole replacement");
+        assert_eq!(
+            fs::read_to_string(&target).expect("read published page"),
+            "<html>replacement & safe</html>"
+        );
+        let names: Vec<_> = fs::read_dir(&dir)
+            .expect("read output directory")
+            .map(|entry| entry.expect("entry").file_name())
+            .collect();
+        assert_eq!(names, [std::ffi::OsString::from("index.html")]);
+        fs::remove_dir_all(&dir).expect("clean test output");
+    }
+
+    #[test]
+    fn failed_rename_preserves_destination_and_cleans_staging() {
+        let dir = sandbox();
+        let target = dir.join("index.html");
+        fs::create_dir(&target).expect("directory cannot be replaced by file");
+        assert!(write_complete_page(&target, "new page").is_err());
+        assert!(target.is_dir(), "failed write changed existing destination");
+        assert_eq!(
+            fs::read_dir(&dir).expect("read directory").count(),
+            1,
+            "failed publish leaked partial staging output"
+        );
+        fs::remove_dir_all(&dir).expect("clean test output");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replacing_existing_link_does_not_overwrite_its_target() {
+        use std::os::unix::fs::symlink;
+
+        let dir = sandbox();
+        let outside = dir.join("unrelated.txt");
+        let target = dir.join("index.html");
+        fs::write(&outside, "unrelated original").expect("seed unrelated file");
+        symlink(&outside, &target).expect("seed existing link");
+
+        write_complete_page(&target, "new complete page").expect("replace link itself");
+        assert_eq!(fs::read_to_string(&target).unwrap(), "new complete page");
+        assert_eq!(fs::read_to_string(&outside).unwrap(), "unrelated original");
+        fs::remove_dir_all(&dir).expect("clean test output");
     }
 }
