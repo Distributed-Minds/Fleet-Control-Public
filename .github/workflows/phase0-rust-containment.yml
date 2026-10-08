@@ -25,6 +25,8 @@ jobs:
           rustup run 1.85.1 cargo fmt --manifest-path Phase0/rust-fixtures/Cargo.toml -- --check
           rustup run 1.85.1 cargo fetch --manifest-path Phase0/rust-fixtures/Cargo.toml --locked
           rustup run 1.85.1 cargo test --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline
+          # Explicit opt-in: historical differential; never needed by Rust-only consumers.
+          rustup run 1.85.1 cargo test --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline --test historical_containment_differential -- --ignored
           rustup run 1.85.1 cargo clippy --manifest-path Phase0/rust-fixtures/Cargo.toml --all-targets --locked --offline -- -D warnings
           rustup run 1.85.1 cargo run --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline -- Phase0/fixtures/containment-spec3.json
           # CLI execution is distinct from cargo test: exercise every staged oracle.
