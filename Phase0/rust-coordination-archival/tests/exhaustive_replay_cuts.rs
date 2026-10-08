@@ -139,9 +139,15 @@ fn stale_provenance_is_rejected_even_when_all_payloads_and_positions_match() {
     for stale_at in 0..COUNT {
         let mut live = canonical.clone();
         live[stale_at].order_basis.generation += 1;
-        assert_eq!(replay(&canonical, &live, &cut()), Err(ReplayFailure::UntrustedCut));
+        assert_eq!(
+            replay(&canonical, &live, &cut()),
+            Err(ReplayFailure::UntrustedCut)
+        );
         live[stale_at] = canonical[stale_at].clone();
         live[stale_at].source_incarnation = "stale-store-incarnation".into();
-        assert_eq!(replay(&canonical, &live, &cut()), Err(ReplayFailure::UntrustedCut));
+        assert_eq!(
+            replay(&canonical, &live, &cut()),
+            Err(ReplayFailure::UntrustedCut)
+        );
     }
 }
