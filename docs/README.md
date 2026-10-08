@@ -11,9 +11,9 @@ Open [`docs/index.html`](index.html) in a browser directly, or use an already av
 Compile and run from the repository root with an installed Rust compiler:
 
 ```sh
-rustc --edition=2021 -D warnings tests/check_free_energy_site.rs -o /tmp/free-energy-site-check
-/tmp/free-energy-site-check
-rustc --edition=2021 -D warnings --test tests/check_free_energy_site.rs -o /tmp/free-energy-site-tests
+rustc --edition=2021 -D warnings tests/check_free_energy_site.rs -o /tmp/free-energy-site-check &&
+/tmp/free-energy-site-check &&
+rustc --edition=2021 -D warnings --test tests/check_free_energy_site.rs -o /tmp/free-energy-site-tests &&
 /tmp/free-energy-site-tests
 ```
 
