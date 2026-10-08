@@ -9,6 +9,20 @@ use std::{
     process::ExitCode,
 };
 
+/// Refuse symlinked render output directories, including links outside the
+/// project tree. This is a local input-admission check, not a race-free
+/// filesystem sandbox against concurrent untrusted directory replacement.
+fn validate_output_directory(parent: &Path) -> io::Result<()> {
+    let metadata = fs::symlink_metadata(parent)?;
+    if !metadata.file_type().is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "catalog output directory must be a real directory (symlink prohibited)",
+        ));
+    }
+    Ok(())
+}
+
 /// Publish a fully written page with a same-directory rename. An interrupted
 /// write must not truncate the previously generated static page. This changes
 /// only the local preview file; it is not hosting or publication authority.
@@ -16,6 +30,7 @@ fn write_complete_page(output: &Path, html: &str) -> io::Result<()> {
     let parent = output
         .parent()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "output has no parent"))?;
+    validate_output_directory(parent)?;
     let filename = output
         .file_name()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "output has no filename"))?;
@@ -169,6 +184,12 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
     let html = render::render_catalog(&records);
     let output = root.join("site/index.html");
     if check {
+        if let Err(error) =
+            validate_output_directory(output.parent().expect("catalog output always has a parent"))
+        {
+            eprintln!("{}: {error}", output.display());
+            return ExitCode::FAILURE;
+        }
         match fs::read_to_string(&output) {
             Ok(previous) if previous == html => {
                 println!(
@@ -386,6 +407,36 @@ mod atomic_render_tests {
             "failed publish leaked partial staging output"
         );
         fs::remove_dir_all(&dir).expect("clean test output");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_output_directory_cannot_redirect_render_to_unrelated_files() {
+        use std::os::unix::fs::symlink;
+
+        let dir = sandbox();
+        let outside = dir.join("unrelated-directory");
+        let alias = dir.join("site");
+        fs::create_dir(&outside).expect("prepare unrelated output directory");
+        fs::write(outside.join("index.html"), "original").expect("seed unrelated file");
+        symlink(&outside, &alias).expect("redirect site directory outside project");
+
+        let target = alias.join("index.html");
+        let error = write_complete_page(&target, "replacement")
+            .expect_err("symlinked output directory must fail closed");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(error.to_string().contains("symlink prohibited"));
+        assert_eq!(
+            fs::read_to_string(outside.join("index.html")).unwrap(),
+            "original"
+        );
+        assert!(validate_output_directory(&alias).is_err());
+        let entries: Vec<_> = fs::read_dir(&outside)
+            .expect("read unrelated directory")
+            .map(|entry| entry.expect("entry").file_name())
+            .collect();
+        assert_eq!(entries, [std::ffi::OsString::from("index.html")]);
+        fs::remove_dir_all(&dir).expect("clean isolated sandbox");
     }
 
     #[cfg(unix)]
