@@ -598,7 +598,10 @@ fn validate_required_nullable_presence(json: &str) -> Result<(), Vec<String>> {
             }
         }
     }
-    if let Some(events) = root.pointer("/review/claim_history").and_then(Value::as_array) {
+    if let Some(events) = root
+        .pointer("/review/claim_history")
+        .and_then(Value::as_array)
+    {
         for (index, event) in events.iter().enumerate() {
             require_keys(
                 Some(event),
