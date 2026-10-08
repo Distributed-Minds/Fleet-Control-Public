@@ -894,21 +894,26 @@ mod tests {
     // The manual contributor path is a source-level contract, not a hosted agent.
     // PR CI already runs this Rust test module, so guard the copyable prompt here.
     fn inspect_help_guide_contract(guide: &str) -> Result<(), &'static str> {
-        let mut opening: Option<&str> = None;
+        // Reuse the production Markdown fence recognizer: a short inner
+        // delimiter must not close a longer fence or create a phantom prompt.
+        let mut opening: Option<(u8, usize, bool)> = None;
         let mut contents = String::new();
         let mut prompts = Vec::new();
         for line in guide.lines() {
-            if let Some(info) = line.strip_prefix("```") {
-                if opening.is_none() {
-                    opening = Some(info.trim());
-                    contents.clear();
-                    continue;
-                }
-                if info.trim().is_empty() {
-                    if opening == Some("text") && contents.starts_with("I want to help [") {
-                        prompts.push(std::mem::take(&mut contents));
+            if let Some((marker, width, closing_suffix)) = fence_marker(line) {
+                if let Some((open_marker, open_width, is_prompt)) = opening {
+                    if marker == open_marker && width >= open_width && closing_suffix {
+                        if is_prompt && contents.starts_with("I want to help [") {
+                            prompts.push(std::mem::take(&mut contents));
+                        }
+                        opening = None;
+                        contents.clear();
+                        continue;
                     }
-                    opening = None;
+                } else {
+                    let trimmed = line.trim_start_matches(' ');
+                    let language = trimmed[width..].trim();
+                    opening = Some((marker, width, marker == b'\x60' && language == "text"));
                     contents.clear();
                     continue;
                 }
@@ -988,4 +993,30 @@ mod tests {
             Err("unclosed code fence")
         );
     }
+
+    #[test]
+    fn help_prompt_extraction_respects_markdown_fence_length() {
+        let guide = include_str!("../HELP-A-PROJECT.md");
+        // A triple-backtick example inside a four-backtick Markdown fence
+        // is literal text, not a second copyable agent prompt.
+        let nested = format!("{guide}\n````markdown\n```text\nI want to help [FAKE].\n```\n````\n");
+        assert_eq!(inspect_help_guide_contract(&nested), Ok(()));
+
+        // A real four-backtick text fence containing a second prompt counts.
+        let duplicate = format!("{guide}\n````text\nI want to help [SECOND].\n````\n");
+        assert_eq!(
+            inspect_help_guide_contract(&duplicate),
+            Err("expected one copyable HELP prompt")
+        );
+
+        // A three-backtick close cannot terminate a four-backtick opener.
+        let broken = guide.replacen(
+            "\n```text\nI want to help [",
+            "\n````text\nI want to help [",
+            1,
+        );
+        assert_ne!(broken, guide, "fixture must lengthen the real prompt opener");
+        assert_eq!(inspect_help_guide_contract(&broken), Err("unclosed code fence"));
+    }
+
 }
