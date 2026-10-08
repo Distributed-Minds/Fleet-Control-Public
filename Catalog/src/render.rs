@@ -102,7 +102,17 @@ pub fn render_catalog(records: &[Project]) -> String {
             out.push_str(&escape(&claim.component));
             out.push_str(" / ");
             out.push_str(&escape(&claim.scope));
-            out.push_str("</strong>: ");
+            out.push_str("</strong> <small>Claim status: ");
+        out.push_str(&escape(&claim.status));
+        out.push_str(" — ");
+        out.push_str(match claim.status.as_str() {
+            "OBSERVED_AT" => "Observed upstream claim, not clearance",
+            "SUPERSEDED" => "Superseded, historical only",
+            "RETRACTED" => "Retracted, not current",
+            "UNKNOWN" => "Unknown, not verified",
+            _ => "Unrecognized, do not rely on",
+        });
+        out.push_str("</small>: ");
             out.push_str(&escape(&claim.statement));
             out.push_str(" <small>Evidence IDs: ");
             let mut ids = claim.evidence_ids.clone();
@@ -265,5 +275,42 @@ mod tests {
                 other => panic!("unhandled renderer context in {id}: {other}"),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod claim_state_regression {
+    use super::render_catalog;
+    use free_energy_catalog::validate_manifest;
+
+    const LUANTI: &str = include_str!("../projects/luanti.json");
+
+    #[test]
+    fn retracted_and_unknown_claims_are_visibly_not_current() {
+        let mut record = validate_manifest(LUANTI).expect("valid pilot");
+        record.rights_claims[0].status = "RETRACTED".to_owned();
+        record.rights_claims[0].statement = "Hypothetical positive claim".to_owned();
+        record.rights_claims[1].status = "UNKNOWN".to_owned();
+        let html = render_catalog(&[record]);
+        assert!(
+            html.contains("Claim status: RETRACTED — Retracted, not current"),
+            "retracted claims must never look like current clearance"
+        );
+        assert!(
+            html.contains("Claim status: UNKNOWN — Unknown, not verified"),
+            "unverified rights cannot look like positive permission"
+        );
+        assert!(html.contains("Rights review required"));
+        assert!(!html.contains("Claim status: RETRACTED</small>:"));
+    }
+
+    #[test]
+    fn status_metadata_is_escaped_when_renderer_gets_untrusted_values() {
+        let mut record = validate_manifest(LUANTI).expect("valid pilot");
+        record.rights_claims[0].status = "<img src=x onerror=alert(1)>".to_owned();
+        let html = render_catalog(&[record]);
+        assert!(html.contains("&lt;img src=x onerror=alert(1)&gt;"));
+        assert!(!html.contains("<img src=x"));
+        assert!(html.contains("Unrecognized, do not rely on"));
     }
 }
