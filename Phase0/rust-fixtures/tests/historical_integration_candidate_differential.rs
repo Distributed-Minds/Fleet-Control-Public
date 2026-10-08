@@ -175,22 +175,47 @@ fn rust_binary_enforces_original_envelope_and_negative_controls() {
 fn historical_python_differential_preserves_known_gaps() {
     let original = historical();
     let fixture = IsolatedFixture::new(&original);
-    check("Python baseline", &fixture.historical_python(), true, "fixtures: OK");
+    check(
+        "Python baseline",
+        &fixture.historical_python(),
+        true,
+        "fixtures: OK",
+    );
     check("Rust baseline", &fixture.rust(), true, "6 passed");
 
     // These are genuine common rejection paths.
     let mut wrong_three_parent_verdict = original.clone();
     wrong_three_parent_verdict["cases"][2]["expect"] = json!("SUPPORTED");
     let fixture = IsolatedFixture::new(&wrong_three_parent_verdict);
-    check("Python altered 3-parent verdict", &fixture.historical_python(), false, "fixtures: OK");
-    check("Rust altered 3-parent verdict", &fixture.rust(), false, "6 passed");
+    check(
+        "Python altered 3-parent verdict",
+        &fixture.historical_python(),
+        false,
+        "fixtures: OK",
+    );
+    check(
+        "Rust altered 3-parent verdict",
+        &fixture.rust(),
+        false,
+        "6 passed",
+    );
 
     let mut stale_becomes_current = original.clone();
     stale_becomes_current["stale_head_cases"][0]["live_target"] =
         stale_becomes_current["stale_head_cases"][0]["predicted_target"].clone();
     let fixture = IsolatedFixture::new(&stale_becomes_current);
-    check("Python stale target revalidated", &fixture.historical_python(), false, "fixtures: OK");
-    check("Rust stale target revalidated", &fixture.rust(), false, "6 passed");
+    check(
+        "Python stale target revalidated",
+        &fixture.historical_python(),
+        false,
+        "fixtures: OK",
+    );
+    check(
+        "Rust stale target revalidated",
+        &fixture.rust(),
+        false,
+        "6 passed",
+    );
 
     // The historical checker never examines the normal expected verdict or
     // constructor-support vector. Rust must reject both: semantic delta,
@@ -198,12 +223,32 @@ fn historical_python_differential_preserves_known_gaps() {
     let mut forged_expected = original.clone();
     forged_expected["cases"][0]["expect"] = json!("UNSUPPORTED_PARENT_CARDINALITY");
     let fixture = IsolatedFixture::new(&forged_expected);
-    check("Python known false pass: expected", &fixture.historical_python(), true, "fixtures: OK");
-    check("Rust rejects forged expected", &fixture.rust(), false, "6 passed");
+    check(
+        "Python known false pass: expected",
+        &fixture.historical_python(),
+        true,
+        "fixtures: OK",
+    );
+    check(
+        "Rust rejects forged expected",
+        &fixture.rust(),
+        false,
+        "6 passed",
+    );
 
     let mut empty_support = original;
     empty_support["cases"][0]["constructor_support"] = json!([]);
     let fixture = IsolatedFixture::new(&empty_support);
-    check("Python known false pass: support", &fixture.historical_python(), true, "fixtures: OK");
-    check("Rust rejects empty support", &fixture.rust(), false, "6 passed");
+    check(
+        "Python known false pass: support",
+        &fixture.historical_python(),
+        true,
+        "fixtures: OK",
+    );
+    check(
+        "Rust rejects empty support",
+        &fixture.rust(),
+        false,
+        "6 passed",
+    );
 }
