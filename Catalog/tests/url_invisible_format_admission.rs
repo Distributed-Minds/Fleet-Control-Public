@@ -48,14 +48,14 @@ fn with_url(pointer: &str, url: &str) -> String {
 fn raw_and_encoded_invisible_formats_are_rejected_at_each_link_surface() {
     validate_manifest(VELOREN).expect("baseline must validate");
     let encoded = [
-        "%C2%AD",      // SOFT HYPHEN
-        "%CD%8F",      // COMBINING GRAPHEME JOINER
-        "%E1%A0%8E",   // MONGOLIAN VOWEL SEPARATOR
-        "%E2%80%8B",   // ZERO WIDTH SPACE
-        "%E2%80%8C",   // ZERO WIDTH NON-JOINER
-        "%E2%80%8D",   // ZERO WIDTH JOINER
-        "%E2%81%A0",   // WORD JOINER
-        "%EF%BB%BF",   // ZERO WIDTH NO-BREAK SPACE
+        "%C2%AD",    // SOFT HYPHEN
+        "%CD%8F",    // COMBINING GRAPHEME JOINER
+        "%E1%A0%8E", // MONGOLIAN VOWEL SEPARATOR
+        "%E2%80%8B", // ZERO WIDTH SPACE
+        "%E2%80%8C", // ZERO WIDTH NON-JOINER
+        "%E2%80%8D", // ZERO WIDTH JOINER
+        "%E2%81%A0", // WORD JOINER
+        "%EF%BB%BF", // ZERO WIDTH NO-BREAK SPACE
     ];
     let raw = [
         '\u{00ad}', '\u{034f}', '\u{180e}', '\u{200b}', '\u{200c}', '\u{200d}', '\u{2060}',
