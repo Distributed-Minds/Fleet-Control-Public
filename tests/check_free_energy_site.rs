@@ -233,10 +233,11 @@ fn has_inline_event_handler(elements: &[&str]) -> bool {
                 }
                 continue;
             }
-            let name = &tag[start..i];
+            let name = &bytes[start..i];
             if name.len() > 2
-                && name[..2].eq_ignore_ascii_case("on")
-                && name[2..].bytes().all(|b| b.is_ascii_alphabetic())
+                && name[0].to_ascii_lowercase() == b'o'
+                && name[1].to_ascii_lowercase() == b'n'
+                && name[2..].iter().all(|b| b.is_ascii_alphabetic())
             {
                 return true;
             }
@@ -892,6 +893,11 @@ data="x"></OBject><EMBED/>"#;
         assert!(!has_inline_event_handler(&tags(allowed)));
         assert!(!has_inline_event_handler(&tags(
             r#"<main id="main"><p>Static landing</p></main>"#
+        )));
+        // Non-ASCII attribute names are legal source bytes; scanning must
+        // never panic by slicing through a UTF-8 code point.
+        assert!(!has_inline_event_handler(&tags(
+            r#"<p μeta="ordinary" title="onclick is just text">Text</p>"#
         )));
     }
 
