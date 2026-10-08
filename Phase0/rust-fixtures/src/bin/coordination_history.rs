@@ -12,6 +12,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process;
 
+#[cfg(test)]
 const BASELINE: &str = include_str!("../../../fixtures/coordination-history-spec5.json");
 const FIXTURE_SCHEMA: &str = "fleet-control/coordination-history-spec5-fixtures/v1";
 const MINIMUM_CASES: usize = 18;
@@ -46,8 +47,11 @@ struct Facts {
     durability_current: Option<bool>,
     durability_state: Option<String>,
     protected: Option<bool>,
+    // Descriptive receipt metadata; not independent authorization evidence.
+    #[allow(dead_code)]
     protected_reason: Option<String>,
     partial_effect: Option<bool>,
+    #[allow(dead_code)]
     retry: Option<String>,
 }
 
@@ -70,8 +74,7 @@ struct Suite {
 fn evaluate(f: &Facts) -> Verdict {
     // Unknown commit acknowledgement and partially applied deletion must be
     // reconciled against authoritative source/ref state BEFORE any retry.
-    if f.manifest_transition_outcome.as_deref() == Some("unknown")
-        || f.partial_effect == Some(true)
+    if f.manifest_transition_outcome.as_deref() == Some("unknown") || f.partial_effect == Some(true)
     {
         return Verdict::Reconcile;
     }
@@ -115,7 +118,11 @@ fn evaluate(f: &Facts) -> Verdict {
 }
 
 fn check_baseline(suite: &Suite, failures: &mut Vec<String>) {
-    let Some(base) = suite.cases.iter().find(|case| case.id == "positive-all-current") else {
+    let Some(base) = suite
+        .cases
+        .iter()
+        .find(|case| case.id == "positive-all-current")
+    else {
         failures.push("missing all-current positive baseline".to_owned());
         return;
     };
@@ -185,8 +192,8 @@ fn execute() -> Result<(), String> {
     if args.next().is_some() {
         return Err("usage: coordination_history [fixtures.json]".to_owned());
     }
-    let input = fs::read_to_string(&path)
-        .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    let input =
+        fs::read_to_string(&path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
     let suite: Suite = serde_json::from_str(&input)
         .map_err(|e| format!("malformed coordination-history fixture: {e}"))?;
     match validate(&suite) {
@@ -238,7 +245,10 @@ mod tests {
     fn duplicate_scenario_identity_is_rejected() {
         let mut suite = source();
         suite.cases.push(suite.cases[0].clone());
-        assert!(validate(&suite).unwrap_err().join(" ").contains("duplicate"));
+        assert!(validate(&suite)
+            .unwrap_err()
+            .join(" ")
+            .contains("duplicate"));
     }
 
     #[test]
@@ -298,6 +308,9 @@ mod tests {
     fn version_mismatch_rejected() {
         let mut suite = source();
         suite.issue = 23;
-        assert!(validate(&suite).unwrap_err().join(" ").contains("unsupported"));
+        assert!(validate(&suite)
+            .unwrap_err()
+            .join(" ")
+            .contains("unsupported"));
     }
 }
