@@ -177,8 +177,8 @@ fn compute(c: &Case) -> Result<Computed<'_>, &'static str> {
             "UNKNOWN"
         });
         // Missing telemetry is unknown, never silently a numeric zero.
-        if c.numeric_default.is_some() {
-            return Err("unknown telemetry cannot acquire a numeric default");
+        if !telemetry && c.numeric_default.is_some() {
+            return Err("missing telemetry cannot acquire a numeric default");
         }
     } else if c.evaluation_budget_remaining.is_some() || c.family_budget_remaining.is_some() {
         let has_budget = c.evaluation_budget_remaining.unwrap_or(1) > 0
@@ -402,5 +402,35 @@ mod tests {
             json!(true),
         );
         assert!(serde_json::from_value::<Fixture>(mutated).is_err());
+    }
+
+    #[test]
+    fn present_telemetry_may_carry_a_measured_numeric_value() {
+        let mut present = change(
+            "missing-telemetry-is-unknown",
+            "telemetry_present",
+            json!(true),
+        );
+        let case = present["cases"]
+            .as_array_mut()
+            .expect("cases")
+            .iter_mut()
+            .find(|c| c["name"] == "missing-telemetry-is-unknown")
+            .expect("telemetry case");
+        case["numeric_default"] = json!(7);
+        case["expected"] = json!("REVIEW_TELEMETRY");
+        assert_eq!(checked(present), Ok(23));
+    }
+
+    #[test]
+    fn missing_telemetry_cannot_fabricate_numeric_measurements() {
+        let modified = change("missing-telemetry-is-unknown", "numeric_default", json!(0));
+        let errors = checked(modified).expect_err("missing telemetry must fail closed");
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.contains("missing telemetry cannot acquire a numeric default")),
+            "{errors:?}"
+        );
     }
 }
