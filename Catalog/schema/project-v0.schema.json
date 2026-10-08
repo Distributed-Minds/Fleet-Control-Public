@@ -1,0 +1,496 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FREE ENERGY project manifest v0 (structure only; Rust semantic validation is required)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "id",
+    "display_name",
+    "kind",
+    "upstream",
+    "play",
+    "rights_claims",
+    "permission_decisions",
+    "adapter",
+    "evidence",
+    "review"
+  ],
+  "properties": {
+    "schema": {
+      "const": "free-energy.project/v0"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9-]*$"
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 140
+    },
+    "kind": {
+      "enum": [
+        "ENGINE",
+        "GAME",
+        "MOD",
+        "REMASTER",
+        "TOOL"
+      ]
+    },
+    "upstream": {
+      "$ref": "#/$defs/upstream"
+    },
+    "play": {
+      "$ref": "#/$defs/play"
+    },
+    "rights_claims": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/rights"
+      }
+    },
+    "permission_decisions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/permission"
+      }
+    },
+    "adapter": {
+      "$ref": "#/$defs/adapter"
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/evidence"
+      }
+    },
+    "review": {
+      "$ref": "#/$defs/review"
+    }
+  },
+  "$defs": {
+    "url": {
+      "type": "string",
+      "minLength": 9,
+      "maxLength": 2048,
+      "pattern": "^https://[^\\s]+$",
+      "description": "Shape only; Rust validator must reject userinfo, IP literals, ports, escaped credentials, internal names and other unsafe links."
+    },
+    "pin": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time",
+      "minLength": 20
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*$"
+    },
+    "maybe_url": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/url"
+        }
+      ]
+    },
+    "maybe_string": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "upstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "discovery_url",
+        "canonical_source_url",
+        "source_revision",
+        "source_revision_reason",
+        "contribution_url",
+        "issue_url",
+        "read_only_mirror_urls"
+      ],
+      "properties": {
+        "discovery_url": {
+          "$ref": "#/$defs/url"
+        },
+        "canonical_source_url": {
+          "$ref": "#/$defs/url"
+        },
+        "source_revision": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/pin"
+            }
+          ]
+        },
+        "source_revision_reason": {
+          "$ref": "#/$defs/maybe_string"
+        },
+        "contribution_url": {
+          "$ref": "#/$defs/url"
+        },
+        "issue_url": {
+          "$ref": "#/$defs/url"
+        },
+        "read_only_mirror_urls": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/url"
+          }
+        }
+      }
+    },
+    "play": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "upstream_download_url",
+        "content_requirements",
+        "local_test_evidence_id"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "ENGINE_ONLY",
+            "UPSTREAM_LINK_ONLY",
+            "FREE_ENERGY_VERIFIED",
+            "UNAVAILABLE_EVIDENCED",
+            "UNKNOWN"
+          ]
+        },
+        "upstream_download_url": {
+          "$ref": "#/$defs/maybe_url"
+        },
+        "content_requirements": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "local_test_evidence_id": {
+          "$ref": "#/$defs/maybe_string"
+        }
+      }
+    },
+    "rights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim_id",
+        "claim_kind",
+        "component",
+        "scope_kind",
+        "scope",
+        "statement",
+        "license_id",
+        "exceptions_or_restrictions",
+        "evidence_ids",
+        "status"
+      ],
+      "properties": {
+        "claim_id": {
+          "$ref": "#/$defs/slug"
+        },
+        "claim_kind": {
+          "enum": [
+            "PUBLISHER_LICENSE",
+            "UPSTREAM_POLICY",
+            "INTERPRETATION"
+          ]
+        },
+        "component": {
+          "enum": [
+            "CODE",
+            "MEDIA",
+            "THIRD_PARTY_DATA",
+            "TRADEMARK",
+            "BUILD",
+            "OTHER"
+          ]
+        },
+        "scope_kind": {
+          "enum": [
+            "PROJECT_DEFAULT",
+            "PATH",
+            "PREFIX",
+            "CONTENT_PACK"
+          ]
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1
+        },
+        "license_id": {
+          "$ref": "#/$defs/maybe_string"
+        },
+        "exceptions_or_restrictions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "evidence_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/slug"
+          }
+        },
+        "status": {
+          "enum": [
+            "OBSERVED_AT",
+            "SUPERSEDED",
+            "RETRACTED",
+            "UNKNOWN"
+          ]
+        }
+      }
+    },
+    "permission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "component",
+        "scope",
+        "use",
+        "decision",
+        "review_evidence_ids",
+        "decision_reason",
+        "decided_at",
+        "reviewer"
+      ],
+      "properties": {
+        "component": {
+          "enum": [
+            "CODE",
+            "MEDIA",
+            "THIRD_PARTY_DATA",
+            "TRADEMARK",
+            "BUILD",
+            "OTHER"
+          ]
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1
+        },
+        "use": {
+          "enum": [
+            "BUNDLE",
+            "HOST",
+            "TRANSFORM",
+            "CROSS_GAME_REUSE"
+          ]
+        },
+        "decision": {
+          "enum": [
+            "REVIEW_REQUIRED",
+            "NOT_AUTHORIZED"
+          ],
+          "description": "APPROVED_FOR_SCOPE prohibited in v0, including forged review evidence."
+        },
+        "review_evidence_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/slug"
+          }
+        },
+        "decision_reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decided_at": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/time"
+            }
+          ]
+        },
+        "reviewer": {
+          "$ref": "#/$defs/maybe_string"
+        }
+      }
+    },
+    "adapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "target_id",
+        "test_evidence_id"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "NONE",
+            "PROPOSED",
+            "TESTED"
+          ]
+        },
+        "target_id": {
+          "$ref": "#/$defs/maybe_string"
+        },
+        "test_evidence_id": {
+          "$ref": "#/$defs/maybe_string"
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_id",
+        "evidence_kind",
+        "subject_scope",
+        "url",
+        "observed_at",
+        "reviewer",
+        "currentness",
+        "repository",
+        "commit",
+        "path"
+      ],
+      "properties": {
+        "evidence_id": {
+          "$ref": "#/$defs/slug"
+        },
+        "evidence_kind": {
+          "enum": [
+            "PINNED_REPOSITORY_FILE",
+            "MUTABLE_UPSTREAM_PAGE",
+            "FREE_ENERGY_LOCAL_TEST",
+            "HUMAN_RIGHTS_REVIEW",
+            "EXTERNAL_RESEARCH_CLAIM"
+          ]
+        },
+        "subject_scope": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "$ref": "#/$defs/url"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/time"
+        },
+        "reviewer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "currentness": {
+          "enum": [
+            "PINNED_SNAPSHOT",
+            "OBSERVED_AT",
+            "INVALIDATED",
+            "UNKNOWN"
+          ]
+        },
+        "repository": {
+          "$ref": "#/$defs/maybe_url"
+        },
+        "commit": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/pin"
+            }
+          ]
+        },
+        "path": {
+          "$ref": "#/$defs/maybe_string"
+        }
+      }
+    },
+    "history": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "old_claim_id",
+        "new_claim_id",
+        "reason",
+        "at"
+      ],
+      "properties": {
+        "old_claim_id": {
+          "$ref": "#/$defs/slug"
+        },
+        "new_claim_id": {
+          "$ref": "#/$defs/maybe_string"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "at": {
+          "$ref": "#/$defs/time"
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reviewed_at",
+        "reviewer",
+        "record_status",
+        "supersedes_record_revision",
+        "claim_history"
+      ],
+      "properties": {
+        "reviewed_at": {
+          "$ref": "#/$defs/time"
+        },
+        "reviewer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "record_status": {
+          "enum": [
+            "DRAFT",
+            "REVIEWED",
+            "WITHDRAWN"
+          ]
+        },
+        "supersedes_record_revision": {
+          "$ref": "#/$defs/maybe_string"
+        },
+        "claim_history": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/history"
+          }
+        }
+      }
+    }
+  }
+}
