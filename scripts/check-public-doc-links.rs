@@ -30,7 +30,7 @@ struct Report {
     errors: Vec<String>,
 }
 
-fn fence_marker(line: &str) -> Option<(u8, usize)> {
+fn fence_marker(line: &str) -> Option<(u8, usize, bool)> {
     let trimmed = line.trim_start_matches(' ');
     if line.len() - trimmed.len() > 3 {
         return None;
@@ -41,7 +41,10 @@ fn fence_marker(line: &str) -> Option<(u8, usize)> {
         return None;
     }
     let size = bytes.iter().take_while(|&&c| c == first).count();
-    (size >= 3).then_some((first, size))
+    // A fence opener may have an info string, but a closing fence must have
+    // only whitespace after the marker. Return the distinction to the caller.
+    let closing_suffix_is_whitespace = bytes[size..].iter().all(|&b| b == b' ' || b == b'\t');
+    (size >= 3).then_some((first, size, closing_suffix_is_whitespace))
 }
 
 fn mask_inline_code(line: &str) -> String {
@@ -188,13 +191,13 @@ fn collect_links(markdown: &str, document: &str, report: &mut Report) -> Vec<Str
     let mut paths = Vec::new();
     let mut fenced: Option<(u8, usize)> = None;
     for (line_idx, line) in markdown.lines().enumerate() {
-        if let Some((marker, width)) = fence_marker(line) {
+        if let Some((marker, width, can_close)) = fence_marker(line) {
             match fenced {
                 None => {
                     fenced = Some((marker, width));
                     continue;
                 }
-                Some((old, old_width)) if old == marker && width >= old_width => {
+                Some((old, old_width)) if old == marker && width >= old_width && can_close => {
                     fenced = None;
                     continue;
                 }
@@ -395,6 +398,34 @@ mod tests {
         }
     }
 
+
+    #[test]
+    fn info_string_does_not_close_fenced_code() {
+        let mut report = Report::default();
+        let paths = collect_links(
+            concat!(
+                "```rust\n",
+                "[hidden](missing.md)\n",
+                "```rust\n",
+                "[still-hidden](missing.md)\n",
+                "~~~/other-fence\n",
+                "``\n", // shorter run does not close
+                "[hidden-again](missing.md)\n",
+                "``` \t \n", // only whitespace after marker may close
+                "[first](one.md)\n",
+                "~~~python\n",
+                "[hidden-tilde](missing.md)\n",
+                "~~~~not-a-closer\n",
+                "[still-hidden-tilde](missing.md)\n",
+                "~~~\n",
+                "[second](two.md)\n"
+            ),
+            "README.md",
+            &mut report,
+        );
+        assert_eq!(paths, vec!["one.md", "two.md"]);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
 
     #[test]
     fn escaped_bracket_is_not_a_link_and_escaped_bang_does_not_hide_one() {
