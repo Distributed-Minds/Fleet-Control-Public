@@ -181,4 +181,93 @@ mod tests {
         assert!(html.contains("&lt;script&gt;&amp;&quot;&#39;"));
         assert!(!html.contains("<script>"));
     }
+
+    #[test]
+    fn authored_escaping_fixture_exercises_rendered_text_and_attribute_encoder() {
+        // Fixture expectations are checked against real HTML output, not copied
+        // back as a fixture verdict. This is lexical escaping conformance; it
+        // does not replace browser DOM, URL admission or rights verification.
+        let suite: serde_json::Value = serde_json::from_str(include_str!(
+            "../fixtures/renderer-escaping-v0.json"
+        ))
+        .expect("valid renderer fixture JSON");
+        let cases = suite["cases"].as_array().expect("renderer fixture cases");
+        assert_eq!(cases.len(), 14, "all authored escaping cases must run");
+
+        for case in cases {
+            let id = case["id"].as_str().expect("fixture case ID");
+            let input = case["input"].as_str().expect("untrusted fixture input");
+            let expected = case["reference_escaped"]
+                .as_str()
+                .expect("reference escaped string");
+            assert_eq!(
+                case["expected_decoded_value"].as_str(),
+                Some(input),
+                "invalid decoded fixture contract: {id}"
+            );
+            assert_eq!(escape(input), expected, "escape primitive: {id}");
+
+            match case["context"].as_str().expect("escaping context") {
+                "text" => {
+                    let mut project = validate_manifest(LUANTI).expect("valid pilot");
+                    let surrounded = match case["source_field"]
+                        .as_str()
+                        .expect("text source field")
+                    {
+                        "display_name" => {
+                            project.display_name = input.to_owned();
+                            format!("<h2>{expected}</h2>")
+                        }
+                        "rights_claims[].statement" => {
+                            project.rights_claims[0].statement = input.to_owned();
+                            format!(": {expected} <small>")
+                        }
+                        "play.content_requirements[]" => {
+                            project.play.content_requirements = vec![input.to_owned()];
+                            format!("<li>{expected}</li>")
+                        }
+                        other => panic!("unhandled text sink in {id}: {other}"),
+                    };
+                    let html = render_catalog(&[project]);
+                    assert!(
+                        html.contains(&surrounded),
+                        "input not encoded in its actual rendered text sink: {id}"
+                    );
+                    if input.contains('<') {
+                        assert!(
+                            !html.contains(input),
+                            "untrusted markup escaped incorrectly in rendered page: {id}"
+                        );
+                    }
+                }
+                "double_quoted_attribute" => {
+                    // The v0 page has no manifest-provided aria-label. Its only
+                    // dynamic attribute sink is an href populated by push_link;
+                    // URL admission takes place before this rendering boundary.
+                    let mut html = String::new();
+                    push_link(&mut html, input, "fixture link");
+                    assert_eq!(
+                        html,
+                        format!(
+                            "<a href=\"{expected}\" rel=\"noopener noreferrer\">fixture link</a>"
+                        ),
+                        "attribute breakout or incorrect encoding: {id}"
+                    );
+                    assert_eq!(html.matches(" href=").count(), 1, "{id}");
+                    assert_eq!(html.matches(" rel=").count(), 1, "{id}");
+                    if input.contains('"') {
+                        assert_ne!(
+                            html,
+                            format!(
+                                "<a href=\"{input}\" rel=\"noopener noreferrer\">fixture link</a>"
+                            ),
+                            "naive unescaped attribute output: {id}"
+                        );
+                    }
+                }
+                other => panic!("unhandled renderer context in {id}: {other}"),
+            }
+        }
+    }
+
 }
