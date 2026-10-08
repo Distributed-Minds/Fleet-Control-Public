@@ -48,7 +48,10 @@ fn check_suite(name: &str, fixture: &str, expected_count: usize) {
 
     // A valid manifest is necessary to isolate the URL admission decision:
     // malformed ambient data could otherwise make every negative case pass.
-    assert!(validate_manifest(BASE).is_ok(), "pilot baseline must be valid");
+    assert!(
+        validate_manifest(BASE).is_ok(),
+        "pilot baseline must be valid"
+    );
 
     for case in suite.cases {
         assert!(
@@ -71,8 +74,7 @@ fn check_suite(name: &str, fixture: &str, expected_count: usize) {
                 serde_json::from_str(BASE).expect("parse unmodified Luanti pilot");
             *manifest
                 .pointer_mut(field)
-                .unwrap_or_else(|| panic!("missing tested URL field {field}")) =
-                json!(case.url);
+                .unwrap_or_else(|| panic!("missing tested URL field {field}")) = json!(case.url);
             let changed = serde_json::to_string(&manifest).expect("serialize test mutation");
             let result = validate_manifest(&changed);
             if admitted {
