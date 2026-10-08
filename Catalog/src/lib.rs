@@ -535,7 +535,10 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
         let mut referenced = HashSet::new();
         for id in &item.evidence_ids {
             if !referenced.insert(id.as_str()) {
-                problems.push(format!("duplicate evidence reference in claim {}: {id}", item.claim_id));
+                problems.push(format!(
+                    "duplicate evidence reference in claim {}: {id}",
+                    item.claim_id
+                ));
             }
             match evidence.get(id.as_str()) {
                 None => problems.push(format!("claim {} has unknown evidence {id}", item.claim_id)),
