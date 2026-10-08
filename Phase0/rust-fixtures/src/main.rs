@@ -197,9 +197,10 @@ struct TraceCase {
 }
 
 fn required<'a>(field: &'a Option<String>, name: &str) -> Result<&'a str, String> {
-    field
-        .as_deref()
-        .ok_or_else(|| format!("missing required trace input: {name}"))
+    match field.as_deref() {
+        Some(value) if !value.trim().is_empty() => Ok(value),
+        _ => Err(format!("missing or blank required trace input: {name}")),
+    }
 }
 
 fn trace(c: &TraceCase) -> Result<&'static str, String> {
@@ -459,4 +460,37 @@ mod tests {
         altered["trace_cases"] = json!([]);
         assert!(validate(&fixture(altered)).is_err());
     }
+
+    #[test]
+    fn equal_blank_operation_ids_cannot_pass_cutoff_retry_deduplication() {
+        let mut altered = original();
+        altered["trace_cases"][0]["first_operation_id"] = json!(" \t ");
+        altered["trace_cases"][0]["retry_operation_id"] = json!(" \t ");
+        let typed = fixture(altered);
+        assert!(trace(&typed.trace_cases[0]).is_err());
+        assert!(validate(&typed).is_err());
+    }
+
+    #[test]
+    fn equal_blank_incarnations_cannot_claim_current_locator() {
+        let mut altered = original();
+        altered["trace_cases"][2]["expected_incarnation"] = json!(" \t ");
+        altered["trace_cases"][2]["current_incarnation"] = json!(" \t ");
+        altered["trace_cases"][2]["expected"] = json!("CURRENT");
+        let typed = fixture(altered);
+        assert!(trace(&typed.trace_cases[2]).is_err());
+        assert!(validate(&typed).is_err());
+    }
+
+    #[test]
+    fn equal_blank_dependency_bases_cannot_authorize_boundary() {
+        let mut altered = original();
+        altered["trace_cases"][3]["decision_basis"] = json!(" \t ");
+        altered["trace_cases"][3]["boundary_basis"] = json!(" \t ");
+        altered["trace_cases"][3]["expected"] = json!("BOUNDARY_ALLOWED");
+        let typed = fixture(altered);
+        assert!(trace(&typed.trace_cases[3]).is_err());
+        assert!(validate(&typed).is_err());
+    }
+
 }
