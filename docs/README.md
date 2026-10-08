@@ -8,13 +8,18 @@ Open [`docs/index.html`](index.html) in a browser directly, or use an already av
 
 ## Offline structural smoke check (Rust)
 
-Compile and run from the repository root with an installed Rust compiler:
+Compile and run from the repository root with an installed Rust compiler and `mktemp`. The Unix commands use a per-run temporary directory, stop at the first failed stage, and remove both compiled binaries on success or failure, including when concurrent checks run:
 
 ```sh
-rustc --edition=2021 -D warnings tests/check_free_energy_site.rs -o /tmp/free-energy-site-check &&
-/tmp/free-energy-site-check &&
-rustc --edition=2021 -D warnings --test tests/check_free_energy_site.rs -o /tmp/free-energy-site-tests &&
-/tmp/free-energy-site-tests
+(
+  set -e
+  tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/free-energy-site.XXXXXXXX")"
+  trap 'rm -rf -- "$tmp_dir"' EXIT
+  rustc --edition=2021 -D warnings tests/check_free_energy_site.rs -o "$tmp_dir/site-check"
+  "$tmp_dir/site-check"
+  rustc --edition=2021 -D warnings --test tests/check_free_energy_site.rs -o "$tmp_dir/site-tests"
+  "$tmp_dir/site-tests"
+)
 ```
 
 
