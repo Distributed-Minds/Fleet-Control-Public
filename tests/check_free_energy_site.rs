@@ -189,7 +189,12 @@ fn has_unapproved_resource_markup(elements: &[&str]) -> bool {
             ]
             .iter()
             .any(|name| is_open_element(tag, name))
-            || ["src", "srcset", "poster", "background", "style", "xlink:href"]
+            // Links can send extra network requests through ping or the
+            // Attribution Reporting API without any script or image tag.
+            || [
+                "src", "srcset", "poster", "background", "style",
+                "xlink:href", "ping", "attributionsrc",
+            ]
                 .iter()
                 .any(|name| attribute(tag, name).is_some())
     })
@@ -806,6 +811,23 @@ data="x"></OBject><EMBED/>"#;
         let quoted_and_commented = r#"<!-- <img src="https://example.invalid/"> -->
 <p title='<img src="https://example.invalid/">' >Ordinary text</p>"#;
         assert!(!has_unapproved_resource_markup(&tags(quoted_and_commented)));
+    }
+
+    #[test]
+    fn outbound_anchor_beacon_attributes_are_not_passive_links() {
+        for active_link in [
+            r#"<a href="https://example.org/" ping="https://example.invalid/track">Visit</a>"#,
+            r#"<a href="https://example.org/" PING="">Visit</a>"#,
+            r#"<A HREF="https://example.org/" ATTRIBUTIONSRC="https://example.invalid/report">Visit</A>"#,
+        ] {
+            assert!(
+                has_unapproved_resource_markup(&tags(active_link)),
+                "Link-level network beacon escaped the guard: {active_link}"
+            );
+        }
+        assert!(!has_unapproved_resource_markup(&tags(
+            r#"<a href="https://example.org/" rel="noopener noreferrer">Visit</a>"#
+        )));
     }
 
     #[test]
