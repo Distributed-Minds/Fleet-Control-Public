@@ -1,5 +1,16 @@
 # Troubleshooting
 
+## My fork shows the FREE ENERGY landing README but no `Phase0/`
+
+The upstream `main` branch currently has a project landing page, **not** the installable Phase0 preview. A fork copied from only the default branch can therefore look correct at first but lack the operating files. **Do not enable fleet automations** until `Phase0/05-FLEET-CONFIG.md` is visible on **your repository's default branch**.
+
+1. In **your fork**, use the branch selector to check whether `phase0/public-v0` exists.
+2. **If that branch exists:** with administrator access to **your fork**, open **Settings → Default branch** and select `phase0/public-v0`. Return to the fork's default view and verify `Phase0/05-FLEET-CONFIG.md`. Do **not** change the upstream repository's `main` branch.
+3. **If that branch is missing:** a default-only fork did not copy the preview. Either make a new fork with **Copy the DEFAULT branch only** unchecked and then follow step 2, or install the [Phase0 starter ZIP](https://github.com/Distributed-Minds/Fleet-Control-Public/releases/tag/v0.1.2-phase0-preview) into a repository you control and commit its `Phase0/` directory on that repository's default branch. A fork that copies all branches also contains historical/research branches; they are not the installed fleet.
+4. Follow the [current Getting Started instructions](GETTING-STARTED.md#2-install-the-actual-phase0-preview-in-a-repository-you-control) for both routes. The published v0.1.2 ZIP contains **older setup instructions** and is not a snapshot of the latest preview branch. Inspect the files and configure your own target repository and distinct agent IDs before scheduling runs.
+
+If the verified default branch still has no `Phase0/05-FLEET-CONFIG.md`, **stop**: changing ChatGPT connections or creating more scheduled tasks will not repair the missing installation.
+
 ## My repository does not appear in ChatGPT
 
 Check that:
