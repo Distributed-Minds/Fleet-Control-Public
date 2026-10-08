@@ -71,6 +71,7 @@ pub fn plan_compaction(
     // Individually valid witness snapshots from different generations cannot
     // be composed into one plan without a trusted cross-generation cut.
     let mut manifest_basis = None;
+    let mut shared_batch_basis = None;
     for witness in witnesses {
         match &manifest_basis {
             Some(expected) if expected != &witness.manifest.basis => {
@@ -115,6 +116,22 @@ pub fn plan_compaction(
             Verdict::EligibleModelOnly => {}
             Verdict::Ineligible(reason) => return Err(PlanFailure::Ineligible(reason)),
             Verdict::ReconcilePriorEffect => return Err(PlanFailure::ReconcilePriorEffect),
+        }
+        // Individually eligible witnesses cannot elect incompatible archive
+        // destinations or reconstruction objectives for one destructive batch.
+        // This is a pure model check, not current provider deletion authority.
+        let basis = (
+            witness.manifest.destination_incarnation.as_str(),
+            &witness.horizon.basis,
+            witness.horizon.policy_source_incarnation.as_str(),
+            witness.horizon.preserve_through_epoch,
+        );
+        match shared_batch_basis {
+            Some(previous) if previous != basis => {
+                return Err(PlanFailure::InconsistentWitness);
+            }
+            None => shared_batch_basis = Some(basis),
+            _ => {}
         }
         model_removals.push(ModelRemoval {
             sequence: record.sequence,
@@ -401,5 +418,75 @@ mod tests {
             plan_compaction(&archived, &live, &cut(), &[witness(&live[2])]),
             Err(PlanFailure::MissingOrAmbiguousArchivedCopy)
         );
+    }
+    #[test]
+    fn batch_rejects_distinct_archive_destination_incarnations() {
+        let (archived, live) = histories();
+        let first = witness(&live[0]);
+        let mut second = witness(&live[1]);
+        second.manifest.destination_incarnation = "other-archive-incarnation".into();
+        second.durability.destination_incarnation = second.manifest.destination_incarnation.clone();
+        assert_eq!(evaluate(&first), Verdict::EligibleModelOnly);
+        assert_eq!(evaluate(&second), Verdict::EligibleModelOnly);
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[first, second]),
+            Err(PlanFailure::InconsistentWitness)
+        );
+    }
+
+    #[test]
+    fn batch_rejects_distinct_authorized_horizon_generations() {
+        let (archived, live) = histories();
+        let first = witness(&live[0]);
+        let mut second = witness(&live[1]);
+        second.horizon.basis.generation += 1;
+        second.durability.horizon = second.horizon.basis.clone();
+        assert_eq!(evaluate(&first), Verdict::EligibleModelOnly);
+        assert_eq!(evaluate(&second), Verdict::EligibleModelOnly);
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[first, second]),
+            Err(PlanFailure::InconsistentWitness)
+        );
+    }
+
+    #[test]
+    fn batch_rejects_distinct_horizon_policy_incarnations() {
+        let (archived, live) = histories();
+        let first = witness(&live[0]);
+        let mut second = witness(&live[1]);
+        second.horizon.policy_source_incarnation = "new-policy-incarnation".into();
+        assert_eq!(evaluate(&first), Verdict::EligibleModelOnly);
+        assert_eq!(evaluate(&second), Verdict::EligibleModelOnly);
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[first, second]),
+            Err(PlanFailure::InconsistentWitness)
+        );
+    }
+
+    #[test]
+    fn batch_rejects_incompatible_reconstruction_horizon_lengths() {
+        let (archived, live) = histories();
+        let first = witness(&live[0]);
+        let mut second = witness(&live[1]);
+        second.horizon.preserve_through_epoch = 99;
+        assert_eq!(evaluate(&first), Verdict::EligibleModelOnly);
+        assert_eq!(evaluate(&second), Verdict::EligibleModelOnly);
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[first, second]),
+            Err(PlanFailure::InconsistentWitness)
+        );
+    }
+
+    #[test]
+    fn coherent_manifest_can_select_distinct_immutable_segments() {
+        let (archived, live) = histories();
+        let first = witness(&live[0]);
+        let mut second = witness(&live[1]);
+        second.archive.segment = "another-immutable-segment".into();
+        second.durability.segment = second.archive.segment.clone();
+        assert_eq!(evaluate(&second), Verdict::EligibleModelOnly);
+        let plan = plan_compaction(&archived, &live, &cut(), &[first, second])
+            .expect("one current manifest/horizon may contain distinct segments");
+        assert_eq!(plan.model_removals.len(), 2);
     }
 }
