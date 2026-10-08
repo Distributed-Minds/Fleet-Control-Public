@@ -268,7 +268,9 @@ fn is_public_https_url(url: &str) -> bool {
 // is implemented; a structurally valid JSON string is not a valid status.
 fn check_vocabulary(problems: &mut Vec<String>, path: &str, value: &str, allowed: &[&str]) {
     if !allowed.contains(&value) {
-        problems.push(format!("{path}: unsupported schema vocabulary value {value:?}"));
+        problems.push(format!(
+            "{path}: unsupported schema vocabulary value {value:?}"
+        ));
     }
 }
 
@@ -290,7 +292,14 @@ fn validate_vocabulary(record: &Project, problems: &mut Vec<String>) {
             problems,
             &format!("rights_claims[{index}].component"),
             &claim.component,
-            &["CODE", "MEDIA", "THIRD_PARTY_DATA", "TRADEMARK", "BUILD", "OTHER"],
+            &[
+                "CODE",
+                "MEDIA",
+                "THIRD_PARTY_DATA",
+                "TRADEMARK",
+                "BUILD",
+                "OTHER",
+            ],
         );
         check_vocabulary(
             problems,
@@ -310,7 +319,14 @@ fn validate_vocabulary(record: &Project, problems: &mut Vec<String>) {
             problems,
             &format!("permission_decisions[{index}].component"),
             &permission.component,
-            &["CODE", "MEDIA", "THIRD_PARTY_DATA", "TRADEMARK", "BUILD", "OTHER"],
+            &[
+                "CODE",
+                "MEDIA",
+                "THIRD_PARTY_DATA",
+                "TRADEMARK",
+                "BUILD",
+                "OTHER",
+            ],
         );
         check_vocabulary(
             problems,
@@ -621,8 +637,7 @@ mod tests {
             ("/review/record_status", "review.record_status"),
         ] {
             let forged = changed(LUANTI, |v| {
-                *v.pointer_mut(pointer).expect("existing catalog field") =
-                    json!("FORGED_STATUS");
+                *v.pointer_mut(pointer).expect("existing catalog field") = json!("FORGED_STATUS");
             });
             let errors = validate_manifest(&forged).unwrap_err();
             assert!(
