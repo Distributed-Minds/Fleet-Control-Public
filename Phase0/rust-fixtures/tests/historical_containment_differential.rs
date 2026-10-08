@@ -88,3 +88,146 @@ fn historical_python_and_rust_containment_agree_on_negative_controls() {
     changed["decision_cases"][0]["narrowest_effective_level"] = Value::Null;
     checked("explicit-null-narrowest", &changed, false);
 }
+
+
+/// Historical adaptive-stress's Python oracle reads a hard-coded fixture
+/// path. Import its unchanged historical code and override that path in the
+/// test process so both implementations see exactly the same mutated bytes.
+/// This is a bounded regression differential, not all-family semantic parity.
+#[test]
+#[ignore = "requires historical Python 3 checker; explicitly enabled in candidate CI"]
+fn historical_python_and_rust_adaptive_stress_agree_on_negative_controls() {
+    const ADAPTIVE: &str = include_str!("../../fixtures/adaptive-stress-spec2.json");
+
+    fn checked_adaptive(label: &str, fixture: &Value, should_pass: bool) {
+        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let legacy = manifest
+            .parent()
+            .expect("Phase0 parent")
+            .join("scripts/check-adaptive-stress-fixtures.py");
+        let path = std::env::temp_dir().join(format!(
+            "free-energy-adaptive-differential-{}-{label}.json",
+            process::id()
+        ));
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .expect("create unique adaptive differential fixture");
+        file.write_all(
+            serde_json::to_string(fixture)
+                .expect("serialize adaptive fixture")
+                .as_bytes(),
+        )
+        .expect("write adaptive fixture");
+        drop(file);
+
+        // runpy does not invoke the __main__ guard, so the original checker
+        // remains untouched; replace only the in-process fixture path.
+        let python_entry = concat!(
+            "import pathlib, runpy, sys\n",
+            "ns = runpy.run_path(sys.argv[1], run_name='historical_import')\n",
+            "ns['main'].__globals__['FIXTURE_PATH'] = pathlib.Path(sys.argv[2])\n",
+            "ns['main']()\n"
+        );
+        let python_result = Command::new("python3")
+            .arg("-c")
+            .arg(python_entry)
+            .arg(&legacy)
+            .arg(&path)
+            .output()
+            .expect("run preserved historical adaptive-stress oracle");
+        let rust_result = Command::new(env!("CARGO_BIN_EXE_adaptive_stress"))
+            .arg(&path)
+            .output()
+            .expect("run compiled adaptive-stress oracle");
+        fs::remove_file(&path).expect("remove adaptive differential fixture");
+
+        for (oracle, result) in [("Python", python_result), ("Rust", rust_result)] {
+            assert_eq!(
+                result.status.success(),
+                should_pass,
+                "{oracle} {label}: stdout={} stderr={}",
+                String::from_utf8_lossy(&result.stdout),
+                String::from_utf8_lossy(&result.stderr)
+            );
+            if should_pass {
+                assert!(
+                    String::from_utf8_lossy(&result.stdout).contains("23 passed"),
+                    "{oracle} {label}: missing 23-case success evidence"
+                );
+            } else {
+                assert!(
+                    result.stdout.is_empty(),
+                    "{oracle} {label}: rejected fixture emitted success output"
+                );
+                assert!(
+                    !result.stderr.is_empty(),
+                    "{oracle} {label}: rejected fixture lacked diagnostics"
+                );
+            }
+        }
+    }
+
+    fn change(base: &Value, name: &str, field: &str, value: Value) -> Value {
+        let mut mutated = base.clone();
+        let case = mutated["cases"]
+            .as_array_mut()
+            .expect("historical cases array")
+            .iter_mut()
+            .find(|case| case["name"] == name)
+            .expect("historical named scenario");
+        case[field] = value;
+        mutated
+    }
+
+    let baseline: Value = serde_json::from_str(ADAPTIVE).expect("historical adaptive fixture");
+    checked_adaptive("baseline", &baseline, true);
+
+    for (label, case, field, replacement) in [
+        (
+            "fixture-authority",
+            "fixture-authority-is-inert",
+            "authority_change",
+            json!(true),
+        ),
+        (
+            "retry-double-charge",
+            "retry-reuses-evaluation-id",
+            "extra_workload_charge",
+            json!(true),
+        ),
+        (
+            "ack-loss-rerun",
+            "ack-loss-reconciles-first",
+            "rerun",
+            json!(true),
+        ),
+        (
+            "unbounded-reset",
+            "material-target-change-can-split",
+            "bounded_allowance",
+            json!(0),
+        ),
+        (
+            "unknown-becomes-zero",
+            "missing-telemetry-is-unknown",
+            "numeric_default",
+            json!(0),
+        ),
+        (
+            "budget-exhaustion-misreported",
+            "evaluation-budget-exhaustion",
+            "expected",
+            json!("ELIGIBLE"),
+        ),
+        (
+            "false-remediation-closure",
+            "observed-failure-not-closure",
+            "expected_closed",
+            json!(true),
+        ),
+    ] {
+        checked_adaptive(label, &change(&baseline, case, field, replacement), false);
+    }
+}
