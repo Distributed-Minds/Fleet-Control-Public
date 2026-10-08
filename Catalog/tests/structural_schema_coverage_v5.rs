@@ -35,7 +35,10 @@ fn three_pilots_still_admit() {
 fn required_arrays_cannot_be_empty() {
     for (field, diagnostic) in [
         ("rights_claims", "rights_claims requires at least one item"),
-        ("permission_decisions", "permission_decisions requires at least one item"),
+        (
+            "permission_decisions",
+            "permission_decisions requires at least one item",
+        ),
         ("evidence", "evidence requires at least one item"),
     ] {
         let record = changed(|v| v[field] = json!([]));
@@ -61,17 +64,40 @@ fn mirror_and_evidence_reference_sets_are_unique() {
         let id = v["evidence"][0]["evidence_id"].clone();
         v["permission_decisions"][0]["review_evidence_ids"] = json!([id.clone(), id]);
     });
-    deny(&permission, "duplicate permission review evidence reference");
+    deny(
+        &permission,
+        "duplicate permission review evidence reference",
+    );
 }
 
 #[test]
 fn all_identity_surfaces_use_the_published_slug_grammar() {
     for (pointer, value, expected) in [
-        ("/rights_claims/0/claim_id", "Uppercase", "rights_claims.claim_id"),
-        ("/evidence/0/evidence_id", "0starts-with-digit", "evidence.evidence_id"),
-        ("/rights_claims/0/evidence_ids/0", "bad/segment", "rights_claims.evidence_ids"),
-        ("/adapter/test_evidence_id", "space is invalid", "adapter.test_evidence_id"),
-        ("/play/local_test_evidence_id", "bad.id", "play.local_test_evidence_id"),
+        (
+            "/rights_claims/0/claim_id",
+            "Uppercase",
+            "rights_claims.claim_id",
+        ),
+        (
+            "/evidence/0/evidence_id",
+            "0starts-with-digit",
+            "evidence.evidence_id",
+        ),
+        (
+            "/rights_claims/0/evidence_ids/0",
+            "bad/segment",
+            "rights_claims.evidence_ids",
+        ),
+        (
+            "/adapter/test_evidence_id",
+            "space is invalid",
+            "adapter.test_evidence_id",
+        ),
+        (
+            "/play/local_test_evidence_id",
+            "bad.id",
+            "play.local_test_evidence_id",
+        ),
     ] {
         let record = changed(|v| {
             *v.pointer_mut(pointer).expect("existing pilot field") = json!(value);
@@ -98,5 +124,8 @@ fn link_admission_respects_schema_maximum_length() {
         v["upstream"]["contribution_url"] =
             json!(format!("https://github.com/{}", "a".repeat(2049)));
     });
-    deny(&record, "inadmissible external URL: upstream.contribution_url");
+    deny(
+        &record,
+        "inadmissible external URL: upstream.contribution_url",
+    );
 }

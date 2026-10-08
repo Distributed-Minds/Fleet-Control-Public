@@ -187,7 +187,8 @@ fn is_relative_path(value: &str) -> bool {
 /// IP literals, ports, userinfo and non-ASCII DNS names are intentionally out
 /// of scope until their admission/normalization semantics are specified.
 fn is_public_https_url(url: &str) -> bool {
-    if url.chars().count() > 2048 || !url.starts_with("https://")
+    if url.chars().count() > 2048
+        || !url.starts_with("https://")
         || url
             .chars()
             .any(|c| c.is_control() || c.is_whitespace() || c == '\\')
@@ -373,9 +374,7 @@ fn validate_vocabulary(record: &Project, problems: &mut Vec<String>) {
 fn check_slug(problems: &mut Vec<String>, path: &str, value: &str) {
     let mut bytes = value.bytes();
     let valid = bytes.next().is_some_and(|b| b.is_ascii_lowercase())
-        && bytes.all(|b| {
-            b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'_' | b'-')
-        });
+        && bytes.all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'_' | b'-'));
     if !valid {
         problems.push(format!("{path}: invalid slug identifier"));
     }
@@ -497,7 +496,9 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
     let mut mirror_urls = HashSet::new();
     for (index, url) in record.upstream.read_only_mirror_urls.iter().enumerate() {
         if !mirror_urls.insert(url.as_str()) {
-            problems.push(format!("duplicate upstream read-only mirror URL at index {index}"));
+            problems.push(format!(
+                "duplicate upstream read-only mirror URL at index {index}"
+            ));
         }
         if !is_public_https_url(url) {
             problems.push(format!(
@@ -546,7 +547,10 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
         for id in &item.evidence_ids {
             check_slug(&mut problems, "rights_claims.evidence_ids", id);
             if !referenced.insert(id.as_str()) {
-                problems.push(format!("claim {} duplicates evidence reference {id}", item.claim_id));
+                problems.push(format!(
+                    "claim {} duplicates evidence reference {id}",
+                    item.claim_id
+                ));
             }
         }
         if !claims.insert(item.claim_id.as_str()) {
@@ -579,9 +583,15 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
     for item in &record.permission_decisions {
         let mut reviewed = HashSet::new();
         for id in &item.review_evidence_ids {
-            check_slug(&mut problems, "permission_decisions.review_evidence_ids", id);
+            check_slug(
+                &mut problems,
+                "permission_decisions.review_evidence_ids",
+                id,
+            );
             if !reviewed.insert(id.as_str()) {
-                problems.push(format!("duplicate permission review evidence reference {id}"));
+                problems.push(format!(
+                    "duplicate permission review evidence reference {id}"
+                ));
             }
         }
         if !scopes.contains(&(item.component.as_str(), item.scope.as_str())) {
@@ -648,7 +658,11 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
     let mut history_sources = HashSet::new();
     let mut history_links = HashMap::new();
     for event in &record.review.claim_history {
-        check_slug(&mut problems, "review.claim_history.old_claim_id", &event.old_claim_id);
+        check_slug(
+            &mut problems,
+            "review.claim_history.old_claim_id",
+            &event.old_claim_id,
+        );
         if let Some(new_id) = event.new_claim_id.as_deref() {
             check_slug(&mut problems, "review.claim_history.new_claim_id", new_id);
         }
