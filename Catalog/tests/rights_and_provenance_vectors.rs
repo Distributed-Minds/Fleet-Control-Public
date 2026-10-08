@@ -28,7 +28,10 @@ fn cases<'a>(suite: &'a Value, schema: &str, count: usize) -> &'a [Value] {
     for case in cases {
         let id = case["id"].as_str().expect("case ID");
         assert!(!id.is_empty() && ids.insert(id), "duplicate/blank case ID");
-        assert!(case["expected_valid"].is_boolean(), "missing expected verdict");
+        assert!(
+            case["expected_valid"].is_boolean(),
+            "missing expected verdict"
+        );
         assert!(case["overrides"].is_object(), "missing overrides map");
     }
     cases
@@ -36,7 +39,9 @@ fn cases<'a>(suite: &'a Value, schema: &str, count: usize) -> &'a [Value] {
 
 fn apply_overrides(target: &mut Value, overrides: &Value) {
     for (key, value) in overrides.as_object().expect("overrides object") {
-        let field = target.get_mut(key).expect("override known fragment key");
+        let field = target
+            .get_mut(key.as_str())
+            .expect("override known fragment key");
         *field = value.clone();
     }
 }
@@ -53,11 +58,9 @@ fn check_rights(suite: &Value) -> Result<(), String> {
         apply_overrides(&mut claim, &case["overrides"]);
         // A synthetic claim must cite a real record in this local fixture;
         // the source fragment's placeholder must never masquerade as a pin.
-        claim["evidence_ids"] = json!([
-            manifest["evidence"][0]["evidence_id"]
-                .as_str()
-                .expect("existing evidence identity")
-        ]);
+        claim["evidence_ids"] = json!([manifest["evidence"][0]["evidence_id"]
+            .as_str()
+            .expect("existing evidence identity")]);
         manifest["rights_claims"]
             .as_array_mut()
             .expect("rights claims")
@@ -76,11 +79,7 @@ fn check_rights(suite: &Value) -> Result<(), String> {
 
 fn check_evidence(suite: &Value) -> Result<(), String> {
     assert_eq!(suite["target_pointer"].as_str(), Some("#/$defs/evidence"));
-    for case in cases(
-        suite,
-        "free-energy.catalog-evidence-fragment-tests/v0",
-        27,
-    ) {
+    for case in cases(suite, "free-energy.catalog-evidence-fragment-tests/v0", 27) {
         let mut manifest = full_manifest();
         let mut additional = suite["base_evidence"].clone();
         apply_overrides(&mut additional, &case["overrides"]);
@@ -120,7 +119,10 @@ fn all_27_authored_pinned_evidence_vectors_agree_with_typed_admission() {
 fn tampering_a_historical_expected_verdict_cannot_manufacture_success() {
     let mut rights = parse(RIGHTS);
     rights["cases"][0]["expected_valid"] = json!(false);
-    assert!(check_rights(&rights).is_err(), "forged rights verdict accepted");
+    assert!(
+        check_rights(&rights).is_err(),
+        "forged rights verdict accepted"
+    );
 
     let mut evidence = parse(EVIDENCE);
     evidence["cases"][0]["expected_valid"] = json!(false);
