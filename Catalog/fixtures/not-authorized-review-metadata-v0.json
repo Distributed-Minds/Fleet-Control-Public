@@ -79,6 +79,23 @@
         "decided_at": "2026-10-08"
       },
       "expected_valid": false
+    },
+    {
+      "id": "review-required-whitespace-reason",
+      "overrides": {
+        "decision_reason": "   "
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "not-authorized-whitespace-reason",
+      "overrides": {
+        "decision": "NOT_AUTHORIZED",
+        "reviewer": "maintainer",
+        "decided_at": "2026-10-08T14:45:00Z",
+        "decision_reason": " \t "
+      },
+      "expected_valid": false
     }
   ]
 }
