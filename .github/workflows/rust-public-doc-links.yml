@@ -95,11 +95,11 @@ jobs:
           }
 
           # Missing links in the first-party contributor guide are real failures.
-          printf '%s\\n' '[broken-contributing](missing-contributing.md)' > "$fixture/CONTRIBUTING.md"
+          printf '%s\n' '[broken-contributing](missing-contributing.md)' > "$fixture/CONTRIBUTING.md"
           expect_rejected missing-contributor-guide-target 'target missing'
           : > "$fixture/CONTRIBUTING.md"
 
-          printf '%s\\n' '[missing](missing.md)' > "$fixture/README.md"
+          printf '%s\n' '[missing](missing.md)' > "$fixture/README.md"
           expect_rejected missing-target 'target missing'
 
           # Repeat the same failing input: errors must be sorted and deterministic.
