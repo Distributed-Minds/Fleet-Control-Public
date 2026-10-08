@@ -154,7 +154,32 @@
             "$ref": "#/$defs/url"
           }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source_revision": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "source_revision"
+            ]
+          },
+          "then": {
+            "required": [
+              "source_revision_reason"
+            ],
+            "properties": {
+              "source_revision_reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ]
     },
     "play": {
       "type": "object",
