@@ -334,6 +334,13 @@ fn is_bidi_format(ch: char) -> bool {
     )
 }
 
+// Percent escapes may encode controls and Unicode spaces even when the raw
+// source URL contains no forbidden whitespace. Check the decoded scalar values
+// with the same conservative policy used for unescaped characters.
+fn is_inadmissible_decoded(ch: char) -> bool {
+    !ch.is_ascii() && (ch.is_control() || ch.is_whitespace() || is_bidi_format(ch))
+}
+
 /// Conservative, offline admission for externally displayed links. This does
 /// not resolve DNS, follow redirects, authenticate a host or prove its rights.
 /// IP literals, ports, userinfo and non-ASCII DNS names are intentionally out
@@ -429,7 +436,7 @@ fn is_public_https_url(url: &str) -> bool {
     }
     // Reject invalid UTF-8 after decoding; its browser presentation is not
     // reliably equivalent to the evidence URL being reviewed.
-    if !std::str::from_utf8(&decoded_url).is_ok_and(|s| !s.chars().any(is_bidi_format)) {
+    if !std::str::from_utf8(&decoded_url).is_ok_and(|s| !s.chars().any(is_inadmissible_decoded)) {
         return false;
     }
     true
