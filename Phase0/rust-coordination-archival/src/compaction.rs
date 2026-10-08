@@ -118,8 +118,8 @@ pub fn plan_compaction(
         .filter(|(index, _)| !selected.contains(index))
         .map(|(_, record)| record.clone())
         .collect();
-    let replayed = replay(archived, &retained_live, cut)
-        .map_err(PlanFailure::PostRemovalHistory)?;
+    let replayed =
+        replay(archived, &retained_live, cut).map_err(PlanFailure::PostRemovalHistory)?;
     if replayed != reconstructed {
         return Err(PlanFailure::ReplayDiverged);
     }
