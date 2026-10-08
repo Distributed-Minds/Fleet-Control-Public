@@ -68,11 +68,14 @@ The installing human may deliberately change those policies.
 
 ## Start here
 
-If GitHub, branches, ChatGPT Projects, or automations are new to you, read [`GETTING-STARTED.md`](GETTING-STARTED.md).
+Choose a path based on what you actually want to do:
 
-For game-project routes—from finding something playable to passthrough mods, ports, debugging and sharing—see the [FREE ENERGY workflow guide map](WORKFLOW-GUIDES.md), with links to independently maintained examples and tutorials.
+- **PLAY — find and play an existing project:** use that project's own release and installation instructions. FREE ENERGY's [playable-project catalog](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/60) is planned, not yet an available download directory.
+- **HELP — improve an existing project:** follow [Help an existing FREE ENERGY project](HELP-A-PROJECT.md) for a beginner-friendly contribution path and a copyable prompt for a local coding agent. Check the upstream project's contribution and AI-use policies before doing or publishing work. The guide does not enroll you in a fleet or assign issues automatically.
+- **MAKE — create a mod, port, remaster, or bridge:** consult the [FREE ENERGY workflow guide map](WORKFLOW-GUIDES.md) for technical routes, independently maintained examples, and rights/testing considerations. These references are not a hosted building service.
+- **RUN YOUR OWN FLEET — install the Phase0 preview:** follow [Getting Started](GETTING-STARTED.md) and the [starter releases](https://github.com/Distributed-Minds/Fleet-Control-Public/releases) to install the separate GitHub agent-coordination starter in a repository you control. The public `main` branch does not yet contain this preview.
 
-For the normative machine read order, see [`Phase0/README.md`](Phase0/README.md).
+For the normative Phase0 machine read order, see [`Phase0/README.md`](Phase0/README.md).
 
 ## License
 
