@@ -492,5 +492,4 @@ mod tests {
         assert!(trace(&typed.trace_cases[3]).is_err());
         assert!(validate(&typed).is_err());
     }
-
 }
