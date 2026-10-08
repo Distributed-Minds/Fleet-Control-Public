@@ -13,22 +13,14 @@ use std::fs;
 use std::process;
 
 const K: [u32; 64] = [
-    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
-    0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
-    0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
-    0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
-    0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
-    0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3,
-    0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5,
-    0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
-    0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 ];
 
 fn sha256_hex(input: &[u8]) -> String {
@@ -142,8 +134,8 @@ fn candidate_ids(fixture_text: &str) -> Result<Vec<(String, String)>, String> {
         // lexical order, arrays retain their order, non-ASCII stays UTF-8.
         // This matches historical Python json.dumps(sort_keys=True,
         // separators=(',', ':'), ensure_ascii=False) for the typed fixture.
-        let bytes = serde_json::to_vec(&Value::Object(candidate.clone()))
-            .map_err(|e| e.to_string())?;
+        let bytes =
+            serde_json::to_vec(&Value::Object(candidate.clone())).map_err(|e| e.to_string())?;
         ids.push((name.to_owned(), sha256_hex(&bytes)));
     }
     Ok(ids)
@@ -204,14 +196,22 @@ mod tests {
         assert_eq!(
             actual,
             [
-                ("normal-two-parent".to_owned(),
-                 "7e8986591c4293e4eeebf751a2c12e19512d4792e5cd8267e6308fe0a479d8da".to_owned()),
-                ("reversed-parents-same-tree".to_owned(),
-                 "b9bea4f05c5cf67a3ed24dafae1600bb5f58e30563b96981afac9a8322efdaf8".to_owned()),
-                ("unsupported-three-parent".to_owned(),
-                 "75de8f8eefce4daf6e64ef71267cac4039fd4a1610e77700259ba1298c40c51a".to_owned()),
-                ("compatible-constructor-migration".to_owned(),
-                 "b0ce5db57c6ccc2ccff334ef9905f2488ca826e8d7cefe6f752cd7dd4f59483f".to_owned()),
+                (
+                    "normal-two-parent".to_owned(),
+                    "7e8986591c4293e4eeebf751a2c12e19512d4792e5cd8267e6308fe0a479d8da".to_owned()
+                ),
+                (
+                    "reversed-parents-same-tree".to_owned(),
+                    "b9bea4f05c5cf67a3ed24dafae1600bb5f58e30563b96981afac9a8322efdaf8".to_owned()
+                ),
+                (
+                    "unsupported-three-parent".to_owned(),
+                    "75de8f8eefce4daf6e64ef71267cac4039fd4a1610e77700259ba1298c40c51a".to_owned()
+                ),
+                (
+                    "compatible-constructor-migration".to_owned(),
+                    "b0ce5db57c6ccc2ccff334ef9905f2488ca826e8d7cefe6f752cd7dd4f59483f".to_owned()
+                ),
             ]
         );
         assert_ne!(actual[0].1, actual[1].1);
@@ -233,10 +233,15 @@ mod tests {
     #[test]
     fn unicode_is_utf8_not_ascii_escaped_and_order_is_semantic() {
         let mut fixture: Value = serde_json::from_str(HISTORICAL).unwrap();
-        fixture["cases"][0]["candidate"]["metadata"]["author"] = Value::String("Jörg ∑ 東京".to_owned());
+        fixture["cases"][0]["candidate"]["metadata"]["author"] =
+            Value::String("Jörg ∑ 東京".to_owned());
         let unicode = candidate_ids(&fixture.to_string()).unwrap();
-        fixture["cases"][0]["candidate"]["metadata"]["author"] = Value::String("J\\u00f6rg".to_owned());
-        assert_ne!(unicode[0].1, candidate_ids(&fixture.to_string()).unwrap()[0].1);
+        fixture["cases"][0]["candidate"]["metadata"]["author"] =
+            Value::String("J\\u00f6rg".to_owned());
+        assert_ne!(
+            unicode[0].1,
+            candidate_ids(&fixture.to_string()).unwrap()[0].1
+        );
         let baseline: Value = serde_json::from_str(HISTORICAL).unwrap();
         let mut reordered = baseline.clone();
         let a = reordered["cases"][0]["candidate"]["parents"][0].clone();
