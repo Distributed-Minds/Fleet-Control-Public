@@ -103,16 +103,16 @@ pub fn render_catalog(records: &[Project]) -> String {
             out.push_str(" / ");
             out.push_str(&escape(&claim.scope));
             out.push_str("</strong> <small>Claim status: ");
-        out.push_str(&escape(&claim.status));
-        out.push_str(" — ");
-        out.push_str(match claim.status.as_str() {
-            "OBSERVED_AT" => "Observed upstream claim, not clearance",
-            "SUPERSEDED" => "Superseded, historical only",
-            "RETRACTED" => "Retracted, not current",
-            "UNKNOWN" => "Unknown, not verified",
-            _ => "Unrecognized, do not rely on",
-        });
-        out.push_str("</small>: ");
+            out.push_str(&escape(&claim.status));
+            out.push_str(" — ");
+            out.push_str(match claim.status.as_str() {
+                "OBSERVED_AT" => "Observed upstream claim, not clearance",
+                "SUPERSEDED" => "Superseded, historical only",
+                "RETRACTED" => "Retracted, not current",
+                "UNKNOWN" => "Unknown, not verified",
+                _ => "Unrecognized, do not rely on",
+            });
+            out.push_str("</small>: ");
             out.push_str(&escape(&claim.statement));
             out.push_str(" <small>Evidence IDs: ");
             let mut ids = claim.evidence_ids.clone();
