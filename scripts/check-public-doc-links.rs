@@ -174,6 +174,16 @@ fn parse_destination(raw: &str) -> Result<Option<String>, String> {
     Ok(Some(decoded))
 }
 
+/// Odd-length runs of backslashes escape the next Markdown punctuation token.
+/// Even-length runs leave it active (with a literal backslash in the text).
+fn preceded_by_escape(bytes: &[u8], index: usize) -> bool {
+    let mut start = index;
+    while start > 0 && bytes[start - 1] == b'\\' {
+        start -= 1;
+    }
+    (index - start) % 2 == 1
+}
+
 fn collect_links(markdown: &str, document: &str, report: &mut Report) -> Vec<String> {
     let mut paths = Vec::new();
     let mut fenced: Option<(u8, usize)> = None;
@@ -198,7 +208,10 @@ fn collect_links(markdown: &str, document: &str, report: &mut Report) -> Vec<Str
         let bytes = visible.as_bytes();
         let mut i = 0;
         while i < bytes.len() {
-            if bytes[i] != b'[' || (i > 0 && bytes[i - 1] == b'!') {
+            if bytes[i] != b'['
+                || preceded_by_escape(bytes, i)
+                || (i > 0 && bytes[i - 1] == b'!' && !preceded_by_escape(bytes, i - 1))
+            {
                 i += 1;
                 continue;
             }
@@ -380,6 +393,31 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+
+    #[test]
+    fn escaped_bracket_is_not_a_link_and_escaped_bang_does_not_hide_one() {
+        let mut report = Report::default();
+        let paths = collect_links(
+            r#"\[literal](missing.md) [normal](exists.md) \![also-real](other.md) ![image](missing.png)"#,
+            "README.md",
+            &mut report,
+        );
+        assert_eq!(paths, vec!["exists.md", "other.md"]);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn even_and_odd_backslash_runs_preserve_markdown_escape_parity() {
+        let mut report = Report::default();
+        let paths = collect_links(
+            r#"\\[normal](a.md) \\\[literal](missing.md) \\![image](missing.png) \![normal](b.md)"#,
+            "README.md",
+            &mut report,
+        );
+        assert_eq!(paths, vec!["a.md", "b.md"]);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
     }
 
     #[test]
