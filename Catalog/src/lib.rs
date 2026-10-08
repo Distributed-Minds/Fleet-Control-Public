@@ -423,7 +423,9 @@ fn is_bidi_format(ch: char) -> bool {
 // source URL contains no forbidden whitespace. Check the decoded scalar values
 // with the same conservative policy used for unescaped characters.
 fn is_inadmissible_decoded(ch: char) -> bool {
-    !ch.is_ascii() && (ch.is_control() || ch.is_whitespace() || is_bidi_format(ch))
+    (!ch.is_ascii() && (ch.is_control() || ch.is_whitespace()))
+        || is_bidi_format(ch)
+        || is_invisible_path_format(ch)
 }
 
 /// Conservative, offline admission for externally displayed links. This does
