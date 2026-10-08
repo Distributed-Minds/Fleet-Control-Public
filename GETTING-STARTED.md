@@ -89,13 +89,12 @@ In ChatGPT, choose **New project** in the sidebar. Name it anything you like, fo
 
 Open the project menu (`...`) → **Project settings**.
 
-From the release ZIP, open:
+Use the Project-instructions template from the installation path you chose:
 
-```text
-COPY-INTO-CHATGPT/PROJECT-INSTRUCTIONS.md
-```
+- **Option A — fork:** open [`Phase0/templates/PROJECT-INSTRUCTIONS.md`](Phase0/templates/PROJECT-INSTRUCTIONS.md) on **your fork's default branch**. The fork already includes this template; no release ZIP is needed for this path.
+- **Option B — release ZIP:** open `COPY-INTO-CHATGPT/PROJECT-INSTRUCTIONS.md` from the extracted ZIP.
 
-Copy the entire file into Project instructions. Replace every occurrence of:
+Copy the entire chosen template into Project instructions. Replace every occurrence of:
 
 ```text
 <OWNER>/<REPOSITORY>
@@ -132,20 +131,23 @@ This means agents may prepare branches and PRs, but a human decides what enters 
 
 ### 7. Create persistent scheduled agents
 
-The release ZIP contains one ready-made prompt per identity:
+Use the automation prompts from your chosen installation path:
 
-```text
-COPY-INTO-AUTOMATIONS/A1.md
-COPY-INTO-AUTOMATIONS/A2.md
-COPY-INTO-AUTOMATIONS/A3.md
-COPY-INTO-AUTOMATIONS/A4.md
-COPY-INTO-AUTOMATIONS/A5.md
-```
+- **Option A — fork:** open [`Phase0/templates/AUTOMATION-PROMPT.md`](Phase0/templates/AUTOMATION-PROMPT.md) on **your fork's default branch**. It is a generic template: make one separate prompt copy for every enabled identity (`A1`, `A2`, etc.). Replace `<AGENT_ID>` in each copy with that identity; never leave the placeholder unchanged or reuse one identity for multiple automations.
+- **Option B — release ZIP:** the ZIP includes an individual prompt for each identity:
+
+  ```text
+  COPY-INTO-AUTOMATIONS/A1.md
+  COPY-INTO-AUTOMATIONS/A2.md
+  COPY-INTO-AUTOMATIONS/A3.md
+  COPY-INTO-AUTOMATIONS/A4.md
+  COPY-INTO-AUTOMATIONS/A5.md
+  ```
 
 For each agent you enable:
 
-1. open its file;
-2. replace `<OWNER>/<REPOSITORY>` with your repository;
+1. open its ZIP prompt or the corresponding separate fork-template copy;
+2. replace `<OWNER>/<REPOSITORY>` with your repository, and replace `<AGENT_ID>` with the matching identity if you used the generic fork template;
 3. create a recurring task/automation in the supported ChatGPT surface you use;
 4. paste the prompt as the task instruction;
 5. choose a schedule appropriate for your plan and workload;
