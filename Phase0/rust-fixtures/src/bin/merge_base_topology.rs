@@ -276,20 +276,34 @@ fn check(cases: &[Case]) -> Result<usize, Vec<String>> {
     }
 }
 
-fn main() {
-    let cases: Vec<Case> = match serde_json::from_str(FIXTURES) {
-        Ok(cases) => cases,
-        Err(error) => {
-            eprintln!("merge-base-topology fixture parse failed: {error}");
-            std::process::exit(1);
-        }
+// Preserve a zero-argument checked-in baseline, but also admit caller-owned
+// fixtures for actual process-level semantic regression and input-boundary
+// tests. This oracle remains read-only and grants no Git mutation authority.
+fn run() -> Result<usize, String> {
+    let mut args = std::env::args_os().skip(1);
+    let input = args.next();
+    if args.next().is_some() {
+        return Err("usage: merge_base_topology [fixture.json]".to_owned());
+    }
+    let content = match input {
+        Some(path) => std::fs::read_to_string(&path).map_err(|error| {
+            format!(
+                "cannot read merge-base fixture {}: {error}",
+                std::path::Path::new(&path).display()
+            )
+        })?,
+        None => FIXTURES.to_owned(),
     };
-    match check(&cases) {
+    let cases: Vec<Case> = serde_json::from_str(&content)
+        .map_err(|error| format!("merge-base-topology fixture parse failed: {error}"))?;
+    check(&cases).map_err(|errors| errors.join("\n"))
+}
+
+fn main() {
+    match run() {
         Ok(count) => println!("merge-base-topology: {count} read-only model fixtures PASS"),
-        Err(errors) => {
-            for error in errors {
-                eprintln!("merge-base-topology: {error}");
-            }
+        Err(error) => {
+            eprintln!("merge-base-topology: {error}");
             std::process::exit(1);
         }
     }

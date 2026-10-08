@@ -79,48 +79,14 @@ fn git_id(value: &str) -> bool {
             .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
-/// Python's historical identity oracle serializes objects with
-/// sort_keys=True, separators=(",", ":"), ensure_ascii=False.
-/// Serialize every object recursively in lexicographic Unicode key order,
-/// independent of serde_json's optional preserve_order feature.
-/// The typed Candidate contains no floating-point fields (whose cross-runtime
-/// canonical format would need a separate compatibility contract).
+/// Byte-exact canonical candidate material for a future vetted SHA-256 engine.
+/// Mirrors Python json.dumps(sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+/// for this typed, integer/string-only schema; serde_json's pinned default Map
+/// ordering is lexical and serialization retains UTF-8 Unicode text.
+/// This function DOES NOT compute or verify a cryptographic candidate identity.
 fn canonical_candidate_bytes(candidate: &Candidate) -> Result<Vec<u8>, String> {
-    let value = serde_json::to_value(candidate).map_err(|e| e.to_string())?;
-    let mut bytes = Vec::new();
-    write_canonical_json(&value, &mut bytes)?;
-    Ok(bytes)
-}
-
-fn write_canonical_json(value: &serde_json::Value, bytes: &mut Vec<u8>) -> Result<(), String> {
-    match value {
-        serde_json::Value::Object(fields) => {
-            bytes.push(b'{');
-            let mut keys: Vec<_> = fields.keys().collect();
-            keys.sort_unstable();
-            for (index, key) in keys.iter().enumerate() {
-                if index != 0 {
-                    bytes.push(b',');
-                }
-                serde_json::to_writer(&mut *bytes, key).map_err(|e| e.to_string())?;
-                bytes.push(b':');
-                write_canonical_json(fields.get(key.as_str()).expect("iterated map key"), bytes)?;
-            }
-            bytes.push(b'}');
-        }
-        serde_json::Value::Array(items) => {
-            bytes.push(b'[');
-            for (index, item) in items.iter().enumerate() {
-                if index != 0 {
-                    bytes.push(b',');
-                }
-                write_canonical_json(item, bytes)?;
-            }
-            bytes.push(b']');
-        }
-        scalar => serde_json::to_writer(&mut *bytes, scalar).map_err(|e| e.to_string())?,
-    }
-    Ok(())
+    let value = serde_json::to_value(candidate).map_err(|error| error.to_string())?;
+    serde_json::to_vec(&value).map_err(|error| error.to_string())
 }
 
 fn validate_candidate(candidate: &Candidate, supported: &[usize]) -> Result<(), String> {
@@ -345,46 +311,6 @@ mod tests {
     }
 
     #[test]
-    fn canonical_bytes_match_historical_python_sorted_utf8_format() {
-        let input: serde_json::Value = serde_json::from_str(
-            r#"{"z":"é","b":{"β":7,"a":2},"a":["☃",1]}"#,
-        )
-        .unwrap();
-        let mut encoded = Vec::new();
-        write_canonical_json(&input, &mut encoded).unwrap();
-        assert_eq!(
-            encoded,
-            r#"{"a":["☃",1],"b":{"a":2,"β":7},"z":"é"}"#.as_bytes()
-        );
-    }
-
-    #[test]
-    fn canonical_candidate_has_sorted_nested_keys_and_preserves_parent_order() {
-        let fixture = sample();
-        let normal = &fixture.cases[0].candidate;
-        let canonical = canonical_candidate_bytes(normal).unwrap();
-        let text = String::from_utf8(canonical.clone()).unwrap();
-        assert!(text.starts_with(r#"{"compatibility_basis":"constructor-v1-exact","#));
-        assert!(text.contains(
-            r#""metadata":{"author":"Example Author <author@example.invalid>","author_time":"1700000000 +0000","committer":"Example Committer <committer@example.invalid>","committer_time":"1700000000 +0000","encoding":"UTF-8","message":"Integrate source\n","signature_policy":"none"}"#
-        ));
-        let mut reversed = normal.clone();
-        reversed.parents.reverse();
-        assert_ne!(canonical, canonical_candidate_bytes(&reversed).unwrap());
-        reversed.parents.reverse();
-        assert_eq!(canonical, canonical_candidate_bytes(&reversed).unwrap());
-    }
-
-    #[test]
-    fn canonical_json_handles_escaped_control_bytes_without_ascii_folding_unicode() {
-        let input: serde_json::Value =
-            serde_json::from_str(r#"{"z":"é","a":"line\n\t\"quoted\""}"#).unwrap();
-        let mut encoded = Vec::new();
-        write_canonical_json(&input, &mut encoded).unwrap();
-        assert_eq!(encoded, r#"{"a":"line\n\t\"quoted\"","z":"é"}"#.as_bytes());
-    }
-
-    #[test]
     fn original_six_cases_match_independent_envelopes() {
         assert_eq!(validate(&sample()).unwrap(), 6);
     }
@@ -451,5 +377,74 @@ mod tests {
         let mut fixture = sample();
         fixture.stale_head_cases.clear();
         assert!(validate(&fixture).is_err());
+    }
+
+    #[test]
+    fn python_canonical_json_bytes_match_four_historical_vectors() {
+        let fixture = sample();
+        // Immutable byte vectors from the original Python canonical_json
+        // contract, not the expected disposition fields in the fixtures.
+        let normal = fixture
+            .cases
+            .iter()
+            .find(|case| case.name == "normal-two-parent")
+            .unwrap();
+        let reversed = fixture
+            .cases
+            .iter()
+            .find(|case| case.name == "reversed-parents-same-tree")
+            .unwrap();
+        assert_eq!(
+            canonical_candidate_bytes(&normal.candidate).unwrap(),
+            r###"{"compatibility_basis":"constructor-v1-exact","constructor_version":"constructor-v1","metadata":{"author":"Example Author <author@example.invalid>","author_time":"1700000000 +0000","committer":"Example Committer <committer@example.invalid>","committer_time":"1700000000 +0000","encoding":"UTF-8","message":"Integrate source\n","signature_policy":"none"},"operation_kind":"explicit-merge","parent_count":2,"parents":["1111111111111111111111111111111111111111","2222222222222222222222222222222222222222"],"schema_version":"integration-candidate-v1","source_commit":"2222222222222222222222222222222222222222","target_commit":"1111111111111111111111111111111111111111","tree":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"###.as_bytes()
+        );
+        assert_eq!(
+            canonical_candidate_bytes(&reversed.candidate).unwrap(),
+            r###"{"compatibility_basis":"constructor-v1-exact","constructor_version":"constructor-v1","metadata":{"author":"Example Author <author@example.invalid>","author_time":"1700000000 +0000","committer":"Example Committer <committer@example.invalid>","committer_time":"1700000000 +0000","encoding":"UTF-8","message":"Integrate source\n","signature_policy":"none"},"operation_kind":"explicit-merge","parent_count":2,"parents":["2222222222222222222222222222222222222222","1111111111111111111111111111111111111111"],"schema_version":"integration-candidate-v1","source_commit":"2222222222222222222222222222222222222222","target_commit":"1111111111111111111111111111111111111111","tree":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"###.as_bytes()
+        );
+        assert_ne!(
+            canonical_candidate_bytes(&normal.candidate).unwrap(),
+            canonical_candidate_bytes(&reversed.candidate).unwrap(),
+            "parent reversal changes the canonical input to SHA-256"
+        );
+        for case in &fixture.cases {
+            assert!(
+                canonical_candidate_bytes(&case.candidate).is_ok(),
+                "all four historical candidate envelopes must serialize"
+            );
+        }
+    }
+
+    #[test]
+    fn python_utf8_and_embedded_newline_bytes_do_not_become_ascii_escapes() {
+        let mut candidate = sample().cases.remove(0).candidate;
+        candidate.metadata.author = "Jörg ∑ 東京".to_owned();
+        candidate.metadata.message = "Line one\nLine two".to_owned();
+        let bytes = canonical_candidate_bytes(&candidate).unwrap();
+        assert_eq!(bytes, r###"{"compatibility_basis":"constructor-v1-exact","constructor_version":"constructor-v1","metadata":{"author":"Jörg ∑ 東京","author_time":"1700000000 +0000","committer":"Example Committer <committer@example.invalid>","committer_time":"1700000000 +0000","encoding":"UTF-8","message":"Line one\nLine two","signature_policy":"none"},"operation_kind":"explicit-merge","parent_count":2,"parents":["1111111111111111111111111111111111111111","2222222222222222222222222222222222222222"],"schema_version":"integration-candidate-v1","source_commit":"2222222222222222222222222222222222222222","target_commit":"1111111111111111111111111111111111111111","tree":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"###.as_bytes());
+        let decoded = String::from_utf8(bytes).expect("canonical material is UTF-8");
+        assert!(decoded.contains("Jörg ∑ 東京"));
+        assert!(!decoded.contains(r"\\u"));
+    }
+
+    #[test]
+    fn normalized_candidate_bytes_bind_metadata_tree_and_constructor_generation() {
+        let original = sample().cases.remove(0).candidate;
+        let baseline = canonical_candidate_bytes(&original).unwrap();
+        let mut changed = original.clone();
+        changed.tree = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_owned();
+        assert_ne!(baseline, canonical_candidate_bytes(&changed).unwrap());
+        changed = original.clone();
+        changed.metadata.message.push('!');
+        assert_ne!(baseline, canonical_candidate_bytes(&changed).unwrap());
+        changed = original.clone();
+        changed.parent_count = 3;
+        assert_ne!(baseline, canonical_candidate_bytes(&changed).unwrap());
+        changed = original.clone();
+        changed.constructor_version = "constructor-v2".to_owned();
+        assert_ne!(baseline, canonical_candidate_bytes(&changed).unwrap());
+        changed = original.clone();
+        changed.compatibility_basis = "alternate".to_owned();
+        assert_ne!(baseline, canonical_candidate_bytes(&changed).unwrap());
     }
 }

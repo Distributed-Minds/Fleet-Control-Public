@@ -124,6 +124,24 @@ fn incomplete_duplicate_or_future_version_suites_fail_closed() {
 }
 
 #[test]
+fn unrecognized_manifest_transition_outcomes_fail_closed() {
+    // An unrecognized receipt previously inherited the all-current fixture
+    // baseline and produced a misleading positive PASS from the real binary.
+    for outcome in [
+        "",
+        "success",
+        "failed",
+        "UNKNOWN",
+        "unknown ",
+        "already_committed",
+    ] {
+        let mut fixture = baseline();
+        fixture["cases"][0]["facts"]["manifest_transition_outcome"] = json!(outcome);
+        rejects_without_success(&fixture, "unrecognized manifest transition outcome");
+    }
+}
+
+#[test]
 fn malformed_fact_types_and_unknown_fields_fail_closed() {
     let mut string_bool = baseline();
     string_bool["cases"][0]["facts"]["archive_exact"] = json!("true");

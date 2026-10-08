@@ -9,6 +9,47 @@ use std::fs;
 use std::path::PathBuf;
 use std::process;
 
+const REQUIRED_DECISION_IDS: &[&str] = &[
+    "backlog-cannot-renew",
+    "duplicate-semantic-case",
+    "policy-generation-move",
+    "missing-restoration-debt",
+];
+const REQUIRED_WORKLOAD_IDS: &[&str] = &[
+    "ordinary-load",
+    "correlated-burst-overload",
+    "sustained-arrivals-restoration-progress",
+    "priority-starvation-detected",
+    "priority-starvation-failsafe",
+    "zero-restoration-capacity",
+    "service-loss-then-recovery",
+    "restored-terminal",
+    "separate-restoration-capacity",
+];
+const REQUIRED_PLANNING_IDS: &[&str] = &[
+    "rare-event-false-positive-heavy",
+    "sensitivity-baseline",
+    "low-action-volume",
+    "high-action-volume",
+];
+
+// A case count alone is not coverage: replacing one historical negative
+// scenario with a new, self-consistent positive scenario must fail admission.
+fn require_original_ids<'a>(
+    family: &str,
+    ids: impl Iterator<Item = &'a str>,
+    required: &[&str],
+    failures: &mut Vec<String>,
+) {
+    let observed: HashSet<&str> = ids.collect();
+    let expected: HashSet<&str> = required.iter().copied().collect();
+    if observed != expected {
+        failures.push(format!(
+            "{family} family has missing, extra, or renamed historical case identities"
+        ));
+    }
+}
+
 fn yes() -> bool {
     true
 }
@@ -153,7 +194,13 @@ fn simulate(c: &Workload) -> Result<Value, String> {
         return Ok(json!({"disposition": "INVALID_MISSING_DEBT"}));
     }
     if !c.authority_current && !effect_active {
-        let caps = capacities(&c.service_capacity, ticks)?;
+        // Revoked authority with no active effect still carries adjudication
+        // backlog. Honor the selected capacity mode rather than silently
+        // treating a separate-capacity workload as shared capacity.
+        let caps = match c.capacity_mode {
+            CapacityMode::Shared => capacities(&c.service_capacity, ticks)?,
+            CapacityMode::Separate => capacities(&c.adjudication_capacity, ticks)?,
+        };
         for (arrival, cap) in c.arrivals.iter().zip(caps.iter()) {
             backlog = backlog
                 .checked_add(*arrival)
@@ -324,6 +371,24 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
             failures.push(format!("incomplete {name} family: {found} < {minimum}"));
         }
     }
+    require_original_ids(
+        "decision",
+        f.decision_cases.iter().map(|case| case.id.as_str()),
+        REQUIRED_DECISION_IDS,
+        &mut failures,
+    );
+    require_original_ids(
+        "workload",
+        f.workload_cases.iter().map(|case| case.id.as_str()),
+        REQUIRED_WORKLOAD_IDS,
+        &mut failures,
+    );
+    require_original_ids(
+        "planning",
+        f.planning_cases.iter().map(|case| case.id.as_str()),
+        REQUIRED_PLANNING_IDS,
+        &mut failures,
+    );
     let mut seen = HashSet::new();
     for id in f
         .decision_cases
@@ -353,6 +418,28 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
                     failures.push(format!("{}: expected must be a JSON object", c.id));
                     continue;
                 };
+                // Sparse historical fixture expectations are intentional, but
+                // a disposition-only assertion must not certify restoration timing,
+                // starvation deadlines, or backlog accounting. Require the
+                // minimum observable metrics for the computed state.
+                let required: &[&str] = match actual.get("disposition").and_then(Value::as_str) {
+                    Some("RESTORED") if c.initial_restoration_work > 0 => {
+                        &["disposition", "first_progress_tick", "restored_by_tick"]
+                    }
+                    Some("INVALID_STARVATION" | "DEGRADED_ESCALATION") => {
+                        &["disposition", "escalation_tick"]
+                    }
+                    Some("RESTORE_PROGRESS") => &["disposition", "first_progress_tick"],
+                    Some("OK" | "OVERLOAD_VISIBLE" | "RESTORED") => {
+                        &["disposition", "final_adjudication_backlog"]
+                    }
+                    _ => &["disposition"],
+                };
+                for key in required {
+                    if !expected.contains_key(*key) {
+                        failures.push(format!("{}: missing expected {key}", c.id));
+                    }
+                }
                 for (key, value) in expected {
                     if actual.get(key) != Some(value) {
                         failures.push(format!(
@@ -361,9 +448,6 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
                             actual.get(key)
                         ));
                     }
-                }
-                if !expected.contains_key("disposition") {
-                    failures.push(format!("{}: missing expected disposition", c.id));
                 }
             }
             Err(reason) => failures.push(format!("{}: {reason}", c.id)),
@@ -475,6 +559,33 @@ mod tests {
     }
 
     #[test]
+    fn sparse_expectations_cannot_skip_material_capacity_semantics() {
+        // Each omission previously retained a matching disposition while
+        // silently bypassing an essential measured property.
+        for (case_index, key) in [
+            (0, "final_adjudication_backlog"),
+            (1, "final_adjudication_backlog"),
+            (2, "first_progress_tick"),
+            (2, "restored_by_tick"),
+            (3, "escalation_tick"),
+            (4, "escalation_tick"),
+            (6, "restored_by_tick"),
+            (7, "final_adjudication_backlog"),
+            (8, "first_progress_tick"),
+        ] {
+            let mut suite = original();
+            suite["workload_cases"][case_index]["expected"]
+                .as_object_mut()
+                .expect("expected workload metrics")
+                .remove(key);
+            let errors = mutated(suite)
+                .expect_err("missing semantic assertion must fail closed")
+                .join(" ");
+            assert!(errors.contains(key), "missing {key}: {errors}");
+        }
+    }
+
+    #[test]
     fn changed_restoration_capacity_is_detected() {
         let mut changed = original();
         changed["workload_cases"][8]["restoration_capacity"][0] = json!(0);
@@ -493,6 +604,21 @@ mod tests {
         let mut changed = original();
         changed["decision_cases"][0]["expected"] = json!("OK");
         assert!(mutated(changed).is_err());
+    }
+
+    #[test]
+    fn renamed_historical_case_in_any_family_must_not_false_pass() {
+        for family in ["decision_cases", "workload_cases", "planning_cases"] {
+            let mut changed = original();
+            changed[family][0]["id"] = json!("invented-easy-positive-case");
+            let errors = mutated(changed)
+                .expect_err("original scenario identity may not be substituted")
+                .join(" ");
+            assert!(
+                errors.contains("missing, extra, or renamed historical case identities"),
+                "{family}: {errors}"
+            );
+        }
     }
 
     #[test]
@@ -533,5 +659,49 @@ mod tests {
         let mut arrival = original();
         arrival["workload_cases"][0]["arrivals"][0] = json!(-2);
         assert!(mutated(arrival).is_err());
+    }
+    #[test]
+    fn already_restored_separate_capacity_uses_adjudication_not_shared_service() {
+        let mut case = original()["workload_cases"][0].clone();
+        case["authority_current"] = json!(false);
+        case["effect_active"] = json!(false);
+        case["restoration_debt"] = json!(false);
+        case["initial_adjudication_backlog"] = json!(0);
+        case["initial_restoration_work"] = json!(0);
+        case["arrivals"] = json!([2, 0]);
+        case["capacity_mode"] = json!("separate");
+        case["service_capacity"] = json!([0, 0]);
+        case["adjudication_capacity"] = json!([1, 1]);
+        case["restoration_capacity"] = json!([0, 0]);
+        let scenario: Workload = serde_json::from_value(case.clone()).expect("valid workload");
+        assert_eq!(
+            simulate(&scenario),
+            Ok(json!({"disposition": "RESTORED", "final_adjudication_backlog": 0})),
+            "separate adjudication capacity must continue draining backlog"
+        );
+
+        // The irrelevant shared service-capacity trace cannot silently
+        // override the separate-mode authoritative adjudication capacity.
+        case["service_capacity"] = json!([99, 99]);
+        let scenario: Workload = serde_json::from_value(case.clone()).unwrap();
+        assert_eq!(
+            simulate(&scenario),
+            Ok(json!({"disposition": "RESTORED", "final_adjudication_backlog": 0}))
+        );
+
+        // Even the no-active-effect path must reject invalid separate-mode
+        // adjudication capacity rather than ignoring the negative input.
+        case["adjudication_capacity"] = json!([-1, 1]);
+        let scenario: Workload = serde_json::from_value(case.clone()).unwrap();
+        assert!(simulate(&scenario).is_err());
+
+        case["capacity_mode"] = json!("shared");
+        case["service_capacity"] = json!([1, 1]);
+        let scenario: Workload = serde_json::from_value(case).unwrap();
+        assert_eq!(
+            simulate(&scenario),
+            Ok(json!({"disposition": "RESTORED", "final_adjudication_backlog": 0})),
+            "existing shared-capacity behavior must remain intact"
+        );
     }
 }
