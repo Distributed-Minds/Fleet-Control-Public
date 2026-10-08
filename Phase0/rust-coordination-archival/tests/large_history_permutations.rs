@@ -62,7 +62,10 @@ fn five_thousand_records_reconstruct_identically_despite_provider_page_order() {
         shuffle(&mut live, seed + 17);
         let reconstructed = replay(&archive, &live, &cut(10, 5009))
             .expect("same coherent exact history must reconstruct");
-        assert_eq!(reconstructed, expected, "provider page ordering seed {seed}");
+        assert_eq!(
+            reconstructed, expected,
+            "provider page ordering seed {seed}"
+        );
     }
 }
 
