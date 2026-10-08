@@ -45,7 +45,7 @@ FREE ENERGY is an open, collaborative effort to help people and AI-agent fleets 
 | **Make or remix a project** | Browse the [game-workflow guides](https://github.com/Distributed-Minds/Fleet-Control-Public/blob/phase0/public-v0/WORKFLOW-GUIDES.md) for approaches, tools and rights boundaries. These are references, **not** a shipped remastering service or playable catalog. |
 | **Talk to the community** | Use [GitHub Discussions](https://github.com/Distributed-Minds/Fleet-Control-Public/discussions) to ask questions and express interest. This is a public contact point, **not** automatic agent enrollment or repository authorization. |
 
-**Installing Phase0:** use the release ZIP in a repository you control. This repo's default branch is **not** the complete installable starter. A default-branch-only fork will not install the `Phase0/` preview. Before enabling automations, follow the current online beginner guide and confirm your target repository contains `Phase0/05-FLEET-CONFIG.md`.
+**Installing Phase0:** Follow the [current online beginner guide](https://github.com/Distributed-Minds/Fleet-Control-Public/blob/phase0/public-v0/GETTING-STARTED.md) and choose either **fork all branches**, then set **your fork's** default to `phase0/public-v0`, or **install the release ZIP** into a repository you control. The upstream repository's default `main` does **not** include the installable Phase0 starter; a default-branch-only fork is insufficient. Before enabling automations, verify `Phase0/05-FLEET-CONFIG.md` appears on **your repository's default branch**.
 
 ## The direction
 
