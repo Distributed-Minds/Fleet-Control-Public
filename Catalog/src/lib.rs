@@ -256,7 +256,11 @@ fn is_portable_repository_segment(part: &str) -> bool {
     {
         return false;
     }
-    let stem = part.split('.').next().unwrap_or_default().to_ascii_uppercase();
+    let stem = part
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_uppercase();
     !matches!(
         stem.as_str(),
         "CON"
