@@ -184,9 +184,9 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
     let html = render::render_catalog(&records);
     let output = root.join("site/index.html");
     if check {
-        if let Err(error) = validate_output_directory(
-            output.parent().expect("catalog output always has a parent"),
-        ) {
+        if let Err(error) =
+            validate_output_directory(output.parent().expect("catalog output always has a parent"))
+        {
             eprintln!("{}: {error}", output.display());
             return ExitCode::FAILURE;
         }
@@ -426,7 +426,10 @@ mod atomic_render_tests {
             .expect_err("symlinked output directory must fail closed");
         assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
         assert!(error.to_string().contains("symlink prohibited"));
-        assert_eq!(fs::read_to_string(outside.join("index.html")).unwrap(), "original");
+        assert_eq!(
+            fs::read_to_string(outside.join("index.html")).unwrap(),
+            "original"
+        );
         assert!(validate_output_directory(&alias).is_err());
         let entries: Vec<_> = fs::read_dir(&outside)
             .expect("read unrelated directory")
