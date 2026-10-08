@@ -144,9 +144,21 @@ pub enum Verdict {
 }
 
 fn named(id: &str) -> bool {
-    // Opaque provider identifiers must not carry terminal/control bytes.
-    // Such bytes can corrupt serialized receipts and audit boundaries.
-    !id.trim().is_empty() && !id.chars().any(char::is_control)
+    // Provider IDs are opaque, but they appear in operator receipts and logs.
+    // C0/C1 controls and Unicode bidirectional formatting may forge the
+    // displayed relationship between an ID and its authorization receipt.
+    !id.trim().is_empty()
+        && !id.chars().any(|ch| {
+            ch.is_control()
+                || matches!(
+                    ch,
+                    '\u{061c}'
+                        | '\u{200e}'
+                        | '\u{200f}'
+                        | '\u{202a}'..='\u{202e}'
+                        | '\u{2066}'..='\u{2069}'
+                )
+        })
 }
 
 /// Deterministic, side-effect-free AND composition of independent bases.
@@ -451,6 +463,44 @@ mod tests {
                 evaluate(&witness),
                 Verdict::Ineligible(Denial::OrderNotProven),
                 "unsafe ordering ID admitted: {bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn bidi_formatting_cannot_spoof_replay_or_admission_identifiers() {
+        for marker in [
+            '\u{061c}', '\u{200e}', '\u{200f}', '\u{202a}', '\u{202b}', '\u{202c}', '\u{202d}',
+            '\u{202e}', '\u{2066}', '\u{2067}', '\u{2068}', '\u{2069}',
+        ] {
+            let bad = format!("record{marker}42");
+            // Identical forged source IDs in all independent inputs must
+            // still fail; a mere mismatch test would not prove the guard.
+            let mut witness = fixture();
+            witness.observed_source.record_id = bad.clone();
+            witness.archive.source.record_id = bad.clone();
+            witness.authority.source.record_id = bad.clone();
+            assert_eq!(
+                evaluate(&witness),
+                Verdict::Ineligible(Denial::SourceMoved),
+                "bidi source identity admitted: {marker:?}"
+            );
+
+            let mut witness = fixture();
+            witness.operation_id = bad.clone();
+            witness.authority.operation_id = bad.clone();
+            assert_eq!(
+                evaluate(&witness),
+                Verdict::Ineligible(Denial::AuthorityNotCurrent),
+                "bidi operation identity admitted: {marker:?}"
+            );
+
+            let mut forged = item("a", 10);
+            forged.stable_id = bad;
+            assert_eq!(
+                replay(&[forged, item("b", 11)], &[item("c", 12)], &cut()),
+                Err(ReplayFailure::UntrustedCut),
+                "bidi replay record identity admitted: {marker:?}"
             );
         }
     }
