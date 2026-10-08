@@ -85,8 +85,8 @@ where
 /// checked-in page must not follow an untracked filesystem symlink out of the
 /// project source directory (or silently accept a JSON-named directory).
 fn read_render_manifest(path: &Path) -> Result<String, String> {
-    let metadata = fs::symlink_metadata(path)
-        .map_err(|error| format!("{}: {error}", path.display()))?;
+    let metadata =
+        fs::symlink_metadata(path).map_err(|error| format!("{}: {error}", path.display()))?;
     if !metadata.file_type().is_file() {
         return Err(format!(
             "{}: render source must be a regular file (symlinks prohibited)",
