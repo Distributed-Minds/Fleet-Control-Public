@@ -110,8 +110,7 @@ fn changed_causal_facts() -> Vec<(&'static str, Value)> {
         ["renewal_evidence_current"] = json!(true);
 
     let mut workload = baseline();
-    named_case(&mut workload, "workload_cases", "ordinary-load")
-        ["service_capacity"][0] = json!(0);
+    named_case(&mut workload, "workload_cases", "ordinary-load")["service_capacity"][0] = json!(0);
 
     let mut planning = baseline();
     named_case(
@@ -149,8 +148,7 @@ fn compiled_rust_admits_baseline_but_rejects_changed_causal_facts() {
 #[test]
 fn rust_closes_historical_sparse_expected_and_identity_loopholes() {
     let mut sparse = baseline();
-    named_case(&mut sparse, "workload_cases", "ordinary-load")
-        ["expected"]
+    named_case(&mut sparse, "workload_cases", "ordinary-load")["expected"]
         .as_object_mut()
         .expect("expected workload metrics")
         .remove("final_adjudication_backlog");
@@ -168,7 +166,10 @@ fn rust_closes_historical_sparse_expected_and_identity_loopholes() {
 #[ignore = "explicit archival Python 3 comparison; never an installed runtime dependency"]
 fn archived_python_and_compiled_rust_agree_on_causal_changes_and_record_deltas() {
     let original = Input::new(&baseline());
-    assert!(rust(&original.0).status.success(), "Rust historical baseline");
+    assert!(
+        rust(&original.0).status.success(),
+        "Rust historical baseline"
+    );
     assert!(
         python(&original.0).status.success(),
         "Python historical baseline"
@@ -184,8 +185,7 @@ fn archived_python_and_compiled_rust_agree_on_causal_changes_and_record_deltas()
     // The original Python runner checked only provided expected fields; the
     // Rust migration intentionally requires essential workload measurements.
     let mut sparse = baseline();
-    named_case(&mut sparse, "workload_cases", "ordinary-load")
-        ["expected"]
+    named_case(&mut sparse, "workload_cases", "ordinary-load")["expected"]
         .as_object_mut()
         .expect("workload metrics")
         .remove("final_adjudication_backlog");
