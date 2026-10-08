@@ -48,7 +48,11 @@ fn every_required_nullable_property_rejects_absence_at_its_own_path() {
             "supersedes_record_revision",
             "review.supersedes_record_revision",
         ),
-        ("/rights_claims/0", "license_id", "rights_claims[0].license_id"),
+        (
+            "/rights_claims/0",
+            "license_id",
+            "rights_claims[0].license_id",
+        ),
         (
             "/permission_decisions/0",
             "decided_at",
@@ -73,9 +77,9 @@ fn every_required_nullable_property_rejects_absence_at_its_own_path() {
         let errors =
             validate_manifest(&record.to_string()).expect_err("missing nullable key must reject");
         assert!(
-            errors.iter().any(|error| {
-                error == &format!("{expected}: missing schema-required field")
-            }),
+            errors
+                .iter()
+                .any(|error| { error == &format!("{expected}: missing schema-required field") }),
             "omitted {expected} bypassed the schema key-presence gate: {errors:?}"
         );
     }
@@ -96,11 +100,12 @@ fn missing_nullable_claim_history_successor_is_detected() {
         .as_object_mut()
         .expect("event object")
         .remove("new_claim_id");
-    let errors =
-        validate_manifest(&record.to_string()).expect_err("incomplete event must reject");
+    let errors = validate_manifest(&record.to_string()).expect_err("incomplete event must reject");
     assert!(
-        errors.iter().any(|error| error
-            == "review.claim_history[0].new_claim_id: missing schema-required field"),
+        errors
+            .iter()
+            .any(|error| error
+                == "review.claim_history[0].new_claim_id: missing schema-required field"),
         "missing historical successor key not detected: {errors:?}"
     );
 }
