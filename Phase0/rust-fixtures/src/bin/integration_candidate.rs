@@ -12,6 +12,7 @@ use std::env;
 use std::fs;
 use std::process;
 
+#[cfg(test)]
 const HISTORICAL_FIXTURE: &str =
     include_str!("../../../fixtures/integration-candidate-v1.json");
 
@@ -108,7 +109,9 @@ fn validate_candidate(candidate: &Candidate, supported: &[usize]) -> Result<(), 
 }
 
 fn normal_parents(candidate: &Candidate) -> bool {
-    candidate.parents == [candidate.target_commit.as_str(), candidate.source_commit.as_str()]
+    candidate.parents.len() == 2
+        && candidate.parents[0] == candidate.target_commit
+        && candidate.parents[1] == candidate.source_commit
 }
 
 fn disposition(case: &Case, normal: &Candidate) -> Result<String, String> {
