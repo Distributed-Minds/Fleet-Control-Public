@@ -105,9 +105,6 @@ struct Case {
 
 fn check_case(c: &Case) -> Vec<String> {
     use Action::*;
-    use Authority::*;
-    use Lineage::*;
-    use Resource::*;
     use Verdict::*;
 
     let mut errors = Vec::new();
@@ -124,26 +121,26 @@ fn check_case(c: &Case) -> Vec<String> {
         reject("approval-required execution cannot claim autonomous success");
     }
 
-    if c.lineage != Current
+    if c.lineage != Lineage::Current
         && matches!(c.action, ScheduledWrite | Cleanup)
         && expected != LineageUnknown
     {
         reject("mutation with unknown/conflicting lineage must fail closed");
     }
 
-    if c.lineage == Current && c.action == ScheduledWrite {
+    if c.lineage == Lineage::Current && c.action == ScheduledWrite {
         match c.authority {
-            Stale if expected != AuthorityStale => {
+            Authority::Stale if expected != AuthorityStale => {
                 reject("stale scheduled authority must be denied")
             }
-            Forged | Incompatible if expected != AuthorityUnavailable => {
+            Authority::Forged | Authority::Incompatible if expected != AuthorityUnavailable => {
                 reject("unverifiable scheduled authority cannot permit a write")
             }
             _ => {}
         }
     }
 
-    if c.action == Cleanup && c.lineage == Current && c.authority == Stale {
+    if c.action == Cleanup && c.lineage == Lineage::Current && c.authority == Authority::Stale {
         let required = if c.recovery {
             AllowRecovery
         } else {
@@ -154,27 +151,29 @@ fn check_case(c: &Case) -> Vec<String> {
         }
     }
 
-    if c.action == Cleanup && c.resource == Ambiguous && expected != Ambiguous {
+    if c.action == Cleanup && c.resource == Resource::Ambiguous && expected != Ambiguous {
         reject("ambiguous resource incarnation is not cleanup success");
     }
 
     match expected {
         AllowFenced => {
             if c.action != ScheduledWrite
-                || c.lineage != Current
+                || c.lineage != Lineage::Current
                 || c.authority != Authority::Current
-                || c.resource != Exact
+                || c.resource != Resource::Exact
                 || !c.fenced
                 || c.approval.is_some()
             {
-                reject("ALLOW_FENCED requires a fenced current scheduled write on an exact resource");
+                reject(
+                    "ALLOW_FENCED requires a fenced current scheduled write on an exact resource",
+                );
             }
         }
         AllowRecovery => {
             if c.action != Cleanup
-                || c.lineage != Current
-                || c.authority != Stale
-                || c.resource != Exact
+                || c.lineage != Lineage::Current
+                || c.authority != Authority::Stale
+                || c.resource != Resource::Exact
                 || !c.recovery
                 || c.approval.is_some()
             {
@@ -183,15 +182,15 @@ fn check_case(c: &Case) -> Vec<String> {
         }
         PassedClean => {
             if c.action != Cleanup
-                || c.lineage != Current
-                || c.resource != AbsentWithReceipt
+                || c.lineage != Lineage::Current
+                || c.resource != Resource::AbsentWithReceipt
                 || c.approval.is_some()
             {
                 reject("PASSED_CLEAN requires authoritative receipt for this exact cleanup");
             }
         }
         ReuseLineage => {
-            if c.action != Reconcile || c.lineage != Current || !c.successor_evidence {
+            if c.action != Reconcile || c.lineage != Lineage::Current || !c.successor_evidence {
                 reject("REUSE_LINEAGE requires explicit successor continuity evidence");
             }
         }
@@ -241,8 +240,8 @@ fn run() -> Result<(), String> {
     if args.next().is_some() {
         return Err("usage: github_capability [fixture.json]".to_owned());
     }
-    let json = fs::read_to_string(&input)
-        .map_err(|e| format!("cannot read {}: {e}", input.display()))?;
+    let json =
+        fs::read_to_string(&input).map_err(|e| format!("cannot read {}: {e}", input.display()))?;
     let fixture: Fixture = serde_json::from_str(&json)
         .map_err(|e| format!("invalid fixture {}: {e}", input.display()))?;
     match validate(&fixture) {
