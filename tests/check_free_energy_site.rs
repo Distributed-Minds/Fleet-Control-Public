@@ -183,6 +183,25 @@ fn has_unique_main_landmark(elements: &[&str]) -> bool {
     }
 }
 
+/// Ignore required copy that exists only in source comments. This is a
+/// conservative source check, not a complete HTML text-content parser.
+/// An unclosed comment consumes the rest of the document.
+fn without_html_comments(html: &str) -> String {
+    let mut uncommented = String::with_capacity(html.len());
+    let mut remaining = html;
+    loop {
+        let Some(start) = remaining.find("<!--") else {
+            uncommented.push_str(remaining);
+            return uncommented;
+        };
+        uncommented.push_str(&remaining[..start]);
+        let Some(end) = remaining[start + 4..].find("-->") else {
+            return uncommented;
+        };
+        remaining = &remaining[start + 4 + end + 3..];
+    }
+}
+
 fn expect(errors: &mut Vec<String>, condition: bool, message: impl Into<String>) {
     if !condition {
         errors.push(message.into());
@@ -203,6 +222,7 @@ fn validate(root: &Path) -> Vec<String> {
         }
     }
     let html = &content[0];
+    let uncommented_html = without_html_comments(html);
     let css = &content[1];
     let readme = &content[2];
     let elements = tags(html);
@@ -223,10 +243,10 @@ fn validate(root: &Path) -> Vec<String> {
         .filter_map(|tag| attribute(tag, "href"))
         .collect();
 
-    expect(&mut errors, html.contains("<html lang=\"en\">"), "Missing English HTML language");
+    expect(&mut errors, uncommented_html.contains("<html lang=\"en\">"), "Missing English HTML language");
     expect(
         &mut errors,
-        html.contains("<meta name=\"viewport\""),
+        uncommented_html.contains("<meta name=\"viewport\""),
         "Missing viewport meta tag",
     );
     expect(
@@ -312,7 +332,7 @@ fn validate(root: &Path) -> Vec<String> {
         ("Not yet available", "Missing future-feature disclaimer"),
         ("Fleet-Control Phase0", "Current orchestration preview not identified"),
     ] {
-        expect(&mut errors, html.contains(required), explanation);
+        expect(&mut errors, uncommented_html.contains(required), explanation);
     }
     expect(
         &mut errors,
@@ -370,6 +390,32 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn comments_cannot_forge_required_public_safety_copy() {
+        let html = r#"<main><!-- Do not post secrets -->
+<p>Posting does not enroll a contributor.</p></main>"#;
+        let live = without_html_comments(html);
+        assert!(!live.contains("Do not post secrets"));
+        assert!(live.contains("Posting does not enroll a contributor."));
+    }
+
+    #[test]
+    fn unclosed_html_comment_cannot_forge_required_copy() {
+        let live = without_html_comments(
+            "<main><p>Public questions.</p><!-- Do not post secrets",
+        );
+        assert_eq!(live, "<main><p>Public questions.</p>");
+        assert!(!live.contains("Do not post secrets"));
+    }
+
+    #[test]
+    fn required_copy_survives_adjacent_complete_comments() {
+        let live = without_html_comments(
+            "<!-- Do not post secrets --> <p>Do not post secrets</p> <!-- hidden -->",
+        );
+        assert_eq!(live, " <p>Do not post secrets</p> ");
+    }
 
     #[test]
     fn route_card_count_ignores_comments_attribute_spoofing_and_non_articles() {
