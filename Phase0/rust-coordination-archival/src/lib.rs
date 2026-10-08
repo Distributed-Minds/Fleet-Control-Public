@@ -521,8 +521,13 @@ mod tests {
 
             let mut invalid_cut = cut();
             invalid_cut.ordering.identity = disguised;
+            let mut archive = [item("a", 10), item("b", 11)];
+            let mut live = [item("c", 12)];
+            for record in archive.iter_mut().chain(live.iter_mut()) {
+                record.order_basis = invalid_cut.ordering.clone();
+            }
             assert_eq!(
-                replay(&[item("a", 10), item("b", 11)], &[item("c", 12)], &invalid_cut),
+                replay(&archive, &live, &invalid_cut),
                 Err(ReplayFailure::UntrustedCut),
                 "variation selector disguised the certified order basis: {marker:?}"
             );
