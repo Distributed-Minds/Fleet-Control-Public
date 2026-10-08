@@ -34,10 +34,73 @@ fn is_open_element(tag: &str, name: &str) -> bool {
     tag[..end].eq_ignore_ascii_case(name)
 }
 
+/// Read HTML attributes as complete name/value tokens, not arbitrary substrings.
+/// Otherwise data-href or href text inside another quoted attribute can forge
+/// a passing link/id check. This remains a restricted source checker, not a
+/// general HTML parser.
 fn attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
-    let needle = format!("{name}=\"");
-    let rest = tag.split_once(needle.as_str())?.1;
-    Some(rest.split_once('"')?.0)
+    let bytes = tag.as_bytes();
+    let mut i = 0;
+
+    // Skip the element name before inspecting attributes.
+    while i < bytes.len() && !bytes[i].is_ascii_whitespace() && bytes[i] != b'/' {
+        i += 1;
+    }
+    while i < bytes.len() {
+        while i < bytes.len() && (bytes[i].is_ascii_whitespace() || bytes[i] == b'/') {
+            i += 1;
+        }
+        let start = i;
+        while i < bytes.len()
+            && !bytes[i].is_ascii_whitespace()
+            && bytes[i] != b'='
+            && bytes[i] != b'/'
+        {
+            i += 1;
+        }
+        if start == i {
+            break;
+        }
+        let key = &tag[start..i];
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if i == bytes.len() || bytes[i] != b'=' {
+            continue; // Boolean attribute; the next token may have a value.
+        }
+        i += 1;
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if i == bytes.len() {
+            break;
+        }
+
+        let quote = bytes[i];
+        let value = if quote == b'"' || quote == b'\'' {
+            i += 1;
+            let value_start = i;
+            while i < bytes.len() && bytes[i] != quote {
+                i += 1;
+            }
+            if i == bytes.len() {
+                break; // Unterminated quote: do not guess subsequent attributes.
+            }
+            let value = &tag[value_start..i];
+            i += 1;
+            value
+        } else {
+            let value_start = i;
+            while i < bytes.len() && !bytes[i].is_ascii_whitespace() {
+                i += 1;
+            }
+            &tag[value_start..i]
+        };
+        if key.eq_ignore_ascii_case(name) {
+            return Some(value);
+        }
+    }
+    None
 }
 
 fn expect(errors: &mut Vec<String>, condition: bool, message: impl Into<String>) {
@@ -260,5 +323,21 @@ data="x"></OBject><EMBED/>"#;
     #[test]
     fn empty_attribute_is_not_a_working_link() {
         assert_eq!(attribute(r#"a href="""#, "href"), Some(""));
+    }
+
+    #[test]
+    fn attribute_names_cannot_be_spoofed_by_prefixes_or_quoted_text() {
+        assert_eq!(attribute(r#"a data-href="#main""#, "href"), None);
+        assert_eq!(attribute(r#"main data-id="main""#, "id"), None);
+        assert_eq!(attribute(r#"a title='fake href="#main"' data-href="#main""#, "href"), None);
+        assert_eq!(attribute(r#"a aria-label="fake id=main" data-id="main""#, "id"), None);
+        assert_eq!(
+            attribute(r#"a data-href="#wrong" HREF = "#main""#, "href"),
+            Some("#main")
+        );
+        assert_eq!(
+            attribute(r#"a title='quoted attribute text' href="#main""#, "href"),
+            Some("#main")
+        );
     }
 }
