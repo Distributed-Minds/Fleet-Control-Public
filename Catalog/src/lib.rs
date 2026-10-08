@@ -637,6 +637,92 @@ fn validate_required_nullable_presence(json: &str) -> Result<(), Vec<String>> {
     }
 }
 
+fn check_visible_text(problems: &mut Vec<String>, path: &str, value: &str) {
+    if value.chars().any(is_bidi_format_character) {
+        problems.push(format!(
+            "{path}: bidirectional formatting control in visible metadata"
+        ));
+    }
+}
+
+fn validate_visible_metadata(record: &Project, problems: &mut Vec<String>) {
+    check_visible_text(problems, "display_name", &record.display_name);
+    if let Some(reason) = &record.upstream.source_revision_reason {
+        check_visible_text(problems, "upstream.source_revision_reason", reason);
+    }
+    for (i, value) in record.play.content_requirements.iter().enumerate() {
+        check_visible_text(problems, &format!("play.content_requirements[{i}]"), value);
+    }
+    for (i, claim) in record.rights_claims.iter().enumerate() {
+        for (field, value) in [
+            ("scope", claim.scope.as_str()),
+            ("statement", claim.statement.as_str()),
+        ] {
+            check_visible_text(problems, &format!("rights_claims[{i}].{field}"), value);
+        }
+        if let Some(license) = &claim.license_id {
+            check_visible_text(problems, &format!("rights_claims[{i}].license_id"), license);
+        }
+        for (j, value) in claim.exceptions_or_restrictions.iter().enumerate() {
+            check_visible_text(
+                problems,
+                &format!("rights_claims[{i}].exceptions_or_restrictions[{j}]"),
+                value,
+            );
+        }
+    }
+    for (i, decision) in record.permission_decisions.iter().enumerate() {
+        for (field, value) in [
+            ("scope", decision.scope.as_str()),
+            ("decision_reason", decision.decision_reason.as_str()),
+        ] {
+            check_visible_text(
+                problems,
+                &format!("permission_decisions[{i}].{field}"),
+                value,
+            );
+        }
+        if let Some(value) = &decision.reviewer {
+            check_visible_text(
+                problems,
+                &format!("permission_decisions[{i}].reviewer"),
+                value,
+            );
+        }
+        if let Some(value) = &decision.decided_at {
+            check_visible_text(
+                problems,
+                &format!("permission_decisions[{i}].decided_at"),
+                value,
+            );
+        }
+    }
+    for (i, evidence) in record.evidence.iter().enumerate() {
+        for (field, value) in [
+            ("subject_scope", evidence.subject_scope.as_str()),
+            ("reviewer", evidence.reviewer.as_str()),
+            ("observed_at", evidence.observed_at.as_str()),
+        ] {
+            check_visible_text(problems, &format!("evidence[{i}].{field}"), value);
+        }
+    }
+    for (field, value) in [
+        ("review.reviewer", record.review.reviewer.as_str()),
+        ("review.reviewed_at", record.review.reviewed_at.as_str()),
+    ] {
+        check_visible_text(problems, field, value);
+    }
+    for (i, event) in record.review.claim_history.iter().enumerate() {
+        for (field, value) in [("reason", event.reason.as_str()), ("at", event.at.as_str())] {
+            check_visible_text(
+                problems,
+                &format!("review.claim_history[{i}].{field}"),
+                value,
+            );
+        }
+    }
+}
+
 /// Parse the closed object layout and reject a bounded set of dangerous
 /// cross-record claims. Success is NOT full JSON Schema or rights approval.
 pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
@@ -645,6 +731,7 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
         serde_json::from_str(json).map_err(|e| vec![format!("JSON/typed manifest: {e}")])?;
     let mut problems = Vec::new();
     validate_vocabulary(&record, &mut problems);
+    validate_visible_metadata(&record, &mut problems);
     // These cardinality rules are required by the checked-in v5 JSON Schema;
     // serde accepts an empty Vec, so typed decoding alone cannot enforce them.
     for (path, count) in [
