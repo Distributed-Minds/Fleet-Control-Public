@@ -362,17 +362,46 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
         }
     }
 
-    // v0 history is a current-snapshot review note, not an append-only ledger.
-    // Both sides of an asserted supersession must resolve in this manifest.
+    // The manifest is a current snapshot, not an append-only ledger.
+    // Each supersession source has at most one disposition; known IDs alone
+    // cannot justify cyclic, self-referential or contradictory history.
+    let mut history_sources = HashSet::new();
+    let mut history_links = HashMap::new();
     for event in &record.review.claim_history {
         if !claims.contains(event.old_claim_id.as_str()) {
             problems.push(format!("supersession references unknown old claim {}", event.old_claim_id));
+        }
+        if !history_sources.insert(event.old_claim_id.as_str()) {
+            problems.push(format!("duplicate supersession source {}", event.old_claim_id));
         }
         if let Some(new_id) = event.new_claim_id.as_deref() {
             if !claims.contains(new_id) {
                 problems.push(format!("supersession references unknown new claim {new_id}"));
             }
+            if new_id == event.old_claim_id {
+                problems.push(format!("claim self-supersession: {new_id}"));
+            }
+            history_links.entry(event.old_claim_id.as_str()).or_insert(new_id);
         }
+    }
+    let mut examined = HashSet::new();
+    for origin in history_links.keys().copied() {
+        if examined.contains(origin) {
+            continue;
+        }
+        let mut chain = HashSet::new();
+        let mut node = origin;
+        while let Some(&next) = history_links.get(node) {
+            if !chain.insert(node) {
+                problems.push(format!("cyclic claim supersession at {node}"));
+                break;
+            }
+            if examined.contains(node) {
+                break;
+            }
+            node = next;
+        }
+        examined.extend(chain);
     }
 
     match &record.play.status {
@@ -477,6 +506,48 @@ mod tests {
         });
         assert!(validate_manifest(&attack).is_err());
     }
+    #[test]
+    fn claim_history_rejects_self_cycles_and_duplicate_predecessors() {
+        let self_link = changed(LUANTI, |v| {
+            v["review"]["claim_history"] = json!([{
+                "old_claim_id":"code-lgpl", "new_claim_id":"code-lgpl",
+                "reason":"invalid self", "at":"2026-10-08T00:00:00Z"
+            }]);
+        });
+        let errors = validate_manifest(&self_link).unwrap_err();
+        assert!(errors.iter().any(|e| e.contains("self-supersession")), "{errors:?}");
+
+        let cycle = changed(LUANTI, |v| {
+            v["review"]["claim_history"] = json!([
+                {"old_claim_id":"code-lgpl", "new_claim_id":"media-default",
+                 "reason":"forward", "at":"2026-10-08T00:00:00Z"},
+                {"old_claim_id":"media-default", "new_claim_id":"code-lgpl",
+                 "reason":"backward", "at":"2026-10-08T00:00:01Z"}
+            ]);
+        });
+        let errors = validate_manifest(&cycle).unwrap_err();
+        assert!(errors.iter().any(|e| e.contains("cyclic claim supersession")), "{errors:?}");
+
+        let duplicate = changed(LUANTI, |v| {
+            v["review"]["claim_history"] = json!([
+                {"old_claim_id":"code-lgpl", "new_claim_id":"media-default",
+                 "reason":"first", "at":"2026-10-08T00:00:00Z"},
+                {"old_claim_id":"code-lgpl", "new_claim_id":null,
+                 "reason":"conflicting", "at":"2026-10-08T00:00:01Z"}
+            ]);
+        });
+        let errors = validate_manifest(&duplicate).unwrap_err();
+        assert!(errors.iter().any(|e| e.contains("duplicate supersession source")), "{errors:?}");
+
+        let acyclic = changed(LUANTI, |v| {
+            v["review"]["claim_history"] = json!([{
+                "old_claim_id":"code-lgpl", "new_claim_id":"media-default",
+                "reason":"valid direct link", "at":"2026-10-08T00:00:00Z"
+            }]);
+        });
+        assert!(validate_manifest(&acyclic).is_ok());
+    }
+
     fn assert_url_fixture(source: &str, expected_key: &str) {
         let fixture: Value = serde_json::from_str(source).expect("valid fixture JSON");
         for case in fixture["cases"].as_array().expect("cases array") {
