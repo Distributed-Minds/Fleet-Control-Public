@@ -37,7 +37,7 @@
       "overrides": {
         "source_revision_reason": "  "
       },
-      "expected_valid": true
+      "expected_valid": false
     },
     {
       "id": "null-pin-nonstring-reason",
