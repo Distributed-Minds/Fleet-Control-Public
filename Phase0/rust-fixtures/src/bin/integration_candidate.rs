@@ -78,6 +78,51 @@ fn git_id(value: &str) -> bool {
             .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
+
+/// Python's historical identity oracle serializes objects with
+/// sort_keys=True, separators=(",", ":"), ensure_ascii=False.
+/// Serialize every object recursively in lexicographic Unicode key order,
+/// independent of serde_json's optional preserve_order feature.
+/// The typed Candidate contains no floating-point fields (whose cross-runtime
+/// canonical format would need a separate compatibility contract).
+fn canonical_candidate_bytes(candidate: &Candidate) -> Result<Vec<u8>, String> {
+    let value = serde_json::to_value(candidate).map_err(|e| e.to_string())?;
+    let mut bytes = Vec::new();
+    write_canonical_json(&value, &mut bytes)?;
+    Ok(bytes)
+}
+
+fn write_canonical_json(value: &serde_json::Value, bytes: &mut Vec<u8>) -> Result<(), String> {
+    match value {
+        serde_json::Value::Object(fields) => {
+            bytes.push(b'{');
+            let mut keys: Vec<_> = fields.keys().collect();
+            keys.sort_unstable();
+            for (index, key) in keys.iter().enumerate() {
+                if index != 0 {
+                    bytes.push(b',');
+                }
+                serde_json::to_writer(&mut *bytes, key).map_err(|e| e.to_string())?;
+                bytes.push(b':');
+                write_canonical_json(&fields[*key], bytes)?;
+            }
+            bytes.push(b'}');
+        }
+        serde_json::Value::Array(items) => {
+            bytes.push(b'[');
+            for (index, item) in items.iter().enumerate() {
+                if index != 0 {
+                    bytes.push(b',');
+                }
+                write_canonical_json(item, bytes)?;
+            }
+            bytes.push(b']');
+        }
+        scalar => serde_json::to_writer(&mut *bytes, scalar).map_err(|e| e.to_string())?,
+    }
+    Ok(())
+}
+
 fn validate_candidate(candidate: &Candidate, supported: &[usize]) -> Result<(), String> {
     if candidate.schema_version != "integration-candidate-v1"
         || candidate.operation_kind != "explicit-merge"
@@ -131,8 +176,8 @@ fn disposition(case: &Case, normal: &Candidate) -> Result<String, String> {
     let mut reversed = normal.clone();
     reversed.parents.reverse();
     if c == &reversed && c.parents != normal.parents {
-        let original = serde_json::to_vec(normal).map_err(|e| e.to_string())?;
-        let ordered = serde_json::to_vec(c).map_err(|e| e.to_string())?;
+        let original = canonical_candidate_bytes(normal)?;
+        let ordered = canonical_candidate_bytes(c)?;
         if original == ordered {
             return Err("reversed parents did not change canonical payload".to_owned());
         }
@@ -270,6 +315,46 @@ mod tests {
 
     fn sample() -> Fixture {
         serde_json::from_str(HISTORICAL_FIXTURE).expect("historical fixture must parse")
+    }
+
+    #[test]
+    fn canonical_bytes_match_historical_python_sorted_utf8_format() {
+        let input: serde_json::Value = serde_json::from_str(
+            r#"{"z":"é","b":{"β":7,"a":2},"a":["☃",1]}"#,
+        )
+        .unwrap();
+        let mut encoded = Vec::new();
+        write_canonical_json(&input, &mut encoded).unwrap();
+        assert_eq!(
+            encoded,
+            r#"{"a":["☃",1],"b":{"a":2,"β":7},"z":"é"}"#.as_bytes()
+        );
+    }
+
+    #[test]
+    fn canonical_candidate_has_sorted_nested_keys_and_preserves_parent_order() {
+        let fixture = sample();
+        let normal = &fixture.cases[0].candidate;
+        let canonical = canonical_candidate_bytes(normal).unwrap();
+        let text = String::from_utf8(canonical.clone()).unwrap();
+        assert!(text.starts_with(r#"{"compatibility_basis":"constructor-v1-exact","#));
+        assert!(text.contains(
+            r#""metadata":{"author":"Example Author <author@example.invalid>","author_time":"1700000000 +0000","committer":"Example Committer <committer@example.invalid>","committer_time":"1700000000 +0000","encoding":"UTF-8","message":"Integrate source\n","signature_policy":"none"}"#
+        ));
+        let mut reversed = normal.clone();
+        reversed.parents.reverse();
+        assert_ne!(canonical, canonical_candidate_bytes(&reversed).unwrap());
+        reversed.parents.reverse();
+        assert_eq!(canonical, canonical_candidate_bytes(&reversed).unwrap());
+    }
+
+    #[test]
+    fn canonical_json_handles_escaped_control_bytes_without_ascii_folding_unicode() {
+        let input: serde_json::Value =
+            serde_json::from_str(r#"{"z":"é","a":"line\n\t\"quoted\""}"#).unwrap();
+        let mut encoded = Vec::new();
+        write_canonical_json(&input, &mut encoded).unwrap();
+        assert_eq!(encoded, r#"{"a":"line\n\t\"quoted\"","z":"é"}"#.as_bytes());
     }
 
     #[test]
