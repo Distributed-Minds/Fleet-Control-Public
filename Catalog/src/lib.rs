@@ -170,10 +170,137 @@ fn is_full_git_sha(value: &str) -> bool {
 // Unicode directional formatting can visually re-order repository paths while
 // leaving different exact bytes. Never use such display-spoofable strings as
 // identities for rights scopes or pinned evidence.
+/// Conservative, offline RFC3339 profile for evidence and review timestamps.
+/// Validates calendar dates and explicit time zones without network/currentness
+/// inference. Leap-second (':60') claims are rejected unless a separately
+/// authoritative leap-second schedule is introduced.
+fn is_rfc3339_timestamp(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() < 20 || !value.is_ascii() {
+        return false;
+    }
+    for (index, separator) in [(4, b'-'), (7, b'-'), (10, b'T'), (13, b':'), (16, b':')] {
+        if bytes.get(index) != Some(&separator) {
+            return false;
+        }
+    }
+    let number = |start: usize, end: usize| -> Option<u32> {
+        let slice = bytes.get(start..end)?;
+        if !slice.iter().all(u8::is_ascii_digit) {
+            return None;
+        }
+        std::str::from_utf8(slice).ok()?.parse().ok()
+    };
+    let (Some(year), Some(month), Some(day), Some(hour), Some(minute), Some(second)) = (
+        number(0, 4),
+        number(5, 7),
+        number(8, 10),
+        number(11, 13),
+        number(14, 16),
+        number(17, 19),
+    ) else {
+        return false;
+    };
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let max_day = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => return false,
+    };
+    if year == 0 || day == 0 || day > max_day || hour > 23 || minute > 59 || second > 59 {
+        return false;
+    }
+
+    let mut zone = 19;
+    if bytes.get(zone) == Some(&b'.') {
+        zone += 1;
+        let fraction_start = zone;
+        while bytes.get(zone).is_some_and(u8::is_ascii_digit) {
+            zone += 1;
+        }
+        if zone == fraction_start {
+            return false;
+        }
+    }
+    match bytes.get(zone).copied() {
+        Some(b'Z') => zone + 1 == bytes.len(),
+        Some(b'+') | Some(b'-') => {
+            bytes.len() == zone + 6
+                && bytes[zone + 3] == b':'
+                && number(zone + 1, zone + 3).is_some_and(|hour| hour <= 23)
+                && number(zone + 4, zone + 6).is_some_and(|minute| minute <= 59)
+        }
+        _ => false,
+    }
+}
+
 fn is_bidi_format_character(ch: char) -> bool {
     matches!(
         ch,
         '\u{061c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'
+    )
+}
+
+fn is_portable_repository_segment(part: &str) -> bool {
+    // A path used as a rights or evidence identity must not alias another
+    // path on a common checkout platform. Windows trims trailing dots, maps
+    // device names (including extensions) specially, and uses ':' for NTFS
+    // alternate data streams. Reject rather than silently reinterpret these
+    // spellings. This does not prove that an upstream path exists.
+    if part.ends_with('.')
+        || part
+            .chars()
+            .any(|ch| matches!(ch, ':' | '<' | '>' | '"' | '|' | '?' | '*'))
+    {
+        return false;
+    }
+    let stem = part
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_uppercase();
+    !matches!(
+        stem.as_str(),
+        "CON"
+            | "PRN"
+            | "AUX"
+            | "NUL"
+            | "COM1"
+            | "COM2"
+            | "COM3"
+            | "COM4"
+            | "COM5"
+            | "COM6"
+            | "COM7"
+            | "COM8"
+            | "COM9"
+            | "LPT1"
+            | "LPT2"
+            | "LPT3"
+            | "LPT4"
+            | "LPT5"
+            | "LPT6"
+            | "LPT7"
+            | "LPT8"
+            | "LPT9"
+            | "COM¹"
+            | "COM²"
+            | "COM³"
+            | "LPT¹"
+            | "LPT²"
+            | "LPT³"
+    )
+}
+
+// Invisible formatting characters can make two distinct Git paths look
+// identical in rights and pinned-evidence reviews. Do not normalize them:
+// repository identity and scoped license decisions require exact visible paths.
+fn is_invisible_path_format(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{00ad}' | '\u{034f}' | '\u{180e}' | '\u{200b}'..='\u{200d}' | '\u{2060}' | '\u{feff}'
     )
 }
 
@@ -185,13 +312,33 @@ fn is_relative_path(value: &str) -> bool {
         && !value.starts_with('/')
         && !value.contains('%')
         && !value.contains('\\')
-        && !value
-            .chars()
-            .any(|ch| ch.is_control() || is_bidi_format_character(ch))
-        && value
-            .split('/')
-            .all(|part| !part.is_empty() && part != "." && part != ".." && part.trim() == part)
-        && value.as_bytes().get(1).is_none_or(|b| *b != b':')
+        && !value.chars().any(|ch| {
+            ch.is_control() || is_bidi_format_character(ch) || is_invisible_path_format(ch)
+        })
+        && value.split('/').all(|part| {
+            !part.is_empty()
+                && part != "."
+                && part != ".."
+                && part.trim() == part
+                && is_portable_repository_segment(part)
+        })
+}
+
+// Bidirectional formatting controls change the perceived direction of link
+// paths and evidence references without changing the underlying URL bytes.
+// They must never be admitted as apparently trustworthy catalog links.
+fn is_bidi_format(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{061c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'
+    )
+}
+
+// Percent escapes may encode controls and Unicode spaces even when the raw
+// source URL contains no forbidden whitespace. Check the decoded scalar values
+// with the same conservative policy used for unescaped characters.
+fn is_inadmissible_decoded(ch: char) -> bool {
+    !ch.is_ascii() && (ch.is_control() || ch.is_whitespace() || is_bidi_format(ch))
 }
 
 /// Conservative, offline admission for externally displayed links. This does
@@ -258,9 +405,14 @@ fn is_public_https_url(url: &str) -> bool {
         b'A'..=b'F' => Some(b - b'A' + 10),
         _ => None,
     };
-    for (i, b) in bytes.iter().enumerate() {
-        if *b == b'%' {
-            let Some((hi, lo)) = bytes.get(i + 1).zip(bytes.get(i + 2)) else {
+    // Decode exactly one URL-escape layer before checking display-control
+    // characters. Checking only raw Unicode misses %E2%80%AE and similar
+    // bidi spoofs that browsers decode when following a link.
+    let mut decoded_url = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            let Some((hi, lo)) = bytes.get(index + 1).zip(bytes.get(index + 2)) else {
                 return false;
             };
             let (Some(hi), Some(lo)) = (decode_hex(*hi), decode_hex(*lo)) else {
@@ -275,7 +427,17 @@ fn is_public_https_url(url: &str) -> bool {
             {
                 return false;
             }
+            decoded_url.push(decoded);
+            index += 3;
+        } else {
+            decoded_url.push(bytes[index]);
+            index += 1;
         }
+    }
+    // Reject invalid UTF-8 after decoding; its browser presentation is not
+    // reliably equivalent to the evidence URL being reviewed.
+    if !std::str::from_utf8(&decoded_url).is_ok_and(|s| !s.chars().any(is_inadmissible_decoded)) {
+        return false;
     }
     true
 }
@@ -392,10 +554,89 @@ fn check_slug(problems: &mut Vec<String>, path: &str, value: &str) {
     }
 }
 
-// User-authored display metadata is not an authority source, but Unicode
-// directional formatting can make its visible claim differ from its bytes.
-// Reject it at admission, before text is displayed or used in rights reviews.
-// Non-ASCII language text that has no directional controls remains supported.
+// Serde Option<T> otherwise accepts a missing field as None. The published
+// schema requires these keys to be present even when their values are null.
+// Keep this shape gate separate from semantic rights/permission decisions.
+fn validate_required_nullable_presence(json: &str) -> Result<(), Vec<String>> {
+    use serde_json::Value;
+
+    let root: Value = serde_json::from_str(json)
+        .map_err(|error| vec![format!("JSON/typed manifest: {error}")])?;
+
+    fn require_keys(value: Option<&Value>, path: &str, keys: &[&str], problems: &mut Vec<String>) {
+        if let Some(object) = value.and_then(Value::as_object) {
+            for key in keys {
+                if !object.contains_key(*key) {
+                    problems.push(format!("{path}.{key}: missing schema-required field"));
+                }
+            }
+        }
+    }
+
+    let mut problems = Vec::new();
+    require_keys(
+        root.get("upstream"),
+        "upstream",
+        &["source_revision", "source_revision_reason"],
+        &mut problems,
+    );
+    require_keys(
+        root.get("play"),
+        "play",
+        &["upstream_download_url", "local_test_evidence_id"],
+        &mut problems,
+    );
+    require_keys(
+        root.get("adapter"),
+        "adapter",
+        &["target_id", "test_evidence_id"],
+        &mut problems,
+    );
+    require_keys(
+        root.get("review"),
+        "review",
+        &["supersedes_record_revision"],
+        &mut problems,
+    );
+
+    for (collection, keys) in [
+        ("rights_claims", &["license_id"][..]),
+        ("permission_decisions", &["decided_at", "reviewer"][..]),
+        ("evidence", &["repository", "commit", "path"][..]),
+    ] {
+        if let Some(items) = root.get(collection).and_then(Value::as_array) {
+            for (index, item) in items.iter().enumerate() {
+                require_keys(
+                    Some(item),
+                    &format!("{collection}[{index}]"),
+                    keys,
+                    &mut problems,
+                );
+            }
+        }
+    }
+    if let Some(events) = root
+        .pointer("/review/claim_history")
+        .and_then(Value::as_array)
+    {
+        for (index, event) in events.iter().enumerate() {
+            require_keys(
+                Some(event),
+                &format!("review.claim_history[{index}]"),
+                &["new_claim_id"],
+                &mut problems,
+            );
+        }
+    }
+
+    problems.sort();
+    if problems.is_empty() {
+        Ok(())
+    } else {
+        Err(problems)
+    }
+}
+
 fn check_visible_text(problems: &mut Vec<String>, path: &str, value: &str) {
     if value.chars().any(is_bidi_format_character) {
         problems.push(format!(
@@ -485,6 +726,7 @@ fn validate_visible_metadata(record: &Project, problems: &mut Vec<String>) {
 /// Parse the closed object layout and reject a bounded set of dangerous
 /// cross-record claims. Success is NOT full JSON Schema or rights approval.
 pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
+    validate_required_nullable_presence(json)?;
     let record: Project =
         serde_json::from_str(json).map_err(|e| vec![format!("JSON/typed manifest: {e}")])?;
     let mut problems = Vec::new();
@@ -540,6 +782,11 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
                 problems.push(format!("evidence[{index}].{field} must be nonblank"));
             }
         }
+        if !is_rfc3339_timestamp(&item.observed_at) {
+            problems.push(format!(
+                "evidence[{index}].observed_at must be an RFC3339 timestamp"
+            ));
+        }
     }
     for (field, value) in [
         ("reviewer", record.review.reviewer.as_str()),
@@ -549,11 +796,28 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
             problems.push(format!("review.{field} must be nonblank"));
         }
     }
+    if !is_rfc3339_timestamp(&record.review.reviewed_at) {
+        problems.push("review.reviewed_at must be an RFC3339 timestamp".to_string());
+    }
     for (index, event) in record.review.claim_history.iter().enumerate() {
         for (field, value) in [("reason", event.reason.as_str()), ("at", event.at.as_str())] {
             if value.trim().is_empty() {
                 problems.push(format!(
                     "review.claim_history[{index}].{field} must be nonblank"
+                ));
+            }
+        }
+        if !is_rfc3339_timestamp(&event.at) {
+            problems.push(format!(
+                "review.claim_history[{index}].at must be an RFC3339 timestamp"
+            ));
+        }
+    }
+    for (index, permission) in record.permission_decisions.iter().enumerate() {
+        if let Some(date) = &permission.decided_at {
+            if !is_rfc3339_timestamp(date) {
+                problems.push(format!(
+                    "permission_decisions[{index}].decided_at must be an RFC3339 timestamp"
                 ));
             }
         }

@@ -9,6 +9,20 @@ use std::{
     process::ExitCode,
 };
 
+/// Refuse symlinked render output directories, including links outside the
+/// project tree. This is a local input-admission check, not a race-free
+/// filesystem sandbox against concurrent untrusted directory replacement.
+fn validate_output_directory(parent: &Path) -> io::Result<()> {
+    let metadata = fs::symlink_metadata(parent)?;
+    if !metadata.file_type().is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "catalog output directory must be a real directory (symlink prohibited)",
+        ));
+    }
+    Ok(())
+}
+
 /// Publish a fully written page with a same-directory rename. An interrupted
 /// write must not truncate the previously generated static page. This changes
 /// only the local preview file; it is not hosting or publication authority.
@@ -16,6 +30,7 @@ fn write_complete_page(output: &Path, html: &str) -> io::Result<()> {
     let parent = output
         .parent()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "output has no parent"))?;
+    validate_output_directory(parent)?;
     let filename = output
         .file_name()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "output has no filename"))?;
@@ -80,6 +95,22 @@ where
     }
 }
 
+/// Reject symlinked or non-regular JSON inputs for the deterministic render path.
+/// The explicit validate CLI accepts caller-chosen paths, but generating the
+/// checked-in page must not follow an untracked filesystem symlink out of the
+/// project source directory (or silently accept a JSON-named directory).
+fn read_render_manifest(path: &Path) -> Result<String, String> {
+    let metadata =
+        fs::symlink_metadata(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    if !metadata.file_type().is_file() {
+        return Err(format!(
+            "{}: render source must be a regular file (symlinks prohibited)",
+            path.display()
+        ));
+    }
+    fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))
+}
+
 /// Render only after every local pilot manifest passes typed admission.
 /// This does not claim complete Draft 2020-12 schema or upstream rights clearance.
 fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
@@ -121,7 +152,7 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
     let mut ids = HashSet::new();
     let mut problems = Vec::new();
     for path in paths {
-        match fs::read_to_string(&path) {
+        match read_render_manifest(&path) {
             Ok(text) => match free_energy_catalog::validate_manifest(&text) {
                 Ok(record) => {
                     if !ids.insert(record.id.clone()) {
@@ -153,6 +184,12 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
     let html = render::render_catalog(&records);
     let output = root.join("site/index.html");
     if check {
+        if let Err(error) =
+            validate_output_directory(output.parent().expect("catalog output always has a parent"))
+        {
+            eprintln!("{}: {error}", output.display());
+            return ExitCode::FAILURE;
+        }
         match fs::read_to_string(&output) {
             Ok(previous) if previous == html => {
                 println!(
@@ -374,6 +411,36 @@ mod atomic_render_tests {
 
     #[cfg(unix)]
     #[test]
+    fn symlinked_output_directory_cannot_redirect_render_to_unrelated_files() {
+        use std::os::unix::fs::symlink;
+
+        let dir = sandbox();
+        let outside = dir.join("unrelated-directory");
+        let alias = dir.join("site");
+        fs::create_dir(&outside).expect("prepare unrelated output directory");
+        fs::write(outside.join("index.html"), "original").expect("seed unrelated file");
+        symlink(&outside, &alias).expect("redirect site directory outside project");
+
+        let target = alias.join("index.html");
+        let error = write_complete_page(&target, "replacement")
+            .expect_err("symlinked output directory must fail closed");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(error.to_string().contains("symlink prohibited"));
+        assert_eq!(
+            fs::read_to_string(outside.join("index.html")).unwrap(),
+            "original"
+        );
+        assert!(validate_output_directory(&alias).is_err());
+        let entries: Vec<_> = fs::read_dir(&outside)
+            .expect("read unrelated directory")
+            .map(|entry| entry.expect("entry").file_name())
+            .collect();
+        assert_eq!(entries, [std::ffi::OsString::from("index.html")]);
+        fs::remove_dir_all(&dir).expect("clean isolated sandbox");
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn replacing_existing_link_does_not_overwrite_its_target() {
         use std::os::unix::fs::symlink;
 
@@ -387,5 +454,84 @@ mod atomic_render_tests {
         assert_eq!(fs::read_to_string(&target).unwrap(), "new complete page");
         assert_eq!(fs::read_to_string(&outside).unwrap(), "unrelated original");
         fs::remove_dir_all(&dir).expect("clean test output");
+    }
+}
+
+#[cfg(test)]
+mod render_manifest_file_admission_tests {
+    use super::read_render_manifest;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    const PILOT: &str = include_str!("../projects/luanti.json");
+
+    struct Sandbox(PathBuf);
+
+    impl Sandbox {
+        fn new() -> Self {
+            let number = NEXT.fetch_add(1, Ordering::Relaxed);
+            let directory = std::env::temp_dir().join(format!(
+                "free-energy-render-manifest-admission-{}-{number}",
+                std::process::id()
+            ));
+            fs::create_dir(&directory).expect("unique local sandbox");
+            Self(directory)
+        }
+    }
+
+    impl Drop for Sandbox {
+        fn drop(&mut self) {
+            fs::remove_dir_all(&self.0).expect("remove isolated fixture");
+        }
+    }
+
+    #[test]
+    fn regular_json_manifest_remains_readable() {
+        let sandbox = Sandbox::new();
+        let project = sandbox.0.join("luanti.json");
+        fs::write(&project, PILOT).expect("write local pilot");
+        assert_eq!(read_render_manifest(&project).unwrap(), PILOT);
+    }
+
+    #[test]
+    fn directory_with_json_extension_is_rejected() {
+        let sandbox = Sandbox::new();
+        let not_a_file = sandbox.0.join("directory.json");
+        fs::create_dir(&not_a_file).expect("create disguised directory");
+        let diagnosis = read_render_manifest(&not_a_file).unwrap_err();
+        assert!(diagnosis.contains("regular file"), "{diagnosis}");
+    }
+
+    #[test]
+    fn missing_input_is_not_silently_accepted() {
+        let sandbox = Sandbox::new();
+        assert!(read_render_manifest(&sandbox.0.join("missing.json")).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinks_cannot_import_external_manifests_or_alias_local_ones() {
+        use std::os::unix::fs::symlink;
+
+        let sandbox = Sandbox::new();
+        let projects = sandbox.0.join("projects");
+        fs::create_dir(&projects).expect("project fixture directory");
+        let external = sandbox.0.join("outside-projects.json");
+        fs::write(&external, PILOT).expect("write outside project source");
+        let external_link = projects.join("external.json");
+        symlink(&external, &external_link).expect("link to external data");
+
+        let internal = projects.join("internal.json");
+        fs::write(&internal, PILOT).expect("write real manifest");
+        let alias = projects.join("alias.json");
+        symlink(&internal, &alias).expect("link to in-tree manifest");
+
+        for path in [&external_link, &alias] {
+            let diagnosis = read_render_manifest(path).unwrap_err();
+            assert!(diagnosis.contains("symlinks prohibited"), "{diagnosis}");
+        }
+        assert_eq!(read_render_manifest(&internal).unwrap(), PILOT);
     }
 }
