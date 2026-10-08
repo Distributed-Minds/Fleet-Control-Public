@@ -1,0 +1,28 @@
+name: Validate Phase0 Rust containment prototype
+on:
+  pull_request:
+    branches: [phase0/public-v0]
+    paths:
+      - '.github/workflows/phase0-rust-containment.yml'
+      - 'Phase0/rust-fixtures/**'
+      - 'Phase0/fixtures/containment-spec3.json'
+permissions:
+  contents: read
+jobs:
+  containment-rust:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install Rust compiler
+        run: rustup toolchain install 1.85.1 --profile minimal --component clippy --component rustfmt
+      - name: Compile and run semantic fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup run 1.85.1 cargo fmt --manifest-path Phase0/rust-fixtures/Cargo.toml -- --check
+          rustup run 1.85.1 cargo test --manifest-path Phase0/rust-fixtures/Cargo.toml
+          rustup run 1.85.1 cargo clippy --manifest-path Phase0/rust-fixtures/Cargo.toml --all-targets -- -D warnings
+          rustup run 1.85.1 cargo run --manifest-path Phase0/rust-fixtures/Cargo.toml -- Phase0/fixtures/containment-spec3.json

@@ -1,0 +1,11 @@
+[package]
+name = "free-energy-phase0-fixtures"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Exact direct versions. The transitive dependency graph still needs a
+# committed, reviewed Cargo.lock before this prototype may integrate.
+[dependencies]
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.145"
