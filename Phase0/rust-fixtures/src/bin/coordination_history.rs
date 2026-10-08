@@ -16,6 +16,26 @@ use std::process;
 const BASELINE: &str = include_str!("../../../fixtures/coordination-history-spec5.json");
 const FIXTURE_SCHEMA: &str = "fleet-control/coordination-history-spec5-fixtures/v1";
 const MINIMUM_CASES: usize = 18;
+const REQUIRED_HISTORICAL_CASE_IDS: &[&str] = &[
+    "positive-all-current",
+    "opaque-id-not-order",
+    "manifest-competing-successors",
+    "manifest-rollback",
+    "mixed-cut-omission",
+    "mixed-cut-overlap-dedup",
+    "source-version-moved",
+    "authority-revoked",
+    "retention-expires-before-horizon",
+    "key-custody-lost",
+    "caller-self-weakens-horizon",
+    "authorized-future-only-downgrade",
+    "authorized-bounded-retirement",
+    "horizon-rollback-after-downgrade",
+    "lost-ack-manifest-reconcile",
+    "partial-delete-retry",
+    "protected-active-owner",
+    "incomplete-pagination",
+];
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -147,6 +167,17 @@ fn check_baseline(suite: &Suite, failures: &mut Vec<String>) {
     }
 }
 
+fn require_original_scenario_ids(suite: &Suite, failures: &mut Vec<String>) {
+    // A same-count replacement must not erase a historical negative scenario.
+    // Additive scenarios are permitted; original identity is not fixture-controlled.
+    let present: HashSet<&str> = suite.cases.iter().map(|case| case.id.as_str()).collect();
+    for required in REQUIRED_HISTORICAL_CASE_IDS {
+        if !present.contains(required) {
+            failures.push(format!("missing required historical scenario id: {required}"));
+        }
+    }
+}
+
 fn validate(suite: &Suite) -> Result<usize, Vec<String>> {
     let mut failures = Vec::new();
     if suite.schema != FIXTURE_SCHEMA || suite.issue != 22 {
@@ -162,6 +193,7 @@ fn validate(suite: &Suite) -> Result<usize, Vec<String>> {
         ));
     }
     check_baseline(suite, &mut failures);
+    require_original_scenario_ids(suite, &mut failures);
     let mut ids = HashSet::new();
     for case in &suite.cases {
         if case.id.trim().is_empty() || !ids.insert(case.id.as_str()) {
@@ -239,6 +271,25 @@ mod tests {
         let errors = validate(&suite).unwrap_err().join(" ");
         assert!(errors.contains("incomplete"));
         assert!(errors.contains("missing all-current"));
+    }
+
+    #[test]
+    fn each_same_count_replacement_of_original_scenario_is_rejected() {
+        for old_id in REQUIRED_HISTORICAL_CASE_IDS {
+            let mut suite = source();
+            let case = suite
+                .cases
+                .iter_mut()
+                .find(|case| case.id == *old_id)
+                .expect("historical case must be present");
+            case.id = format!("forged-replacement-for-{old_id}");
+            let failures = validate(&suite).expect_err("renamed original must fail");
+            let missing = format!("missing required historical scenario id: {old_id}");
+            assert!(
+                failures.iter().any(|failure| failure == &missing),
+                "{old_id}: {failures:?}"
+            );
+        }
     }
 
     #[test]
