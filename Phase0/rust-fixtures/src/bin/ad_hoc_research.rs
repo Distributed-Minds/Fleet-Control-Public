@@ -35,6 +35,89 @@ const GROUPS: [(&str, usize); 6] = [
     ("packet_field_cases", 5),
 ];
 
+// An envelope count is not coverage: exchanging a hard historical negative
+// scenario for an unrelated easy positive with the same expected result must
+// not silently downgrade the migrated oracle. These names are deliberately
+// pinned in compiled code rather than read from the untrusted fixture.
+const REQUIRED_ORIGINAL_CASE_IDS: &[(&str, &[&str])] = &[
+    (
+        "publication_cases",
+        &[
+            "complete-absent-current-authority",
+            "existing-complete",
+            "existing-incomplete",
+            "duplicate-equivalent",
+            "inventory-unknown",
+            "authority-stale",
+            "self-asserted-authority-ignored",
+            "schema-incompatible",
+            "locator-conflict",
+            "provider-locator-unknown-before-create",
+        ],
+    ),
+    (
+        "identity_cases",
+        &[
+            "same-semantic-retry",
+            "presentation-only-variance-same-identity",
+            "changed-content-new-identity",
+            "changed-source-new-identity",
+            "temporary-cannot-claim-persistent-state",
+            "shared-transport-principal-not-persistent-identity",
+            "packet-storage-not-policy",
+            "recursive-derivative-not-independent",
+            "pure-research-branch-creation",
+            "exceptional-existing-surface-without-authority",
+            "exceptional-mutation-active-collision",
+        ],
+    ),
+    (
+        "source_cases",
+        &[
+            "default-authority-first",
+            "branch-fully-contained",
+            "diverged-unique-evidence",
+            "stale-pr-unique-caveat",
+            "branch-name-only",
+            "default-unresolved",
+            "default-head-moved-during-research",
+            "consumed-source-ref-deleted",
+            "same-path-default-vs-nondefault",
+        ],
+    ),
+    (
+        "recovery_cases",
+        &[
+            "cutoff-before-create",
+            "cutoff-after-create-before-ack",
+            "lost-ack-retry",
+            "authority-expired-after-create-before-ack",
+            "incomplete-retry-inventory",
+            "lost-ack-schema-incompatible",
+            "lost-ack-content-conflict",
+        ],
+    ),
+    (
+        "concurrency_cases",
+        &[
+            "two-empty-atomic-unique",
+            "two-empty-serialized",
+            "two-empty-reconcile-after-create",
+            "two-empty-blind-create",
+            "atomic-create-lost-ack-retry",
+        ],
+    ),
+    (
+        "packet_field_cases",
+        &[
+            "required-handoff-fields-preserved",
+            "truthfully-empty-handoff-fields-preserved",
+            "missing-stale-source-warning-rejected",
+            "missing-discovery-vocabulary-rejected",
+            "missing-useful-next-action-rejected",
+        ],
+    ),
+];
 fn flag(case: &Value, key: &str, default: bool) -> Result<bool, String> {
     match case.get(key) {
         None => Ok(default),
@@ -444,6 +527,22 @@ fn validate(data: &Value) -> Result<usize, Vec<String>> {
             }
         }
     }
+    // Verify every original fixture identity within its own semantic family.
+    // Additional future scenarios remain permitted, but substitution cannot
+    // erase a historical fail-closed regression by maintaining only counts.
+    for (family, required) in REQUIRED_ORIGINAL_CASE_IDS {
+        if let Some(cases) = data.get(*family).and_then(Value::as_array) {
+            let observed: HashSet<&str> = cases
+                .iter()
+                .filter_map(|case| case.get("id").and_then(Value::as_str))
+                .collect();
+            for original in *required {
+                if !observed.contains(original) {
+                    failures.push(format!("{family}: missing original scenario {original}"));
+                }
+            }
+        }
+    }
     failures.sort();
     if failures.is_empty() {
         Ok(total)
@@ -495,6 +594,23 @@ mod cli_semantic_tests {
         assert_eq!(validate(&fixture).unwrap(), 47);
     }
 
+    #[test]
+    fn same_count_substitution_of_each_historical_family_is_rejected() {
+        let baseline: Value = serde_json::from_str(BASELINE).expect("valid baseline");
+        for (family, _) in GROUPS {
+            let mut changed = baseline.clone();
+            let cases = changed[family].as_array_mut().expect("historical family");
+            let replaced = cases[0]["id"].as_str().expect("historical case id").to_owned();
+            cases[0]["id"] = json!(format!("invented-positive-{family}"));
+            let errors = validate(&changed).expect_err("same count must not hide dropped case");
+            assert!(
+                errors
+                    .iter()
+                    .any(|error| error == &format!("{family}: missing original scenario {replaced}")),
+                "{family}: {errors:?}"
+            );
+        }
+    }
     #[test]
     fn changed_authority_and_forged_expected_both_fail() {
         let mut fixture: Value = serde_json::from_str(BASELINE).expect("valid baseline");
