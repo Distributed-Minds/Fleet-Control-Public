@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::env;
 use std::fs;
+use std::io::Write;
 use std::process;
 
 #[cfg(test)]
@@ -78,7 +79,6 @@ fn git_id(value: &str) -> bool {
             .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
-
 /// Python's historical identity oracle serializes objects with
 /// sort_keys=True, separators=(",", ":"), ensure_ascii=False.
 /// Serialize every object recursively in lexicographic Unicode key order,
@@ -104,7 +104,7 @@ fn write_canonical_json(value: &serde_json::Value, bytes: &mut Vec<u8>) -> Resul
                 }
                 serde_json::to_writer(&mut *bytes, key).map_err(|e| e.to_string())?;
                 bytes.push(b':');
-                write_canonical_json(&fields[*key], bytes)?;
+                write_canonical_json(fields.get(key.as_str()).expect("iterated map key"), bytes)?;
             }
             bytes.push(b'}');
         }
@@ -286,20 +286,47 @@ fn validate(fixture: &Fixture) -> Result<usize, String> {
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
-    if args.len() > 1 {
+    let emit_canonical = args.first().is_some_and(|arg| arg == "--emit-canonical");
+    if (emit_canonical && !(2..=3).contains(&args.len()))
+        || (!emit_canonical && args.len() > 1)
+    {
         eprintln!("usage: integration_candidate [fixture-path]");
+        eprintln!("       integration_candidate --emit-canonical <case-name> [fixture-path]");
         process::exit(2);
     }
-    let path = args
-        .first()
-        .map(String::as_str)
-        .unwrap_or("Phase0/fixtures/integration-candidate-v1.json");
+    let path = if emit_canonical {
+        args.get(2)
+    } else {
+        args.first()
+    }
+    .map(String::as_str)
+    .unwrap_or("Phase0/fixtures/integration-candidate-v1.json");
     let result = fs::read_to_string(path)
         .map_err(|e| e.to_string())
         .and_then(|contents| serde_json::from_str::<Fixture>(&contents).map_err(|e| e.to_string()))
-        .and_then(|fixture| validate(&fixture));
+        .and_then(|fixture| {
+            let total = validate(&fixture)?;
+            let bytes = if emit_canonical {
+                let name = &args[1];
+                let candidate = fixture
+                    .cases
+                    .iter()
+                    .find(|case| &case.name == name)
+                    .ok_or_else(|| format!("unknown candidate case: {name}"))?;
+                Some(canonical_candidate_bytes(&candidate.candidate)?)
+            } else {
+                None
+            };
+            Ok((total, bytes))
+        });
     match result {
-        Ok(total) => println!(
+        Ok((_, Some(bytes))) => {
+            if let Err(error) = std::io::stdout().write_all(&bytes) {
+                eprintln!("FAIL: cannot write canonical candidate bytes: {error}");
+                process::exit(1);
+            }
+        }
+        Ok((total, None)) => println!(
             "integration candidate fixture envelope: {total} passed; SHA-256 identity parity NOT checked"
         ),
         Err(reason) => {
