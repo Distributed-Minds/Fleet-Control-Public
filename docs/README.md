@@ -1,0 +1,21 @@
+# FREE ENERGY static landing page
+
+This directory is a zero-dependency landing-page prototype. It does **not** publish a website by itself, and intentionally does not select or hard-code a domain.
+
+## Local preview
+
+From the repository root, run: python3 -m http.server 8000 --directory docs
+
+Then open http://localhost:8000/. No npm dependencies, JavaScript runtime, remote fonts, tracking scripts, or remote images are required.
+
+## Deployment and migration
+
+1. Choose and verify the website domain/host first. Do not create a CNAME or assume a domain in this repository.
+2. For GitHub Pages branch deployment, select the desired branch and /docs directory in repository settings. That is a separate, human-owned administrative decision.
+3. Other static hosts can publish this directory directly; local CSS uses relative URLs.
+4. Verify links to the actual preview release, starter pack, beginner guide, and license immediately before publishing.
+5. After the GitHub slug rename, replace the legacy Distributed-Minds/Fleet-Control-Public links. Preserve historical citations and commit provenance.
+6. Maintain the distinction: FREE ENERGY is the public ecosystem, Fleet-Control is orchestration, Phase0 v0.1.2 is the available preview. Do not advertise envisioned platform functionality as shipped.
+7. Review keyboard focus, skip link, mobile layouts, reduced-motion behavior, and color contrast before public launch.
+
+Tracked by https://github.com/Distributed-Minds/Fleet-Control-Public/issues/57 .
