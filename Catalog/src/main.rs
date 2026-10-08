@@ -66,7 +66,8 @@ fn write_complete_page(output: &Path, html: &str) -> io::Result<()> {
 }
 
 /// Validate readable manifests as one unit. Rejected input cannot emit
-/// a partial positive catalog admission result.
+/// a partial positive catalog admission result. Path labels are escaped in
+/// diagnostics: an untrusted newline must never forge another log record.
 fn validate_loaded<'a, I>(sources: I) -> Result<Vec<(String, String)>, Vec<String>>
 where
     I: IntoIterator<Item = (&'a str, &'a str)>,
@@ -78,13 +79,13 @@ where
         match free_energy_catalog::validate_manifest(json) {
             Ok(record) => {
                 if !ids.insert(record.id.clone()) {
-                    problems.push(format!("{path}: duplicate project ID: {}", record.id));
+                    problems.push(format!("{path:?}: duplicate project ID: {}", record.id));
                 } else {
                     accepted.push((record.id, path.to_owned()));
                 }
             }
             Err(errors) => {
-                problems.extend(errors.into_iter().map(|error| format!("{path}: {error}")));
+                problems.extend(errors.into_iter().map(|error| format!("{path:?}: {error}")));
             }
         }
     }
@@ -101,14 +102,14 @@ where
 /// project source directory (or silently accept a JSON-named directory).
 fn read_render_manifest(path: &Path) -> Result<String, String> {
     let metadata =
-        fs::symlink_metadata(path).map_err(|error| format!("{}: {error}", path.display()))?;
+        fs::symlink_metadata(path).map_err(|error| format!("{}: {error}", format!("{path:?}")))?;
     if !metadata.file_type().is_file() {
         return Err(format!(
             "{}: render source must be a regular file (symlinks prohibited)",
-            path.display()
+            format!("{path:?}")
         ));
     }
-    fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))
+    fs::read_to_string(path).map_err(|error| format!("{}: {error}", format!("{path:?}")))
 }
 
 /// Render only after every local pilot manifest passes typed admission.
@@ -124,7 +125,7 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
     let entries = match fs::read_dir(&project_dir) {
         Ok(entries) => entries,
         Err(error) => {
-            eprintln!("{}: {error}", project_dir.display());
+            eprintln!("{}: {error}", format!("{project_dir:?}"));
             return ExitCode::FAILURE;
         }
     };
@@ -158,7 +159,7 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
                     if !ids.insert(record.id.clone()) {
                         problems.push(format!(
                             "{}: duplicate project ID: {}",
-                            path.display(),
+                            format!("{path:?}"),
                             record.id
                         ));
                     } else {
@@ -167,11 +168,11 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
                 }
                 Err(errors) => {
                     for error in errors {
-                        problems.push(format!("{}: {error}", path.display()));
+                        problems.push(format!("{}: {error}", format!("{path:?}")));
                     }
                 }
             },
-            Err(error) => problems.push(format!("{}: {error}", path.display())),
+            Err(error) => problems.push(format!("{}: {error}", format!("{path:?}"))),
         }
     }
     if !problems.is_empty() {
@@ -187,7 +188,7 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
         if let Err(error) =
             validate_output_directory(output.parent().expect("catalog output always has a parent"))
         {
-            eprintln!("{}: {error}", output.display());
+            eprintln!("{}: {error}", format!("{output:?}"));
             return ExitCode::FAILURE;
         }
         match fs::read_to_string(&output) {
@@ -200,19 +201,19 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
             Ok(_) => {
                 eprintln!(
                     "{}: generated HTML differs; run render to regenerate",
-                    output.display()
+                    format!("{output:?}")
                 );
                 ExitCode::FAILURE
             }
             Err(error) => {
-                eprintln!("{}: {error}", output.display());
+                eprintln!("{}: {error}", format!("{output:?}"));
                 ExitCode::FAILURE
             }
         }
     } else {
         if let Some(parent) = output.parent() {
             if let Err(error) = fs::create_dir_all(parent) {
-                eprintln!("{}: {error}", parent.display());
+                eprintln!("{}: {error}", format!("{parent:?}"));
                 return ExitCode::FAILURE;
             }
         }
@@ -220,12 +221,12 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
             Ok(()) => {
                 println!(
                     "Generated {} from typed pilot records (draft only)",
-                    output.display()
+                    format!("{output:?}")
                 );
                 ExitCode::SUCCESS
             }
             Err(error) => {
-                eprintln!("{}: {error}", output.display());
+                eprintln!("{}: {error}", format!("{output:?}"));
                 ExitCode::FAILURE
             }
         }
@@ -268,15 +269,15 @@ fn main() -> ExitCode {
                                 }
                             }
                             Err(error) => {
-                                errors.push(format!("{}: directory entry: {error}", path.display()))
+                                errors.push(format!("{}: directory entry: {error}", format!("{path:?}")))
                             }
                         }
                     }
                     if count == 0 {
-                        errors.push(format!("{}: no JSON manifests found", path.display()));
+                        errors.push(format!("{}: no JSON manifests found", format!("{path:?}")));
                     }
                 }
-                Err(error) => errors.push(format!("{}: {error}", path.display())),
+                Err(error) => errors.push(format!("{}: {error}", format!("{path:?}"))),
             }
         } else {
             manifest_paths.push(path);
@@ -288,7 +289,7 @@ fn main() -> ExitCode {
     for path in manifest_paths {
         match fs::read_to_string(&path) {
             Ok(text) => loaded.push((path.to_string_lossy().into_owned(), text)),
-            Err(error) => errors.push(format!("{}: {error}", path.display())),
+            Err(error) => errors.push(format!("{}: {error}", format!("{path:?}"))),
         }
     }
 
