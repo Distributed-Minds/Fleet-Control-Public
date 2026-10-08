@@ -27,12 +27,13 @@
       "component": "CODE",
       "scope_kind": "PROJECT_DEFAULT",
       "scope": "OpenRA engine code",
-      "statement": "OpenRA COPYRIGHT/COPYING material and official legal page describe GPL3 licensing for OpenRA software, not original franchise data.",
-      "license_id": "GPL-3.0-only",
+      "statement": "OpenRA's pinned README states GNU GPL version 3 or (at the user's option) any later version for OpenRA code; this does not extend to Electronic Arts original-game data.",
+      "license_id": "GPL-3.0-or-later",
       "exceptions_or_restrictions": [
         "Verify exact component/license-file applicability before redistributing"
       ],
       "evidence_ids": [
+        "readme-snapshot",
         "copying-snapshot",
         "legal-page"
       ],
@@ -144,6 +145,18 @@
     "test_evidence_id": null
   },
   "evidence": [
+    {
+      "evidence_id": "readme-snapshot",
+      "evidence_kind": "PINNED_REPOSITORY_FILE",
+      "subject_scope": "License applicability/version declaration for OpenRA code",
+      "url": "https://github.com/OpenRA/OpenRA/blob/b6fc03fcfaef1277592bbd4cbc7d44dd85219902/README.md",
+      "observed_at": "2026-10-08T13:41:33.015Z",
+      "reviewer": "FREE ENERGY source-file verification by manual operator; not legal clearance",
+      "currentness": "PINNED_SNAPSHOT",
+      "repository": "https://github.com/OpenRA/OpenRA",
+      "commit": "b6fc03fcfaef1277592bbd4cbc7d44dd85219902",
+      "path": "README.md"
+    },
     {
       "evidence_id": "copying-snapshot",
       "evidence_kind": "PINNED_REPOSITORY_FILE",
