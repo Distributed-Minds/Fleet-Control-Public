@@ -78,7 +78,11 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
             Ok(text) => match free_energy_catalog::validate_manifest(&text) {
                 Ok(record) => {
                     if !ids.insert(record.id.clone()) {
-                        problems.push(format!("{}: duplicate project ID: {}", path.display(), record.id));
+                        problems.push(format!(
+                            "{}: duplicate project ID: {}",
+                            path.display(),
+                            record.id
+                        ));
                     } else {
                         records.push(record);
                     }
@@ -104,11 +108,16 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
     if check {
         match fs::read_to_string(&output) {
             Ok(previous) if previous == html => {
-                println!("Catalog HTML matches typed pilot input (not full schema/rights verification)");
+                println!(
+                    "Catalog HTML matches typed pilot input (not full schema/rights verification)"
+                );
                 ExitCode::SUCCESS
             }
             Ok(_) => {
-                eprintln!("{}: generated HTML differs; run render to regenerate", output.display());
+                eprintln!(
+                    "{}: generated HTML differs; run render to regenerate",
+                    output.display()
+                );
                 ExitCode::FAILURE
             }
             Err(error) => {
@@ -125,7 +134,10 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
         }
         match fs::write(&output, html) {
             Ok(()) => {
-                println!("Generated {} from typed pilot records (draft only)", output.display());
+                println!(
+                    "Generated {} from typed pilot records (draft only)",
+                    output.display()
+                );
                 ExitCode::SUCCESS
             }
             Err(error) => {
