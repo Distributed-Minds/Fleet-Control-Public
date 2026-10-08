@@ -41,6 +41,16 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## Native Godot ABI host-harness replay: strict-build limitation (2026-10-08)
+
+An independent **offline C host-simulation** replay used the exact corrected L2 archival blobs in `L2-Verifiable-Translation-Prototype/targets/godot-4.7.2-gdextension/`: `godot_target.c@91fdcade954eec2514cf6b5acfc37556626bb1e4`, `harness.c@6a38eb899d86dc185408a5302af6d9c1763b74ce`, `godot_abi_subset.h@79ffa3393a242b09b3dcf98b8cc2a7698d55f0c5`, and `signet_adapter_shim.h@b5dab6366ce8bd09d1643e9cc5233bcb01a494b8`. All four local input byte streams matched these Git object IDs. The compiler was Debian GCC **14.2.0**.
+
+- **Unmodified source, strict build:** `gcc -std=c11 -Wall -Wextra -Werror -fPIC -shared godot_target.c -o libsignet_l2_godot.so` exited **1** because `godot_target.c:11` combines `if(!gv)return 0;memset(...);gv(...);`, triggering `-Werror=misleading-indentation`.
+- **Unmodified source, ordinary warning build:** the same shared-library command *without* `-Werror`, followed by `gcc -std=c11 -Wall -Wextra harness.c -ldl -o godot-harness` and `./godot-harness`, exited **0**, reporting `godot-entry-init: PASS`, `godot-version-discovery: 0x040702`, and `generated-shim-surface: PASS`.
+- **Scratch-only remediation reproduced:** on a throwaway copy of `godot_target.c`, split that one original line into `if (!gv) return 0;`, `memset(&g_shim,0,sizeof(g_shim));`, and `gv(&g_shim.version);` on separate lines. Then **both** the library and harness compiled under `-std=c11 -Wall -Wextra -Werror`; the harness again exited **0** with all three lines of output above.
+
+**Disposition:** the committed original 55 corrected L2 research blobs remain **unchanged**; the three-line strict-build repair was tested only in a local scratch copy and has not been integrated as product source. The host-harness result does **not** establish loading in an actual Godot executable, live Minecraft integration, conformance, license/right clearance, CI acceptance, or a published FREE ENERGY runtime. This section records a reproducible build limitation and qualified remediation, not an archival-source rewrite.
+
 ## Generated data and historical runtime claims
 
 - `adapter-shim-generation/adapter-shim.v0.example.json` and `adapter-role-contract-v1/` contain experiment-authored descriptors, generator scripts, and C/Rust/C#/TypeScript outputs. Their READMEs record historical generator hashes and local results. **Those records do not establish original authorship of every underlying API type, new execution success, or permission to relicense external material.**
