@@ -511,7 +511,11 @@ mod selector_exclusivity_regressions {
 
     #[test]
     fn budget_exhaustion_cannot_smuggle_independence_evidence() {
-        checked_mutation("evaluation-budget-exhaustion", "shared_lineage", json!(false));
+        checked_mutation(
+            "evaluation-budget-exhaustion",
+            "shared_lineage",
+            json!(false),
+        );
     }
 
     #[test]
