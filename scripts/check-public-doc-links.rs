@@ -890,4 +890,102 @@ mod tests {
         assert_eq!(report.errors.len(), 1);
         assert!(report.errors[0].contains("symlink"));
     }
+
+    // The manual contributor path is a source-level contract, not a hosted agent.
+    // PR CI already runs this Rust test module, so guard the copyable prompt here.
+    fn inspect_help_guide_contract(guide: &str) -> Result<(), &'static str> {
+        let mut opening: Option<&str> = None;
+        let mut contents = String::new();
+        let mut prompts = Vec::new();
+        for line in guide.lines() {
+            if let Some(info) = line.strip_prefix("```") {
+                if opening.is_none() {
+                    opening = Some(info.trim());
+                    contents.clear();
+                    continue;
+                }
+                if info.trim().is_empty() {
+                    if opening == Some("text") && contents.starts_with("I want to help [") {
+                        prompts.push(std::mem::take(&mut contents));
+                    }
+                    opening = None;
+                    contents.clear();
+                    continue;
+                }
+            }
+            if opening.is_some() {
+                contents.push_str(line);
+                contents.push('\n');
+            }
+        }
+        if opening.is_some() {
+            return Err("unclosed code fence");
+        }
+        if prompts.len() != 1 {
+            return Err("expected one copyable HELP prompt");
+        }
+        let prompt = &prompts[0];
+        for (needle, diagnostic) in [
+            ("Join the EXISTING project", "existing-project workflow missing"),
+            ("If the project prohibits AI-assisted contributions", "AI policy denial missing"),
+            (
+                "remain read-only until the proposed public submission is permitted",
+                "unknown AI policy fail-closed guard missing",
+            ),
+            ("Do not conceal AI involvement", "AI authorship disclosure guard missing"),
+            ("An unassigned issue may still be claimed", "collision guard missing"),
+            ("Never commit proprietary game assets", "rights guard missing"),
+            ("Ask for authorization before a push", "external-write permission missing"),
+            ("Never merge into default yourself", "default merge guard missing"),
+        ] {
+            if !prompt.contains(needle) {
+                return Err(diagnostic);
+            }
+        }
+        if !guide.contains("**Not available yet:**") {
+            return Err("manual versus future capability disclosure missing");
+        }
+        if !guide.contains("](GETTING-STARTED.md)") {
+            return Err("distinct Phase0 installation link missing");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn copyable_help_guide_policy_and_rights_contract() {
+        let guide = include_str!("../HELP-A-PROJECT.md");
+        assert_eq!(inspect_help_guide_contract(guide), Ok(()));
+    }
+
+    #[test]
+    fn copyable_help_guide_rejects_removed_guards_and_broken_fences() {
+        let guide = include_str!("../HELP-A-PROJECT.md");
+        for (needle, diagnostic) in [
+            (
+                "If the project prohibits AI-assisted contributions",
+                "AI policy denial missing",
+            ),
+            (
+                "remain read-only until the proposed public submission is permitted",
+                "unknown AI policy fail-closed guard missing",
+            ),
+            ("Never commit proprietary game assets", "rights guard missing"),
+            ("Ask for authorization before a push", "external-write permission missing"),
+        ] {
+            let damaged = guide.replacen(needle, "", 1);
+            assert_ne!(damaged, guide, "fixture anchor missing: {needle}");
+            assert_eq!(inspect_help_guide_contract(&damaged), Err(diagnostic));
+        }
+        let duplicate = format!("{guide}\n```text\nI want to help [DUPLICATE]\n```\n");
+        assert_eq!(
+            inspect_help_guide_contract(&duplicate),
+            Err("expected one copyable HELP prompt")
+        );
+        let unterminated = guide.replacen("\n```\n\n## 4.", "\n\n## 4.", 1);
+        assert_ne!(unterminated, guide, "fixture must remove the closing prompt fence");
+        assert_eq!(
+            inspect_help_guide_contract(&unterminated),
+            Err("unclosed code fence")
+        );
+    }
 }
