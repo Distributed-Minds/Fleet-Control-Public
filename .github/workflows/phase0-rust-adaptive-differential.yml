@@ -1,0 +1,35 @@
+name: Verify adaptive stress migration differential (#71)
+on:
+  pull_request:
+    branches: [rust/phase0-fixture-oracles-71]
+    paths:
+      - '.github/workflows/phase0-rust-adaptive-differential.yml'
+      - 'Phase0/rust-fixtures/**'
+      - 'Phase0/fixtures/adaptive-stress-spec2.json'
+      - 'Phase0/scripts/check-adaptive-stress-fixtures.py'
+permissions:
+  contents: read
+jobs:
+  rust-and-historical-differential:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust
+        run: rustup toolchain install 1.85.1 --profile minimal --component rustfmt --component clippy
+      - name: Rust format, offline semantic tests and strict Clippy
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest=Phase0/rust-fixtures/Cargo.toml
+          rustup run 1.85.1 cargo fmt --manifest-path "$manifest" -- --check
+          rustup run 1.85.1 cargo fetch --manifest-path "$manifest" --locked
+          rustup run 1.85.1 cargo test --manifest-path "$manifest" --locked --offline --test historical_adaptive_stress_differential
+          rustup run 1.85.1 cargo clippy --manifest-path "$manifest" --all-targets --locked --offline -- -D warnings
+      - name: Historical Python/Rust differential (opt-in archival evidence)
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup run 1.85.1 cargo test --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline --test historical_adaptive_stress_differential -- --ignored
