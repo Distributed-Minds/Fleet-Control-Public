@@ -2,6 +2,20 @@ name: Rust public onboarding link checker
 
 # Validation only: no secrets, publishing, deployments, or default-branch writes.
 on:
+  push:
+    branches:
+      - phase0/public-v0
+    paths:
+      - .github/workflows/rust-public-doc-links.yml
+      - scripts/check-public-doc-links.rs
+      - README.md
+      - GETTING-STARTED.md
+      - HELP-A-PROJECT.md
+      - WORKFLOW-GUIDES.md
+      - TROUBLESHOOTING.md
+      - BRANDING.md
+      - release-kit/README-FIRST.md
+      - release-kit/INSTALL-CHECKLIST.md
   pull_request:
     branches:
       - phase0/public-v0
