@@ -353,6 +353,28 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
                     failures.push(format!("{}: expected must be a JSON object", c.id));
                     continue;
                 };
+                // Sparse historical fixture expectations are intentional, but
+                // a disposition-only assertion must not certify restoration timing,
+                // starvation deadlines, or backlog accounting. Require the
+                // minimum observable metrics for the computed state.
+                let required: &[&str] = match actual.get("disposition").and_then(Value::as_str) {
+                    Some("RESTORED") if c.initial_restoration_work > 0 => {
+                        &["disposition", "first_progress_tick", "restored_by_tick"]
+                    }
+                    Some("INVALID_STARVATION" | "DEGRADED_ESCALATION") => {
+                        &["disposition", "escalation_tick"]
+                    }
+                    Some("RESTORE_PROGRESS") => &["disposition", "first_progress_tick"],
+                    Some("OK" | "OVERLOAD_VISIBLE" | "RESTORED") => {
+                        &["disposition", "final_adjudication_backlog"]
+                    }
+                    _ => &["disposition"],
+                };
+                for key in required {
+                    if !expected.contains_key(*key) {
+                        failures.push(format!("{}: missing expected {key}", c.id));
+                    }
+                }
                 for (key, value) in expected {
                     if actual.get(key) != Some(value) {
                         failures.push(format!(
@@ -361,9 +383,6 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
                             actual.get(key)
                         ));
                     }
-                }
-                if !expected.contains_key("disposition") {
-                    failures.push(format!("{}: missing expected disposition", c.id));
                 }
             }
             Err(reason) => failures.push(format!("{}: {reason}", c.id)),
@@ -472,6 +491,33 @@ mod tests {
     fn original_seventeen_semantic_cases_pass() {
         let fixture: Fixture = serde_json::from_str(BASELINE).expect("typed baseline");
         assert_eq!(validate(&fixture), Ok(17));
+    }
+
+    #[test]
+    fn sparse_expectations_cannot_skip_material_capacity_semantics() {
+        // Each omission previously retained a matching disposition while
+        // silently bypassing an essential measured property.
+        for (case_index, key) in [
+            (0, "final_adjudication_backlog"),
+            (1, "final_adjudication_backlog"),
+            (2, "first_progress_tick"),
+            (2, "restored_by_tick"),
+            (3, "escalation_tick"),
+            (4, "escalation_tick"),
+            (6, "restored_by_tick"),
+            (7, "final_adjudication_backlog"),
+            (8, "first_progress_tick"),
+        ] {
+            let mut suite = original();
+            suite["workload_cases"][case_index]["expected"]
+                .as_object_mut()
+                .expect("expected workload metrics")
+                .remove(key);
+            let errors = mutated(suite)
+                .expect_err("missing semantic assertion must fail closed")
+                .join(" ");
+            assert!(errors.contains(key), "missing {key}: {errors}");
+        }
     }
 
     #[test]
