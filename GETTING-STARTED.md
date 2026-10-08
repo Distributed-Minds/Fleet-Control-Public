@@ -4,6 +4,8 @@ This guide assumes you are starting from zero. You do **not** need to understand
 
 **FREE ENERGY** is the public project. **Fleet-Control Phase0** is the current repository-local orchestration layer you are installing.
 
+> **Important while FREE ENERGY is a preview (8 October 2026):** The upstream repository's default `main` branch currently has a FREE ENERGY landing README but does not contain the installable Phase0 files. The installable Phase0 files are on [`phase0/public-v0`](https://github.com/Distributed-Minds/Fleet-Control-Public/tree/phase0/public-v0). **A fork that copies only the default branch does not install FREE ENERGY.** Follow step 2 below before creating tasks. This warning can be removed when the upstream default branch actually contains the starter.
+
 ## What you are setting up
 
 You will have three pieces:
@@ -22,21 +24,32 @@ The GitHub repository is the durable shared memory for the fleet. The scheduler 
 - **Fork:** GitHub makes a copy of someone else's public repository inside your own GitHub account.
 - **Clone:** Git copies a repository onto your computer. You do not need to clone anything for the easiest setup.
 
-## Recommended beginner setup: fork first
+## Recommended preview setup: choose a working installation path
 
 ### 1. Create a GitHub account
 
 Create an account at https://github.com/ and sign in.
 
-### 2. Make your own copy
+### 2. Install the actual Phase0 preview in a repository you control
 
-Open https://github.com/Distributed-Minds/Fleet-Control-Public and choose **Fork** near the top-right.
+The upstream repository is still named `Distributed-Minds/Fleet-Control-Public` during the **FREE ENERGY** migration. Its default `main` branch currently contains a landing README but not the Phase0 distribution; use one of these two paths.
 
-That URL currently uses the legacy repository slug while the project migrates to the **FREE ENERGY** name.
+**Option A — GitHub website: fork all branches, then select the preview as your fork's default**
 
-Choose your own GitHub account or organization and create the fork. Your fleet should work on **your fork**, not on `Distributed-Minds/Fleet-Control-Public`.
+1. Inspect [the actual preview branch](https://github.com/Distributed-Minds/Fleet-Control-Public/tree/phase0/public-v0) and confirm it contains `Phase0/`.
+2. Open [the repository](https://github.com/Distributed-Minds/Fleet-Control-Public) and choose **Fork**.
+3. **Leave `Copy the DEFAULT branch only` unchecked.** GitHub otherwise copies `main`, which does not contain Phase0. [GitHub's fork instructions](https://docs.github.com/en/pull-requests/how-tos/work-with-forks/fork-a-repo?tool=webui) confirm that leaving it unchecked copies all branches.
+4. Create the fork in your own account or organization.
+5. **In your fork**, open **Settings → Default branch**; change it to `phase0/public-v0` and confirm. [GitHub's default-branch instructions](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-branches-in-your-repository/changing-the-default-branch) require repository admin access.
+6. Return to your fork's home page. Confirm the default view shows the **FREE ENERGY** README and `Phase0/05-FLEET-CONFIG.md`. **Stop** if either is missing; otherwise your scheduled agents may read a landing-only branch without Phase0.
 
-If you already have a repository for an existing project, you can instead copy the supplied `Phase0/` folder into that repository. Do not replace your existing source code.
+This fork method copies **all** upstream branches, including historical/research branches. Those extra branches are not an indication that their contents are active or part of the starter; only your selected default branch is the installation baseline. Do **not** change the upstream repository's default branch.
+
+**Option B — clean existing repository: install the release ZIP**
+
+Open [FREE ENERGY releases](https://github.com/Distributed-Minds/Fleet-Control-Public/releases), download the latest `FREE-ENERGY-Phase0-Starter-…-preview.zip`, and copy its entire `Phase0/` directory into the root of a repository you own; **commit** the files. Preserve any existing source code. This avoids copying upstream work-in-progress branches. The ZIP also contains the Project and automation prompt templates used in later steps.
+
+Either way, your fleet must target **your repository**, never the upstream `Distributed-Minds/Fleet-Control-Public` repository. Continue only once `Phase0/05-FLEET-CONFIG.md` is visible on **your repository's default branch**.
 
 ### 3. Write down your repository name
 

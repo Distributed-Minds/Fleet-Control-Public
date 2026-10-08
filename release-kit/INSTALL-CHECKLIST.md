@@ -5,6 +5,7 @@ Check each item before asking the fleet to do important work.
 - [ ] I have a GitHub account.
 - [ ] I have a repository that I own or am authorized to modify.
 - [ ] The complete `Phase0/` folder is committed in that repository.
+- [ ] My repository's **default branch** contains `Phase0/05-FLEET-CONFIG.md` (a default-branch-only fork of the current upstream `main` does not).
 - [ ] The root MIT `LICENSE` is present in the installed/starter package.
 - [ ] `Phase0/05-FLEET-CONFIG.md` matches the number of agents I will run.
 - [ ] My GitHub connection is authorized for this exact repository.
