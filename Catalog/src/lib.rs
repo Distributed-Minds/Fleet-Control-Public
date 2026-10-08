@@ -170,6 +170,72 @@ fn is_full_git_sha(value: &str) -> bool {
 // Unicode directional formatting can visually re-order repository paths while
 // leaving different exact bytes. Never use such display-spoofable strings as
 // identities for rights scopes or pinned evidence.
+/// Conservative, offline RFC3339 profile for evidence and review timestamps.
+/// Validates calendar dates and explicit time zones without network/currentness
+/// inference. Leap-second (':60') claims are rejected unless a separately
+/// authoritative leap-second schedule is introduced.
+fn is_rfc3339_timestamp(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() < 20 || !value.is_ascii() {
+        return false;
+    }
+    for (index, separator) in [(4, b'-'), (7, b'-'), (10, b'T'), (13, b':'), (16, b':')] {
+        if bytes.get(index) != Some(&separator) {
+            return false;
+        }
+    }
+    let number = |start: usize, end: usize| -> Option<u32> {
+        let slice = bytes.get(start..end)?;
+        if !slice.iter().all(u8::is_ascii_digit) {
+            return None;
+        }
+        std::str::from_utf8(slice).ok()?.parse().ok()
+    };
+    let (Some(year), Some(month), Some(day), Some(hour), Some(minute), Some(second)) = (
+        number(0, 4),
+        number(5, 7),
+        number(8, 10),
+        number(11, 13),
+        number(14, 16),
+        number(17, 19),
+    ) else {
+        return false;
+    };
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let max_day = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => return false,
+    };
+    if year == 0 || day == 0 || day > max_day || hour > 23 || minute > 59 || second > 59 {
+        return false;
+    }
+
+    let mut zone = 19;
+    if bytes.get(zone) == Some(&b'.') {
+        zone += 1;
+        let fraction_start = zone;
+        while bytes.get(zone).is_some_and(u8::is_ascii_digit) {
+            zone += 1;
+        }
+        if zone == fraction_start {
+            return false;
+        }
+    }
+    match bytes.get(zone).copied() {
+        Some(b'Z') => zone + 1 == bytes.len(),
+        Some(b'+') | Some(b'-') => {
+            bytes.len() == zone + 6
+                && bytes[zone + 3] == b':'
+                && number(zone + 1, zone + 3).is_some_and(|hour| hour <= 23)
+                && number(zone + 4, zone + 6).is_some_and(|minute| minute <= 59)
+        }
+        _ => false,
+    }
+}
+
 fn is_bidi_format_character(ch: char) -> bool {
     matches!(
         ch,
@@ -449,6 +515,9 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
                 problems.push(format!("evidence[{index}].{field} must be nonblank"));
             }
         }
+        if !is_rfc3339_timestamp(&item.observed_at) {
+            problems.push(format!("evidence[{index}].observed_at must be an RFC3339 timestamp"));
+        }
     }
     for (field, value) in [
         ("reviewer", record.review.reviewer.as_str()),
@@ -458,11 +527,26 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
             problems.push(format!("review.{field} must be nonblank"));
         }
     }
+    if !is_rfc3339_timestamp(&record.review.reviewed_at) {
+        problems.push("review.reviewed_at must be an RFC3339 timestamp".to_string());
+    }
     for (index, event) in record.review.claim_history.iter().enumerate() {
         for (field, value) in [("reason", event.reason.as_str()), ("at", event.at.as_str())] {
             if value.trim().is_empty() {
                 problems.push(format!(
                     "review.claim_history[{index}].{field} must be nonblank"
+                ));
+            }
+        }
+        if !is_rfc3339_timestamp(&event.at) {
+            problems.push(format!("review.claim_history[{index}].at must be an RFC3339 timestamp"));
+        }
+    }
+    for (index, permission) in record.permission_decisions.iter().enumerate() {
+        if let Some(date) = &permission.decided_at {
+            if !is_rfc3339_timestamp(date) {
+                problems.push(format!(
+                    "permission_decisions[{index}].decided_at must be an RFC3339 timestamp"
                 ));
             }
         }
