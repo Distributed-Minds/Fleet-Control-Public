@@ -1,0 +1,42 @@
+name: Rust FREE ENERGY landing source checks
+
+# Read-only, dependency-free source validation. No release or deployment authority.
+on:
+  pull_request:
+    branches:
+      - phase0/public-v0
+    paths:
+      - .github/workflows/rust-free-energy-site.yml
+      - tests/check_free_energy_site.rs
+      - docs/index.html
+      - docs/styles.css
+      - docs/README.md
+
+permissions:
+  contents: read
+
+jobs:
+  rust-free-energy-site:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out draft candidate
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust compiler
+        run: rustup toolchain install 1.85.1 --profile minimal
+      - name: Compile and run structural checker unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup run 1.85.1 rustc --edition=2021 -D warnings --test \
+            tests/check_free_energy_site.rs -o "$RUNNER_TEMP/free-energy-site-tests"
+          "$RUNNER_TEMP/free-energy-site-tests" --test-threads=1
+      - name: Compile and validate current landing source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup run 1.85.1 rustc --edition=2021 -D warnings \
+            tests/check_free_energy_site.rs -o "$RUNNER_TEMP/free-energy-site-check"
+          "$RUNNER_TEMP/free-energy-site-check" --root "$GITHUB_WORKSPACE"
