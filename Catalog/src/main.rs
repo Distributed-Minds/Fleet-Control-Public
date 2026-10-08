@@ -1,4 +1,6 @@
 //! Experimental offline catalog admission CLI (NOT the finished catalog).
+mod render;
+
 use std::{collections::HashSet, env, fs, process::ExitCode};
 
 /// Validate readable manifests as one unit. Rejected input cannot emit
@@ -31,9 +33,116 @@ where
     }
 }
 
+/// Render only after every local pilot manifest passes typed admission.
+/// This does not claim complete Draft 2020-12 schema or upstream rights clearance.
+fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
+    if args.len() > 1 || args.first().is_some_and(|a| a != "--check") {
+        eprintln!("Usage: free-energy-catalog render [--check]");
+        return ExitCode::FAILURE;
+    }
+    let check = !args.is_empty();
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let project_dir = root.join("projects");
+    let entries = match fs::read_dir(&project_dir) {
+        Ok(entries) => entries,
+        Err(error) => {
+            eprintln!("{}: {error}", project_dir.display());
+            return ExitCode::FAILURE;
+        }
+    };
+    let mut paths = Vec::new();
+    for entry in entries {
+        match entry {
+            Ok(entry) => {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                    paths.push(path);
+                }
+            }
+            Err(error) => {
+                eprintln!("project directory entry: {error}");
+                return ExitCode::FAILURE;
+            }
+        }
+    }
+    paths.sort();
+    if paths.is_empty() {
+        eprintln!("No project JSON manifests found");
+        return ExitCode::FAILURE;
+    }
+    let mut records = Vec::new();
+    let mut ids = HashSet::new();
+    let mut problems = Vec::new();
+    for path in paths {
+        match fs::read_to_string(&path) {
+            Ok(text) => match free_energy_catalog::validate_manifest(&text) {
+                Ok(record) => {
+                    if !ids.insert(record.id.clone()) {
+                        problems.push(format!("{}: duplicate project ID: {}", path.display(), record.id));
+                    } else {
+                        records.push(record);
+                    }
+                }
+                Err(errors) => {
+                    for error in errors {
+                        problems.push(format!("{}: {error}", path.display()));
+                    }
+                }
+            },
+            Err(error) => problems.push(format!("{}: {error}", path.display())),
+        }
+    }
+    if !problems.is_empty() {
+        problems.sort();
+        for problem in problems {
+            eprintln!("{problem}");
+        }
+        return ExitCode::FAILURE;
+    }
+    let html = render::render_catalog(&records);
+    let output = root.join("site/index.html");
+    if check {
+        match fs::read_to_string(&output) {
+            Ok(previous) if previous == html => {
+                println!("Catalog HTML matches typed pilot input (not full schema/rights verification)");
+                ExitCode::SUCCESS
+            }
+            Ok(_) => {
+                eprintln!("{}: generated HTML differs; run render to regenerate", output.display());
+                ExitCode::FAILURE
+            }
+            Err(error) => {
+                eprintln!("{}: {error}", output.display());
+                ExitCode::FAILURE
+            }
+        }
+    } else {
+        if let Some(parent) = output.parent() {
+            if let Err(error) = fs::create_dir_all(parent) {
+                eprintln!("{}: {error}", parent.display());
+                return ExitCode::FAILURE;
+            }
+        }
+        match fs::write(&output, html) {
+            Ok(()) => {
+                println!("Generated {} from typed pilot records (draft only)", output.display());
+                ExitCode::SUCCESS
+            }
+            Err(error) => {
+                eprintln!("{}: {error}", output.display());
+                ExitCode::FAILURE
+            }
+        }
+    }
+}
+
 fn main() -> ExitCode {
     let mut args = env::args_os().skip(1);
-    if args.next().as_deref() != Some(std::ffi::OsStr::new("validate")) {
+    let command = args.next();
+    if command.as_deref() == Some(std::ffi::OsStr::new("render")) {
+        return render_command(args.collect());
+    }
+    if command.as_deref() != Some(std::ffi::OsStr::new("validate")) {
         eprintln!("Usage: free-energy-catalog validate <manifest.json> [manifest.json ...]");
         return ExitCode::FAILURE;
     }
