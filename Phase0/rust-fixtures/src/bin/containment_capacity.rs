@@ -648,7 +648,18 @@ mod tests {
         assert!(serde_json::from_value::<Fixture>(missing).is_err());
         let mut zero = original();
         zero["workload_cases"][0]["progress_bound"] = json!(0);
-        assert!(mutated(zero).is_er
+        assert!(mutated(zero).is_err());
+    }
+
+    #[test]
+    fn invalid_rate_and_negative_arrival_are_rejected() {
+        let mut rate = original();
+        rate["planning_cases"][0]["sensitivity_den"] = json!(0);
+        assert!(mutated(rate).is_err());
+        let mut arrival = original();
+        arrival["workload_cases"][0]["arrivals"][0] = json!(-2);
+        assert!(mutated(arrival).is_err());
+    }
     #[test]
     fn already_restored_separate_capacity_uses_adjudication_not_shared_service() {
         let mut case = original()["workload_cases"][0].clone();
@@ -692,17 +703,5 @@ mod tests {
             Ok(json!({"disposition": "RESTORED", "final_adjudication_backlog": 0})),
             "existing shared-capacity behavior must remain intact"
         );
-    }
-r());
-    }
-
-    #[test]
-    fn invalid_rate_and_negative_arrival_are_rejected() {
-        let mut rate = original();
-        rate["planning_cases"][0]["sensitivity_den"] = json!(0);
-        assert!(mutated(rate).is_err());
-        let mut arrival = original();
-        arrival["workload_cases"][0]["arrivals"][0] = json!(-2);
-        assert!(mutated(arrival).is_err());
     }
 }
