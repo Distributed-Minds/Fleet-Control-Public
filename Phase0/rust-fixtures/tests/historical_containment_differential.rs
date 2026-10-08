@@ -89,7 +89,6 @@ fn historical_python_and_rust_containment_agree_on_negative_controls() {
     checked("explicit-null-narrowest", &changed, false);
 }
 
-
 /// Historical adaptive-stress's Python oracle reads a hard-coded fixture
 /// path. Import its unchanged historical code and override that path in the
 /// test process so both implementations see exactly the same mutated bytes.
