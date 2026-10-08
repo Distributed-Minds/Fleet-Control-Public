@@ -21,7 +21,8 @@ fn run_input(content: &[u8]) -> Output {
         .create_new(true)
         .open(&path)
         .expect("unique exclusive fixture path");
-    file.write_all(content).expect("write external fixture bytes");
+    file.write_all(content)
+        .expect("write external fixture bytes");
     drop(file);
     let result = Command::new(env!("CARGO_BIN_EXE_merge_base_topology"))
         .arg(&path)
