@@ -424,12 +424,11 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
         }
     }
     for (index, event) in record.review.claim_history.iter().enumerate() {
-        for (field, value) in [
-            ("reason", event.reason.as_str()),
-            ("at", event.at.as_str()),
-        ] {
+        for (field, value) in [("reason", event.reason.as_str()), ("at", event.at.as_str())] {
             if value.trim().is_empty() {
-                problems.push(format!("review.claim_history[{index}].{field} must be nonblank"));
+                problems.push(format!(
+                    "review.claim_history[{index}].{field} must be nonblank"
+                ));
             }
         }
     }
