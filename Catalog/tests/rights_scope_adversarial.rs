@@ -47,12 +47,22 @@ fn rights_path_scope_must_not_escape_the_declared_content_tree() {
 
 #[test]
 fn pinned_provenance_path_and_commit_must_identify_a_safe_immutable_file() {
-    for path in ["../LICENSE.txt", "/LICENSE.txt", "./LICENSE.txt", "dir//file", "src\\LICENSE"] {
+    for path in [
+        "../LICENSE.txt",
+        "/LICENSE.txt",
+        "./LICENSE.txt",
+        "dir//file",
+        "src\\LICENSE",
+    ] {
         let mut candidate = baseline(LUANTI);
         candidate["evidence"][0]["path"] = json!(path);
         rejected(&candidate, "invalid pinned repository evidence");
     }
-    for revision in ["main", "deadbeef", "ABCDEF0123456789012345678901234567890123"] {
+    for revision in [
+        "main",
+        "deadbeef",
+        "ABCDEF0123456789012345678901234567890123",
+    ] {
         let mut candidate = baseline(LUANTI);
         candidate["evidence"][0]["commit"] = json!(revision);
         rejected(&candidate, "invalid pinned repository evidence");
@@ -89,7 +99,10 @@ fn permission_cannot_reference_an_unclaimed_scope_or_unproved_review() {
     let mut nonexistent_review = baseline(LUANTI);
     nonexistent_review["permission_decisions"][0]["review_evidence_ids"] =
         json!(["imaginary-legal-approval"]);
-    rejected(&nonexistent_review, "permission references missing evidence");
+    rejected(
+        &nonexistent_review,
+        "permission references missing evidence",
+    );
 
     let mut forged_approval = baseline(LUANTI);
     forged_approval["permission_decisions"][0]["decision"] = json!("APPROVED_FOR_SCOPE");
