@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 static NEXT_INPUT: AtomicUsize = AtomicUsize::new(0);
 
-const FAMILY_BINARIES: [(&str, &str); 8] = [
+const FAMILY_BINARIES: [(&str, &str); 9] = [
     (
         "containment",
         env!("CARGO_BIN_EXE_free-energy-phase0-fixtures"),
@@ -33,6 +33,10 @@ const FAMILY_BINARIES: [(&str, &str); 8] = [
     (
         "integration_candidate",
         env!("CARGO_BIN_EXE_integration_candidate"),
+    ),
+    (
+        "integration_candidate_digest",
+        env!("CARGO_BIN_EXE_integration_candidate_digest"),
     ),
 ];
 
@@ -86,7 +90,7 @@ fn assert_rejected_without_success(family: &str, input: &str) {
 
 #[test]
 fn all_external_fixture_clis_reject_wrong_root_json_types() {
-    // All seven serde-derived model CLIs and the ad-hoc-research Value model
+    // All compiled fixture CLIs, including the digest identity helper,
     // must interpret these as invalid input, not an empty successful fixture.
     for (family, _) in FAMILY_BINARIES {
         for input in ["null", "[]", "0", "true", "\"fixture\"", "[{}]"] {
