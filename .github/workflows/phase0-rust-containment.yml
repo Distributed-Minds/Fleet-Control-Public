@@ -1,11 +1,11 @@
-name: Validate Phase0 Rust containment prototype
+name: Validate Phase0 Rust fixture candidates
 on:
   pull_request:
     branches: [phase0/public-v0]
     paths:
       - '.github/workflows/phase0-rust-containment.yml'
       - 'Phase0/rust-fixtures/**'
-      - 'Phase0/fixtures/containment-spec3.json'
+      - 'Phase0/fixtures/**'
 permissions:
   contents: read
 jobs:
@@ -27,3 +27,29 @@ jobs:
           rustup run 1.85.1 cargo test --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline
           rustup run 1.85.1 cargo clippy --manifest-path Phase0/rust-fixtures/Cargo.toml --all-targets --locked --offline -- -D warnings
           rustup run 1.85.1 cargo run --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline -- Phase0/fixtures/containment-spec3.json
+          # CLI execution is distinct from cargo test: exercise every staged oracle.
+          for entry in \
+            "adaptive_stress:adaptive-stress-spec2.json" \
+            "authority_closure:authority-closure-spec2.json" \
+            "containment_capacity:containment-capacity-spec2.json" \
+            "coordination_history:coordination-history-spec5.json" \
+            "github_capability:github-capability-spec5.json" \
+            "integration_candidate:integration-candidate-v1.json"
+          do
+            binary="${entry%%:*}"
+            fixture="Phase0/fixtures/${entry#*:}"
+            rustup run 1.85.1 cargo run --manifest-path Phase0/rust-fixtures/Cargo.toml --bin "$binary" --locked --offline -- "$fixture"
+          done
+          # This model checker embeds its fixture at compile time.
+          rustup run 1.85.1 cargo run --manifest-path Phase0/rust-fixtures/Cargo.toml --bin merge_base_topology --locked --offline
+          # Fail if a fixture-taking CLI mistakes malformed input for a PASS.
+          malformed="$(mktemp)"
+          trap 'rm -f "$malformed"' EXIT
+          printf '{invalid-json\n' > "$malformed"
+          for binary in free-energy-phase0-fixtures adaptive_stress authority_closure containment_capacity coordination_history github_capability integration_candidate
+          do
+            if rustup run 1.85.1 cargo run --manifest-path Phase0/rust-fixtures/Cargo.toml --bin "$binary" --locked --offline -- "$malformed"; then
+              echo "::error::$binary accepted malformed JSON as a valid fixture"
+              exit 1
+            fi
+          done
