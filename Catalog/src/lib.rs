@@ -521,13 +521,15 @@ mod tests {
         }
 
         for id in [
-            "", "luanti", "/game", "a/", "-a/b", "a/-b", "a/B", "A/b",
-            "a/b/c", "a/b_c", "a/é", "a/b ",
+            "", "luanti", "/game", "a/", "-a/b", "a/-b", "a/B", "A/b", "a/b/c", "a/b_c", "a/é",
+            "a/b ",
         ] {
             let mutated = changed(LUANTI, |value| value["id"] = json!(id));
             let errors = validate_manifest(&mutated).unwrap_err();
             assert!(
-                errors.iter().any(|error| error.contains("invalid project ID")),
+                errors
+                    .iter()
+                    .any(|error| error.contains("invalid project ID")),
                 "unexpected outcome for invalid project ID {id:?}: {errors:?}"
             );
         }
