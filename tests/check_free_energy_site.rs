@@ -25,6 +25,15 @@ fn tags(html: &str) -> Vec<&str> {
         .collect()
 }
 
+/// Match a real opening tag name at a tag boundary. HTML tag names are
+/// ASCII case-insensitive and attributes may begin after tabs/newlines.
+fn is_open_element(tag: &str, name: &str) -> bool {
+    let end = tag
+        .find(|c: char| c.is_ascii_whitespace() || c == '/')
+        .unwrap_or(tag.len());
+    tag[..end].eq_ignore_ascii_case(name)
+}
+
 fn attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
     let needle = format!("{name}=\"");
     let rest = tag.split_once(needle.as_str())?.1;
@@ -62,12 +71,12 @@ fn validate(root: &Path) -> Vec<String> {
         .collect();
     let links: Vec<&str> = elements
         .iter()
-        .filter(|tag| tag.starts_with("a "))
+        .filter(|tag| is_open_element(tag, "a"))
         .map(|tag| attribute(tag, "href").unwrap_or(""))
         .collect();
     let stylesheets: Vec<&str> = elements
         .iter()
-        .filter(|tag| tag.starts_with("link ") && attribute(tag, "rel") == Some("stylesheet"))
+        .filter(|tag| is_open_element(tag, "link") && attribute(tag, "rel") == Some("stylesheet"))
         .filter_map(|tag| attribute(tag, "href"))
         .collect();
 
@@ -79,7 +88,7 @@ fn validate(root: &Path) -> Vec<String> {
     );
     expect(
         &mut errors,
-        elements.iter().filter(|tag| tag.starts_with("main ")).count() == 1
+        elements.iter().filter(|tag| is_open_element(tag, "main")).count() == 1
             && ids.contains(&"main"),
         "Expected one main landmark with id=main",
     );
@@ -101,8 +110,7 @@ fn validate(root: &Path) -> Vec<String> {
     for forbidden in ["script", "iframe", "form", "object", "embed"] {
         expect(
             &mut errors,
-            !elements.iter().any(|tag| tag.starts_with(format!("{forbidden} ").as_str()))
-                && !elements.iter().any(|tag| *tag == forbidden),
+            !elements.iter().any(|tag| is_open_element(tag, forbidden)),
             format!("Unexpected active/embedded element: {forbidden}"),
         );
     }
@@ -228,6 +236,24 @@ mod tests {
     fn detects_a_missing_local_fixture() {
         let missing = env::temp_dir().join("free-energy-nonexistent-site-fixture");
         assert!(!validate(&missing).is_empty());
+    }
+
+    #[test]
+    fn rejects_mixed_case_and_whitespace_obfuscated_active_elements() {
+        let doc = r#"<ScRiPt
+src="x"></ScRiPt><IFRAME	src="x"></IFRAME><FORM
+method="post"></FORM><OBjectdata="x"></OBject><EMBED/>"#;
+        let elements = tags(doc);
+        for forbidden in ["script", "iframe", "form", "object", "embed"] {
+            assert!(
+                elements.iter().any(|tag| is_open_element(tag, forbidden)),
+                "Failed to identify active element: {forbidden}"
+            );
+        }
+        assert!(!is_open_element("scripture src=\"x\"", "script"));
+        assert!(!is_open_element("/script", "script"));
+        assert!(is_open_element("a\nhref=\"#main\"", "a"));
+        assert!(is_open_element("MAIN\tid=\"main\"", "main"));
     }
 
     #[test]
