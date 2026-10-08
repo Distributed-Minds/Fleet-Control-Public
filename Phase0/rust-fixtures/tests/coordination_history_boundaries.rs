@@ -14,8 +14,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 static NEXT_INPUT: AtomicUsize = AtomicUsize::new(0);
 
 fn fixture() -> Value {
-    serde_json::from_str(include_str!("../../fixtures/coordination-history-spec5.json"))
-        .expect("historical coordination-history suite must parse")
+    serde_json::from_str(include_str!(
+        "../../fixtures/coordination-history-spec5.json"
+    ))
+    .expect("historical coordination-history suite must parse")
 }
 
 fn case_mut<'a>(suite: &'a mut Value, id: &str) -> &'a mut Value {
