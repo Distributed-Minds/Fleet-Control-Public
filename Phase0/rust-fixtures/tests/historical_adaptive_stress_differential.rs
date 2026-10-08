@@ -105,7 +105,10 @@ fn check_rust(value: &Value, allowed: bool, label: &str) {
         String::from_utf8_lossy(&result.stderr)
     );
     if !allowed {
-        assert!(result.stdout.is_empty(), "{label}: false positive success output");
+        assert!(
+            result.stdout.is_empty(),
+            "{label}: false positive success output"
+        );
     }
 }
 
@@ -187,8 +190,16 @@ fn archived_python_and_rust_agree_on_shared_guards_but_not_all_shape_semantics()
 
     // These material historical safety guards reject identically.
     for (name, field, value) in [
-        ("fixture-authority-is-inert", "authority_change", json!(true)),
-        ("material-target-change-can-split", "bounded_allowance", json!(0)),
+        (
+            "fixture-authority-is-inert",
+            "authority_change",
+            json!(true),
+        ),
+        (
+            "material-target-change-can-split",
+            "bounded_allowance",
+            json!(0),
+        ),
         ("missing-telemetry-is-unknown", "numeric_default", json!(0)),
         ("ack-loss-reconciles-first", "rerun", json!(true)),
     ] {
@@ -197,8 +208,14 @@ fn archived_python_and_rust_agree_on_shared_guards_but_not_all_shape_semantics()
         let input = Input::new(&changed);
         let rust_result = rust(&input.path);
         let python_result = python(&input.path);
-        assert!(!rust_result.status.success(), "Rust accepted {name}/{field}");
-        assert!(!python_result.status.success(), "Python accepted {name}/{field}");
+        assert!(
+            !rust_result.status.success(),
+            "Rust accepted {name}/{field}"
+        );
+        assert!(
+            !python_result.status.success(),
+            "Python accepted {name}/{field}"
+        );
         assert!(rust_result.stdout.is_empty(), "Rust false success: {name}");
     }
 
@@ -208,18 +225,32 @@ fn archived_python_and_rust_agree_on_shared_guards_but_not_all_shape_semantics()
     let first_case = duplicate["cases"][0].clone();
     duplicate["cases"].as_array_mut().unwrap().push(first_case);
     let input = Input::new(&duplicate);
-    assert!(!rust(&input.path).status.success(), "Rust must reject duplicate");
-    assert!(python(&input.path).status.success(), "historical Python silently deduplicates");
+    assert!(
+        !rust(&input.path).status.success(),
+        "Rust must reject duplicate"
+    );
+    assert!(
+        python(&input.path).status.success(),
+        "historical Python silently deduplicates"
+    );
 
     let mut unknown = original.clone();
     case_mut(&mut unknown, "retry-reuses-evaluation-id")["untrusted_extra"] = json!(true);
     let input = Input::new(&unknown);
-    assert!(!rust(&input.path).status.success(), "Rust must reject unknown fields");
-    assert!(python(&input.path).status.success(), "historical Python permits extra fields");
+    assert!(
+        !rust(&input.path).status.success(),
+        "Rust must reject unknown fields"
+    );
+    assert!(
+        python(&input.path).status.success(),
+        "historical Python permits extra fields"
+    );
 
     let mut missing_causal_evidence = original;
-    case_mut(&mut missing_causal_evidence, "evaluator-version-churn-same-family")
-        ["evaluator_changed"] = json!(false);
+    case_mut(
+        &mut missing_causal_evidence,
+        "evaluator-version-churn-same-family",
+    )["evaluator_changed"] = json!(false);
     let input = Input::new(&missing_causal_evidence);
     assert!(
         !rust(&input.path).status.success(),
