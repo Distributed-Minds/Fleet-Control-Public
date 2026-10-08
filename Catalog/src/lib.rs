@@ -1142,7 +1142,8 @@ mod tests {
             assert!(
                 errors
                     .iter()
-                    .any(|error| error.contains("duplicate JSON object member") && error.contains(key)),
+                    .any(|error| error.contains("duplicate JSON object member")
+                        && error.contains(key)),
                 "{key} was not rejected as a duplicate: {errors:?}"
             );
         }
