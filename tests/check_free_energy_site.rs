@@ -183,6 +183,19 @@ fn has_unique_main_landmark(elements: &[&str]) -> bool {
     }
 }
 
+/// A base URL changes where relative CSS and fragment links resolve; a
+/// meta refresh can redirect the visitor without JavaScript. Neither belongs
+/// in this no-navigation-side-effects static landing.
+fn has_browser_navigation_override(elements: &[&str]) -> bool {
+    elements.iter().any(|tag| {
+        is_open_element(tag, "base")
+            || (is_open_element(tag, "meta")
+                && attribute(tag, "http-equiv")
+                    .map(|directive| directive.trim().eq_ignore_ascii_case("refresh"))
+                    .unwrap_or(false))
+    })
+}
+
 /// Ignore required copy that exists only in source comments. This is a
 /// conservative source check, not a complete HTML text-content parser.
 /// An unclosed comment consumes the rest of the document.
@@ -268,6 +281,11 @@ fn validate(root: &Path) -> Vec<String> {
         &mut errors,
         stylesheets == ["./styles.css"],
         "Expected one relative local stylesheet",
+    );
+    expect(
+        &mut errors,
+        !has_browser_navigation_override(&elements),
+        "Unexpected base URL override or automatic meta refresh",
     );
     for forbidden in ["script", "iframe", "form", "object", "embed"] {
         expect(
@@ -565,6 +583,37 @@ data="x"></OBject><EMBED/>"#;
         assert!(!is_open_element("/script", "script"));
         assert!(is_open_element("a\nhref=\"#main\"", "a"));
         assert!(is_open_element("MAIN\tid=\"main\"", "main"));
+    }
+
+    #[test]
+    fn base_url_and_meta_refresh_cannot_override_visitor_navigation() {
+        let base = tags(r##"<head><BASE href="https://example.invalid/"></head>"##);
+        assert!(has_browser_navigation_override(&base));
+
+        let redirect = tags(
+            r##"<meta HTTP-EQUIV = 'ReFrEsH' content="0; url=https://example.invalid/">"##,
+        );
+        assert!(has_browser_navigation_override(&redirect));
+
+        let timed_reload = tags(r##"<meta http-equiv=" refresh " content="30">"##);
+        assert!(has_browser_navigation_override(&timed_reload));
+    }
+
+    #[test]
+    fn ordinary_meta_tags_and_spoofed_navigation_markup_are_allowed() {
+        let normal = tags(
+            r##"<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b1015">"##,
+        );
+        assert!(!has_browser_navigation_override(&normal));
+
+        let decoys = tags(
+            r##"<!-- <base href="https://example.invalid/">
+<meta http-equiv="refresh" content="0"> -->
+<a title='<base href="https://example.invalid/">' href="#main">Skip</a>
+<meta data-http-equiv="refresh" content="0">"##,
+        );
+        assert!(!has_browser_navigation_override(&decoys));
     }
 
     #[test]
