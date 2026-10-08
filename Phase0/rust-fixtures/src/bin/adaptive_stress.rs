@@ -424,16 +424,13 @@ mod tests {
 
     #[test]
     fn missing_telemetry_cannot_fabricate_numeric_measurements() {
-        let modified = change(
-            "missing-telemetry-is-unknown",
-            "numeric_default",
-            json!(0),
-        );
+        let modified = change("missing-telemetry-is-unknown", "numeric_default", json!(0));
         let errors = checked(modified).expect_err("missing telemetry must fail closed");
         assert!(
-            errors.iter().any(|error| error.contains("missing telemetry cannot acquire a numeric default")),
+            errors
+                .iter()
+                .any(|error| error.contains("missing telemetry cannot acquire a numeric default")),
             "{errors:?}"
         );
     }
-
 }
