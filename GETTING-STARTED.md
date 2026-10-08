@@ -228,7 +228,7 @@ Unless you explicitly change the rules, it should not:
 
 ### Existing repository
 
-Download the release ZIP. Copy its `Phase0/` folder into the root of your existing repository and commit it. Then use that repository's exact `OWNER/REPOSITORY` name in Project instructions and automation prompts.
+Download the release ZIP and follow **Option B** above rather than relying on the ZIP's older bundled instructions. Copy its complete `Phase0/` directory into a repository you own. If `Phase0/` already exists, inspect and reconcile the files instead of overwriting them. For the historical `v0.1.2` ZIP, copy the [public Phase0 MIT notice](LICENSE) to `Phase0/LICENSE` before committing, without replacing your project's root `LICENSE`. Commit on **your repository's default branch**, verify both `Phase0/05-FLEET-CONFIG.md` and `Phase0/LICENSE` are present there, and use that repository's exact `OWNER/REPOSITORY` in Project instructions and automation prompts.
 
 ### Command line
 
