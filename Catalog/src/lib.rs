@@ -194,6 +194,16 @@ fn is_relative_path(value: &str) -> bool {
         && value.as_bytes().get(1).is_none_or(|b| *b != b':')
 }
 
+// Bidirectional formatting controls change the perceived direction of link
+// paths and evidence references without changing the underlying URL bytes.
+// They must never be admitted as apparently trustworthy catalog links.
+fn is_bidi_format(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{061c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'
+    )
+}
+
 /// Conservative, offline admission for externally displayed links. This does
 /// not resolve DNS, follow redirects, authenticate a host or prove its rights.
 /// IP literals, ports, userinfo and non-ASCII DNS names are intentionally out
@@ -258,9 +268,14 @@ fn is_public_https_url(url: &str) -> bool {
         b'A'..=b'F' => Some(b - b'A' + 10),
         _ => None,
     };
-    for (i, b) in bytes.iter().enumerate() {
-        if *b == b'%' {
-            let Some((hi, lo)) = bytes.get(i + 1).zip(bytes.get(i + 2)) else {
+    // Decode exactly one URL-escape layer before checking display-control
+    // characters. Checking only raw Unicode misses %E2%80%AE and similar
+    // bidi spoofs that browsers decode when following a link.
+    let mut decoded_url = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            let Some((hi, lo)) = bytes.get(index + 1).zip(bytes.get(index + 2)) else {
                 return false;
             };
             let (Some(hi), Some(lo)) = (decode_hex(*hi), decode_hex(*lo)) else {
@@ -275,7 +290,17 @@ fn is_public_https_url(url: &str) -> bool {
             {
                 return false;
             }
+            decoded_url.push(decoded);
+            index += 3;
+        } else {
+            decoded_url.push(bytes[index]);
+            index += 1;
         }
+    }
+    // Reject invalid UTF-8 after decoding; its browser presentation is not
+    // reliably equivalent to the evidence URL being reviewed.
+    if !std::str::from_utf8(&decoded_url).is_ok_and(|s| !s.chars().any(is_bidi_format)) {
+        return false;
     }
     true
 }
