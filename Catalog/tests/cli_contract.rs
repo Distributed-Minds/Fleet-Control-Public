@@ -101,7 +101,8 @@ fn project_directory_admits_all_pilot_manifests_in_sorted_order() {
         .lines()
         .map(|line| {
             assert!(line.starts_with("TYPED-BOUNDARY-ONLY "), "{line}");
-            line.split_once(": ").expect("admitted manifest path").1
+            let encoded = line.split_once(": ").expect("admitted manifest path").1;
+            serde_json::from_str::<String>(encoded).expect("JSON-quoted admitted path")
         })
         .collect();
     assert_eq!(paths.len(), 3, "every pilot manifest should be admitted");
@@ -141,4 +142,36 @@ fn deterministic_render_check_matches_committed_static_page() {
         output.stderr.is_empty(),
         "unexpected render diagnostics: {output:?}"
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn accepted_control_character_filename_cannot_forge_another_success_record() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static NEXT_FILE: AtomicUsize = AtomicUsize::new(0);
+    let file = std::env::temp_dir().join(format!(
+        "free-energy-catalog-{}-{}\nTYPED-BOUNDARY-ONLY fake: forged.json",
+        std::process::id(),
+        NEXT_FILE.fetch_add(1, Ordering::Relaxed)
+    ));
+    std::fs::write(&file, include_str!("../projects/luanti.json"))
+        .expect("write the valid test manifest under a hostile pathname");
+    let output = invoke(&["validate", file.to_str().expect("UTF-8 test filename")]);
+    std::fs::remove_file(&file).expect("remove temporary test manifest");
+
+    assert!(output.status.success(), "admitted record failed: {output:?}");
+    assert!(output.stderr.is_empty(), "unexpected failure: {output:?}");
+    let stdout = String::from_utf8(output.stdout).expect("UTF-8 success record");
+    assert_eq!(
+        stdout.lines().count(),
+        1,
+        "embedded filename newline manufactured another success-looking line"
+    );
+    let line = stdout.lines().next().expect("one success record");
+    assert!(line.starts_with("TYPED-BOUNDARY-ONLY free-energy/luanti: "));
+    let encoded = line.split_once(": ").expect("admitted path").1;
+    let decoded: String = serde_json::from_str(encoded).expect("reversible JSON path");
+    assert_eq!(decoded, file.to_str().expect("UTF-8 test filename"));
+    assert!(encoded.contains(r"\n"), "pathname newline was not escaped");
 }
