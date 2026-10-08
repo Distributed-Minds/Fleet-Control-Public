@@ -371,7 +371,7 @@ mod tests {
     #[test]
     fn unclosed_comments_and_tags_do_not_create_pseudo_links() {
         assert!(tags(r#"<!-- <a href="https://example.com/forged">"#).is_empty());
-        assert!(tags(r#"<a href="#incomplete""#).is_empty());
+        assert!(tags(r##"<a href="#incomplete""##).is_empty());
     }
 
     #[test]
