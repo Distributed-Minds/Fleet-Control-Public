@@ -23,6 +23,7 @@ struct Case {
     id: String,
     changes: Vec<Change>,
     expected_semantic_valid: bool,
+    reason: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -34,10 +35,16 @@ fn execute_case(base: &str, case: &Case) -> Result<(), String> {
     let mut value: Value = serde_json::from_str(base).map_err(|e| e.to_string())?;
     for change in &case.changes {
         if change.op != "replace" || !change.pointer.starts_with('/') {
-            return Err(format!("unsupported mutation: {} {}", change.op, change.pointer));
+            return Err(format!(
+                "unsupported mutation: {} {}",
+                change.op, change.pointer
+            ));
         }
         let slot = value.pointer_mut(&change.pointer).ok_or_else(|| {
-            format!("{}: mutation target does not exist: {}", case.id, change.pointer)
+            format!(
+                "{}: mutation target does not exist: {}",
+                case.id, change.pointer
+            )
         })?;
         *slot = change.value.clone();
     }
@@ -50,7 +57,10 @@ fn execute_case(base: &str, case: &Case) -> Result<(), String> {
 fn check_suite(source: &str) -> Result<(usize, usize), String> {
     let suite: Suite = serde_json::from_str(source).map_err(|e| e.to_string())?;
     if suite.cases.len() != 13 {
-        return Err(format!("expected 13 authored semantic cases, got {}", suite.cases.len()));
+        return Err(format!(
+            "expected 13 authored semantic cases, got {}",
+            suite.cases.len()
+        ));
     }
     if validate_manifest(BASE).is_err() {
         return Err("unmodified baseline is not a valid typed manifest".to_string());
@@ -59,7 +69,10 @@ fn check_suite(source: &str) -> Result<(usize, usize), String> {
     let mut accepted = 0;
     let mut rejected = 0;
     for case in &suite.cases {
-        if case.id.trim().is_empty() || !seen.insert(case.id.as_str()) {
+        if case.id.trim().is_empty()
+            || case.reason.trim().is_empty()
+            || !seen.insert(case.id.as_str())
+        {
             return Err(format!("duplicate or blank fixture case ID: {}", case.id));
         }
         let result = execute_case(BASE, case);
