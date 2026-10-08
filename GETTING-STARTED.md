@@ -47,7 +47,9 @@ This fork method copies **all** upstream branches, including historical/research
 
 **Option B — clean existing repository: install the release ZIP**
 
-Open [FREE ENERGY releases](https://github.com/Distributed-Minds/Fleet-Control-Public/releases), download the latest `FREE-ENERGY-Phase0-Starter-…-preview.zip`, and copy its entire `Phase0/` directory into the root of a repository you own; **commit** the files. Preserve any existing source code. This avoids copying upstream work-in-progress branches. The ZIP also contains the Project and automation prompt templates used in later steps.
+Open [FREE ENERGY releases](https://github.com/Distributed-Minds/Fleet-Control-Public/releases), download the latest `FREE-ENERGY-Phase0-Starter-…-preview.zip`, and copy its entire `Phase0/` directory into the root of a repository you own; **commit** the files. Preserve any existing source code and your repository's own root `LICENSE`. This avoids copying upstream work-in-progress branches. The ZIP also contains the Project and automation prompt templates used in later steps.
+
+**Keep the Phase0 license notice with the installed files.** Check that your installed `Phase0/LICENSE` contains the [FREE ENERGY Phase0 MIT notice](LICENSE). The current online preview includes that file inside `Phase0/`; the historical v0.1.2 ZIP predates this addition, so when installing from that ZIP, copy the public [Phase0 MIT notice](LICENSE) into `Phase0/LICENSE` yourself before committing. **Do not overwrite your existing repository's root `LICENSE`:** Phase0's MIT notice covers the copied Phase0 files, not unrelated files in your project.
 
 **Published ZIP version caveat:** The existing `v0.1.2-phase0-preview` release ZIP predates the corrected fork/default-branch instructions in this online guide. It is a historical starter package, **not** an archive of the current `phase0/public-v0` head. Follow these up-to-date online steps even if you use the ZIP, confirm `Phase0/05-FLEET-CONFIG.md` appears on **your repository's default branch**, and inspect the installed files before creating or enabling automations; do not rely on bundled older setup text alone.
 
