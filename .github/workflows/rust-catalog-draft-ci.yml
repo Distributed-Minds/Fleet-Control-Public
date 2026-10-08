@@ -10,21 +10,31 @@ on:
 permissions:
   contents: read
 jobs:
-  rust-catalog:
+  rustfmt:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust formatter
+        run: rustup toolchain install 1.85.1 --profile minimal --component rustfmt
+      - name: Check Rust formatting
+        run: rustup run 1.85.1 cargo fmt --manifest-path Catalog/Cargo.toml -- --check
+  rust-tests:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-      - name: Install pinned Rust toolchain
-        run: rustup toolchain install 1.85.1 --profile minimal --component clippy --component rustfmt
-      - name: Verify locked and offline Rust catalog draft
+      - name: Install pinned Rust compiler
+        run: rustup toolchain install 1.85.1 --profile minimal --component clippy
+      - name: Verify locked/offline Rust tests and lint
         shell: bash
         run: |
           set -euo pipefail
           test -f Catalog/Cargo.lock
-          rustup run 1.85.1 cargo fmt --manifest-path Catalog/Cargo.toml -- --check
           rustup run 1.85.1 cargo fetch --manifest-path Catalog/Cargo.toml --locked
           rustup run 1.85.1 cargo test --manifest-path Catalog/Cargo.toml --locked --offline
           rustup run 1.85.1 cargo clippy --manifest-path Catalog/Cargo.toml --all-targets --locked --offline -- -D warnings
