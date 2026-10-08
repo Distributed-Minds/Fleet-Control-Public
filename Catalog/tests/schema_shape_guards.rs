@@ -48,7 +48,10 @@ fn display_name_length_is_codepoint_bounded_and_blank_names_fail() {
 #[test]
 fn rights_claims_require_actual_scopes_statements_and_exception_text() {
     for (pointer, diagnostic) in [
-        ("/rights_claims/0/scope", "rights_claims[0].scope must be nonblank"),
+        (
+            "/rights_claims/0/scope",
+            "rights_claims[0].scope must be nonblank",
+        ),
         (
             "/rights_claims/0/statement",
             "rights_claims[0].statement must be nonblank",
@@ -74,7 +77,10 @@ fn evidence_and_review_metadata_cannot_be_empty() {
             "/evidence/0/subject_scope",
             "evidence[0].subject_scope must be nonblank",
         ),
-        ("/evidence/0/reviewer", "evidence[0].reviewer must be nonblank"),
+        (
+            "/evidence/0/reviewer",
+            "evidence[0].reviewer must be nonblank",
+        ),
         (
             "/evidence/0/observed_at",
             "evidence[0].observed_at must be nonblank",
