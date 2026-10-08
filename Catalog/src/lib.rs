@@ -145,6 +145,13 @@ pub struct Review {
 
 /// Mirror the public schema's namespace/slug project ID pattern without
 /// accepting uppercase, separators, or invalid first characters.
+// Matches the published JSON Schema $defs.slug for claim/evidence identities.
+fn is_slug(value: &str) -> bool {
+    let mut bytes = value.bytes();
+    bytes.next().is_some_and(|b| b.is_ascii_lowercase())
+        && bytes.all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-')
+}
+
 fn is_project_id(value: &str) -> bool {
     fn valid_part(part: &str) -> bool {
         let mut bytes = part.bytes();
@@ -485,6 +492,9 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
 
     let mut evidence = HashMap::new();
     for item in &record.evidence {
+        if !is_slug(&item.evidence_id) {
+            problems.push(format!("invalid evidence ID slug: {}", item.evidence_id));
+        }
         if !is_public_https_url(&item.url) {
             problems.push(format!(
                 "inadmissible external URL: evidence {}",
@@ -512,6 +522,9 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
     let mut claims = HashSet::new();
     let mut scopes = HashSet::new();
     for item in &record.rights_claims {
+        if !is_slug(&item.claim_id) {
+            problems.push(format!("invalid claim ID slug: {}", item.claim_id));
+        }
         if !claims.insert(item.claim_id.as_str()) {
             problems.push(format!("duplicate rights claim ID: {}", item.claim_id));
         }
@@ -519,7 +532,11 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
         if item.evidence_ids.is_empty() {
             problems.push(format!("rights claim {} has no evidence", item.claim_id));
         }
+        let mut referenced = HashSet::new();
         for id in &item.evidence_ids {
+            if !referenced.insert(id.as_str()) {
+                problems.push(format!("duplicate evidence reference in claim {}: {id}", item.claim_id));
+            }
             match evidence.get(id.as_str()) {
                 None => problems.push(format!("claim {} has unknown evidence {id}", item.claim_id)),
                 Some(ref_item) if ref_item.currentness == "INVALIDATED" => {
@@ -565,7 +582,11 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
         {
             problems.push("NOT_AUTHORIZED requires review date and reviewer".to_string());
         }
+        let mut reviewed_sources = HashSet::new();
         for id in &item.review_evidence_ids {
+            if !reviewed_sources.insert(id.as_str()) {
+                problems.push(format!("duplicate permission evidence reference: {id}"));
+            }
             match evidence.get(id.as_str()) {
                 None => problems.push(format!("permission references missing evidence {id}")),
                 Some(source) if source.currentness == "INVALIDATED" => {
