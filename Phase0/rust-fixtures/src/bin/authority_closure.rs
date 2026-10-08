@@ -89,7 +89,21 @@ fn validate_inputs(case: &Map<String, Value>) -> Result<(), String> {
         let good = if BOOLS.contains(&name.as_str()) {
             value.is_boolean()
         } else if STRINGS.contains(&name.as_str()) {
-            value.is_string()
+            let Some(text) = value.as_str() else {
+                return Err(format!("invalid type for semantic input: {name}"));
+            };
+            // An unknown enum value must not bypass validation just because
+            // another unrelated rule short-circuits semantic evaluation.
+            let supported = match name.as_str() {
+                "provider_access" => text == "ERROR",
+                "state_class" => matches!(text, "COMMITTED_OBLIGATION" | "HISTORICAL_EFFECT"),
+                "composition" => matches!(text, "ALL_REQUIRED" | "ANY_OF_DECLARED"),
+                _ => false,
+            };
+            if !supported {
+                return Err(format!("unsupported value for semantic input: {name}"));
+            }
+            true
         } else if COUNTS.contains(&name.as_str()) {
             value.as_u64().is_some()
         } else {
@@ -366,6 +380,37 @@ mod tests {
         .is_err());
         assert!(evaluate(&input(json!({"expected":"NO_AUTHORITY","cycle":true}))).is_err());
         assert!(evaluate(&input(json!({"failed_descendants":-1}))).is_err());
+    }
+
+    #[test]
+    fn unsupported_string_states_fail_before_unrelated_short_circuits() {
+        for (field, invalid) in [
+            ("provider_access", "NOT_ERROR"),
+            ("state_class", "UNKNOWN_STATE"),
+            ("composition", "QUORUM"),
+        ] {
+            // Previously the false inventory flag returned UNKNOWN while an
+            // unrelated malformed enumeration was silently accepted.
+            let mut case = input(json!({"inventory_complete": false}));
+            case.insert(field.to_owned(), json!(invalid));
+            assert!(
+                evaluate(&case).is_err(),
+                "unrecognized {field}={invalid} bypassed semantic input admission"
+            );
+        }
+    }
+
+    #[test]
+    fn historical_string_states_remain_admitted() {
+        for case in [
+            json!({"provider_access":"ERROR"}),
+            json!({"state_class":"COMMITTED_OBLIGATION"}),
+            json!({"state_class":"HISTORICAL_EFFECT"}),
+            json!({"composition":"ALL_REQUIRED","surviving_roots":1,"required_roots":1}),
+            json!({"composition":"ANY_OF_DECLARED","surviving_roots":1,"required_roots":2}),
+        ] {
+            assert!(evaluate(&input(case.clone())).is_ok(), "rejected {case}");
+        }
     }
 
     #[test]
