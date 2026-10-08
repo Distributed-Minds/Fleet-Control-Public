@@ -4,7 +4,7 @@ Check each item before asking the fleet to do important work.
 
 - [ ] I have a GitHub account.
 - [ ] I have a repository that I own or am authorized to modify.
-- [ ] **If installing from the published `v0.1.2-phase0-preview` ZIP:** I downloaded the ZIP and its matching [published `.zip.sha256` sidecar](https://github.com/Distributed-Minds/Fleet-Control-Public/releases/download/v0.1.2-phase0-preview/FREE-ENERGY-Phase0-Starter-v0.1.2-preview.zip.sha256) **into the same directory**. Before extracting or copying files, I ran `sha256sum --check FREE-ENERGY-Phase0-Starter-v0.1.2-preview.zip.sha256` from that directory and confirmed the exact ZIP filename reports `OK`. I stopped if the checksum or ZIP was missing or mismatched. Without `sha256sum`, I used a trusted SHA-256 tool and manually compared the entire hexadecimal digest with the matching sidecar. Matching the publisher's sidecar detects accidental/substituted ZIP bytes relative to that sidecar; it is **not** independent publisher authentication, rights clearance, a safety audit, or proof the archived guide is current. This check applies only to the published ZIP, not a current-source or fork installation.
+- [ ] **If installing from the published `v0.1.2-phase0-preview` ZIP:** I downloaded the ZIP and its matching [published `.zip.sha256` sidecar](https://github.com/Distributed-Minds/Fleet-Control-Public/releases/download/v0.1.2-phase0-preview/FREE-ENERGY-Phase0-Starter-v0.1.2-preview.zip.sha256) **into the same directory**. Before extracting or copying files, I ran `sha256sum --check FREE-ENERGY-Phase0-Starter-v0.1.2-preview.zip.sha256` from that directory and confirmed the exact ZIP filename reports `OK`. I stopped if the checksum or ZIP was missing or mismatched. On Windows, I used [the native PowerShell verification below](#windows-powershell-verification-of-the-historical-zip); on other systems without `sha256sum`, I used a trusted SHA-256 tool and manually compared the entire hexadecimal digest with the matching sidecar. Matching the publisher's sidecar detects accidental/substituted ZIP bytes relative to that sidecar; it is **not** independent publisher authentication, rights clearance, a safety audit, or proof the archived guide is current. This check applies only to the published ZIP, not a current-source or fork installation.
 - [ ] **If using that historical ZIP:** I followed the [current online Getting Started guide](https://github.com/Distributed-Minds/Fleet-Control-Public/blob/phase0/public-v0/GETTING-STARTED.md), **not the older setup text bundled in v0.1.2**, for the correct repository/default-branch, connection and automation steps. This historical release is not the current `phase0/public-v0` branch snapshot.
 - [ ] The complete `Phase0/` folder is committed in that repository.
 - [ ] My repository's **default branch** contains `Phase0/05-FLEET-CONFIG.md` (a default-branch-only fork of the current upstream `main` does not).
@@ -22,3 +22,18 @@ Check each item before asking the fleet to do important work.
 - [ ] I understand analysis-only requests should not silently become product-code changes.
 - [ ] I understand generated code still needs normal tests, permissions, CI, backups, and human judgment.
 - [ ] I am starting on a repository where mistakes are recoverable.
+
+## Windows PowerShell verification of the historical ZIP
+
+Run this in PowerShell **from the directory containing both downloaded files**. This rejects an absent ZIP/sidecar, a malformed or differently named checksum entry, and a digest mismatch; only a verified match prints `OK`. It does not independently authenticate the publisher.
+
+```powershell
+$zip = 'FREE-ENERGY-Phase0-Starter-v0.1.2-preview.zip'
+$sidecarLine = (Get-Content -LiteralPath "$zip.sha256" -Raw -ErrorAction Stop).TrimEnd()
+$pattern = '^([0-9a-fA-F]{64}) [ *]' + [regex]::Escape($zip) + '$'
+if ($sidecarLine -cmatch $pattern) { $expected = $Matches[1] }
+else { throw 'Checksum sidecar malformed or names the wrong ZIP' }
+$actual = (Get-FileHash -LiteralPath $zip -Algorithm SHA256 -ErrorAction Stop).Hash
+if ($actual -ine $expected) { throw 'SHA-256 mismatch; do not extract this ZIP' }
+"OK: $zip"
+```
