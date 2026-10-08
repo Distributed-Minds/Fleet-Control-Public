@@ -55,7 +55,20 @@ Open [FREE ENERGY releases](https://github.com/Distributed-Minds/Fleet-Control-P
 sha256sum --check FREE-ENERGY-Phase0-Starter-v0.1.2-preview.zip.sha256
 ```
 
-Continue only when the ZIP reports `OK`; **stop** on a missing file or checksum mismatch. Without `sha256sum`, calculate the downloaded ZIP's SHA-256 with a trusted hashing tool and compare it to the digest in the downloaded checksum file. Use the ZIP and checksum from the **same release**, and check that the checksum refers to the exact ZIP filename; do not assume future releases publish the same assets. Matching a checksum detects differences relative to that checksum file; it does **not independently authenticate the publisher**.
+On **Windows PowerShell**, run this equivalent check from the folder containing both downloads. It rejects a malformed sidecar, a sidecar naming another ZIP, or a differing file digest:
+
+```powershell
+$zip = 'FREE-ENERGY-Phase0-Starter-v0.1.2-preview.zip'
+$line = (Get-Content -LiteralPath "$zip.sha256" -Raw).Trim()
+$pattern = '^(?<digest>[0-9a-fA-F]{64})[ \t]+\*?' + [regex]::Escape($zip) + '$'
+$match = [regex]::Match($line, $pattern)
+if (-not $match.Success) { throw 'Invalid checksum file or wrong ZIP filename' }
+$actual = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash
+if ($actual -ne $match.Groups['digest'].Value) { throw 'ZIP SHA-256 mismatch' }
+Write-Output "OK: $zip matches its published checksum"
+```
+
+Continue only when the verification reports `OK`; **stop** on a missing file or checksum mismatch. Without `sha256sum`, calculate the downloaded ZIP's SHA-256 with a trusted hashing tool and compare it to the digest in the downloaded checksum file. Use the ZIP and checksum from the **same release**, and check that the checksum refers to the exact ZIP filename; do not assume future releases publish the same assets. Matching a checksum detects differences relative to that checksum file; it does **not independently authenticate the publisher**.
 
 **Keep the Phase0 license notice with the installed files.** Check that your installed `Phase0/LICENSE` contains the [FREE ENERGY Phase0 MIT notice](LICENSE). The current online preview includes that file inside `Phase0/`; the historical v0.1.2 ZIP predates this addition, so when installing from that ZIP, copy the public [Phase0 MIT notice](LICENSE) into `Phase0/LICENSE` yourself before committing. **Do not overwrite your existing repository's root `LICENSE`:** Phase0's MIT notice covers the copied Phase0 files, not unrelated files in your project.
 
