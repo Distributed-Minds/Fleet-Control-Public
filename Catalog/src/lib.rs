@@ -41,6 +41,7 @@ pub enum PlayStatus {
     EngineOnly,
     UpstreamLinkOnly,
     FreeEnergyVerified,
+    #[serde(rename = "UNAVAILABLE_EVIDENCED")]
     Unavailable,
     Unknown,
 }
@@ -619,6 +620,25 @@ mod tests {
         let mut value: Value = serde_json::from_str(base).expect("valid test source");
         f(&mut value);
         serde_json::to_string(&value).expect("serializable mutated fixture")
+    }
+
+    #[test]
+    fn unavailable_status_uses_schema_spelling() {
+        let admitted = changed(LUANTI, |record| {
+            record["play"]["status"] = json!("UNAVAILABLE_EVIDENCED");
+        });
+        assert!(
+            validate_manifest(&admitted).is_ok(),
+            "the published v5 schema status must deserialize"
+        );
+
+        let forged = changed(LUANTI, |record| {
+            record["play"]["status"] = json!("UNAVAILABLE");
+        });
+        assert!(
+            validate_manifest(&forged).is_err(),
+            "the unpublished short alias must not be admitted"
+        );
     }
 
     #[test]
