@@ -144,7 +144,9 @@ pub enum Verdict {
 }
 
 fn named(id: &str) -> bool {
-    !id.trim().is_empty()
+    // Opaque provider identifiers must not carry terminal/control bytes.
+    // Such bytes can corrupt serialized receipts and audit boundaries.
+    !id.trim().is_empty() && !id.chars().any(char::is_control)
 }
 
 /// Deterministic, side-effect-free AND composition of independent bases.
@@ -410,6 +412,64 @@ mod tests {
             protections: Protections::default(),
             effect_state: EffectState::NotAttempted,
         }
+    }
+
+    #[test]
+    fn control_bytes_cannot_admit_archival_or_authority_identifiers() {
+        for bad in [
+            "record\n42",
+            "record\r42",
+            "record\0id",
+            "record\u{007f}id",
+            "record\u{0085}id",
+        ] {
+            // Make *every* copy of the source ID agree to prove that this
+            // rejection is about unsafe identifiers, not a version mismatch.
+            let mut witness = fixture();
+            witness.observed_source.record_id = bad.into();
+            witness.archive.source.record_id = bad.into();
+            witness.authority.source.record_id = bad.into();
+            assert_eq!(
+                evaluate(&witness),
+                Verdict::Ineligible(Denial::SourceMoved),
+                "unsafe source ID admitted: {bad:?}"
+            );
+
+            let mut witness = fixture();
+            witness.operation_id = bad.into();
+            witness.authority.operation_id = bad.into();
+            assert_eq!(
+                evaluate(&witness),
+                Verdict::Ineligible(Denial::AuthorityNotCurrent),
+                "unsafe operation ID admitted: {bad:?}"
+            );
+
+            let mut witness = fixture();
+            witness.ordering.basis.identity = bad.into();
+            witness.snapshot.ordering.identity = bad.into();
+            assert_eq!(
+                evaluate(&witness),
+                Verdict::Ineligible(Denial::OrderNotProven),
+                "unsafe ordering ID admitted: {bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn coherent_replay_rejects_control_bytes_in_stable_record_identity() {
+        let mut archive = item("a", 10);
+        archive.stable_id = "a\nforged".into();
+        assert_eq!(
+            replay(&[archive, item("b", 11)], &[item("c", 12)], &cut()),
+            Err(ReplayFailure::UntrustedCut)
+        );
+        // Non-ASCII ordinary opaque identities remain valid.
+        let ordinary = item("μ-opaque", 10);
+        assert_eq!(
+            replay(&[ordinary.clone(), item("b", 11)], &[item("c", 12)], &cut())
+                .unwrap()[0],
+            ordinary
+        );
     }
 
     #[test]
