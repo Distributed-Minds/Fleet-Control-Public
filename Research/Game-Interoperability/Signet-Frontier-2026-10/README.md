@@ -51,6 +51,15 @@ Compact community handoff:
 
 - `Publications/Game-Interoperability/DISCORD-HANDOFF.md`
 
+## Corrected L1/L2 source archives (integrated 2026-10-08)
+
+This research tree now **preserves the corrected primary-source experiments**, not just the response-paper summaries. The original corrected branches remain available as Git provenance. Both archival imports landed in this **non-default research branch**, not the public `main`, installable Phase0 preview, release package, or a deployed FREE ENERGY product:
+
+- **L1 — corrected semantic protocol evidence:** [semantic-core JSON Schema](lanes/L1/schema/signet-semantic-core-0.schema.json) and [cross-language JavaScript reference](lanes/L1/reference/javascript/reference.mjs), with the corrected canonicalization/composition vectors under `lanes/L1/`. [PR #77](https://github.com/Distributed-Minds/Fleet-Control-Public/pull/77) preserved all **29** selected corrected L1 source blobs and merged into this research branch at `9a1af620210338c2ae91ee07fef92b2f86ba4de7`.
+- **L2 — corrected adapter/role-contract research evidence:** [correction notes and historical broken-source segregation](experiments/L2-Verifiable-Translation-Prototype/adapter-role-contract-v1/CORRECTION-NOTES.md), [resolver pilot](experiments/L2-Resolver-Pilot/README.md), and [third-party source/rights ledger](experiments/L2-THIRD-PARTY-PROVENANCE.md). [PR #78](https://github.com/Distributed-Minds/Fleet-Control-Public/pull/78) preserved all **55** corrected L2 source blobs plus an explicit supplemental provenance ledger and merged into this research branch at `480fdf31cd44e7211c880c6b829a5fdc22df339c`.
+
+**Evidence/rights boundary:** These byte-preservation results do **not** validate the historical Python/JavaScript/TypeScript research scripts as maintained executables, prove interoperability with a real game or Godot runtime, establish full license/asset clearance, or qualify a release. The [L2 provenance ledger](experiments/L2-THIRD-PARTY-PROVENANCE.md) retains **RIGHTS_PENDING** and records an offline C host-harness strict-build limitation; the original archive remains unchanged. Legacy research scripts and deliberately broken historical fixtures are **inert archival evidence**, not part of the supported FREE ENERGY toolchain. Any promoted maintained validation must satisfy [Rust-only/no-npm issue #70](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/70). [Issue #73](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/73) tracks remaining source-ledger, rights and conformance disposition; do not infer its completion from these merges.
+
 ## Parallel continuation lanes
 
 The next research pass is split into four non-overlapping lanes:
