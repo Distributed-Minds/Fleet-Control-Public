@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 static NEXT_FILE: AtomicUsize = AtomicUsize::new(0);
 
-const FILE_CLIS: [(&str, &str); 8] = [
+const FILE_CLIS: [(&str, &str); 9] = [
     (
         "containment",
         env!("CARGO_BIN_EXE_free-energy-phase0-fixtures"),
@@ -31,10 +31,14 @@ const FILE_CLIS: [(&str, &str); 8] = [
         "integration_candidate",
         env!("CARGO_BIN_EXE_integration_candidate"),
     ),
+    (
+        "integration_candidate_digest",
+        env!("CARGO_BIN_EXE_integration_candidate_digest"),
+    ),
 ];
 
 #[test]
-fn all_eight_external_fixture_clis_reject_non_utf8_input_without_success_output() {
+fn all_nine_external_fixture_clis_reject_non_utf8_input_without_success_output() {
     for (family, binary) in FILE_CLIS {
         // A raw invalid byte and an incomplete multibyte sequence must each
         // fail before a semantic fixture can be accepted as historical proof.
