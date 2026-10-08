@@ -74,11 +74,20 @@ fn assert_rejected(label: &str, input: &Value) {
 #[test]
 fn exact_historical_input_passes_without_claiming_hash_parity() {
     let output = invoke(&baseline());
-    assert!(output.status.success(), "historical fixture rejected: {output:?}");
+    assert!(
+        output.status.success(),
+        "historical fixture rejected: {output:?}"
+    );
     let stdout = String::from_utf8(output.stdout).expect("UTF-8 CLI result");
     assert!(stdout.contains("6 passed"), "{stdout}");
-    assert!(stdout.contains("SHA-256 identity parity NOT checked"), "{stdout}");
-    assert!(output.stderr.is_empty(), "unexpected diagnostics: {output:?}");
+    assert!(
+        stdout.contains("SHA-256 identity parity NOT checked"),
+        "{stdout}"
+    );
+    assert!(
+        output.stderr.is_empty(),
+        "unexpected diagnostics: {output:?}"
+    );
 }
 
 #[test]
@@ -127,7 +136,10 @@ fn semantic_mutations_fail_at_the_compiled_cli_boundary() {
 
     let mut changed = original.clone();
     changed["cases"][0]["expect"] = json!("UNSUPPORTED_PARENT_CARDINALITY");
-    assert_rejected("expected output rewritten without semantic change", &changed);
+    assert_rejected(
+        "expected output rewritten without semantic change",
+        &changed,
+    );
 }
 
 #[test]
