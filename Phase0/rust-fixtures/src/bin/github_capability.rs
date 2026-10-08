@@ -416,19 +416,6 @@ mod tests {
     }
 
     #[test]
-    fn existing_failure_witnesses_remain_admitted() {
-        // The historical cases are still valid without rewriting their
-        // expected labels; only unsupported changed facts are rejected.
-        for id in [3, 17, 20, 22, 23] {
-            let mut fixture = fixture();
-            fixture["cases"] = json!([fixture["cases"].as_array().unwrap()
-                .iter().find(|case| case["id"] == json!(id)).unwrap().clone()]);
-            let case: Case = serde_json::from_value(fixture["cases"][0].clone()).unwrap();
-            assert!(check_case(&case).is_empty(), "rejected historical case {id}");
-        }
-    }
-
-    #[test]
     fn original_twenty_eight_cases_pass_invariant_checks() {
         assert_eq!(checked(fixture()), Ok(28));
     }
