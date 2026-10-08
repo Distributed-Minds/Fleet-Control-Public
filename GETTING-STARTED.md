@@ -224,7 +224,16 @@ Download the release ZIP. Copy its `Phase0/` folder into the root of your existi
 
 ### Command line
 
-If you already use Git, you can clone the public repository locally, add a remote for a repository you own, and push it there. “Clone” means copy to your computer; “fork” means GitHub creates the copy in your account.
+If you already use Git and want to install Phase0 into **an existing repository you control**, clone the **preview branch explicitly**, not upstream `main`:
+
+```sh
+git clone --depth 1 --single-branch --branch phase0/public-v0 \
+  https://github.com/Distributed-Minds/Fleet-Control-Public.git free-energy-preview
+```
+
+Confirm `free-energy-preview/Phase0/05-FLEET-CONFIG.md` and `free-energy-preview/Phase0/LICENSE` exist. On **your own repository's default branch**, copy the complete `free-energy-preview/Phase0/` folder into the repository root, inspect the result, and commit it there. If a `Phase0/` folder already exists, review and reconcile its contents instead of overwriting it. **Do not copy the upstream `.git/` directory, replace your project's root `LICENSE`, or push to the FREE ENERGY upstream.** Configure `Phase0/05-FLEET-CONFIG.md` and confirm that it appears on your own default branch before scheduling agents.
+
+A plain clone without `--branch phase0/public-v0` checks out upstream `main`, which **does not contain Phase0**. If you want a full GitHub-hosted fork rather than copying only the starter, follow **Option A** above. “Clone” means copying the repository to your computer; “fork” means GitHub makes a repository copy in your account.
 
 ## Before important work
 
