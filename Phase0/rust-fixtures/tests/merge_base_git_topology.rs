@@ -163,6 +163,6 @@ fn changing_an_observed_tip_changes_the_authoritative_base_set() {
     // A new actual merge commit on top of one side makes that side the
     // unique best ancestor. Old multi-base predictions are now stale.
     let advanced = repo.commit("advanced", &[&tip_a, &tip_b]);
-    assert_eq!(repo.best_bases(&advanced, &tip_b), vec![tip_b]);
+    assert_eq!(repo.best_bases(&advanced, &tip_b), vec![tip_b.clone()]);
     assert_ne!(repo.best_bases(&advanced, &tip_b), original);
 }
