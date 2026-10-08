@@ -168,8 +168,12 @@ fn is_full_git_sha(value: &str) -> bool {
 }
 
 fn is_relative_path(value: &str) -> bool {
+    // Repository paths are identity-bearing, not URL paths. Until an
+    // authoritative percent-decoding/canonicalization contract exists, reject
+    // escapes instead of admitting potentially aliased traversal or scope.
     !value.is_empty()
         && !value.starts_with('/')
+        && !value.contains('%')
         && !value.contains('\\')
         && !value.chars().any(char::is_control)
         && value
@@ -787,6 +791,39 @@ mod tests {
             v["upstream"]["source_revision"] = json!("master");
         });
         assert!(validate_manifest(&attack).is_err());
+    }
+
+    #[test]
+    fn percent_escaped_repository_paths_fail_closed_for_rights_and_evidence() {
+        // This is admission policy, not a claim that a subsequent URL fetch
+        // or filesystem consumer safely normalizes arbitrary repository paths.
+        assert!(is_relative_path("assets/audio/music theme.ogg"));
+        assert!(validate_manifest(LUANTI).is_ok());
+        for path in [
+            "assets/%2e%2e/private",
+            "assets/%2Fadmin",
+            "assets/%5cprivate",
+            "assets/%252e%252e/private",
+        ] {
+            assert!(!is_relative_path(path), "ambiguous repository path: {path}");
+            let rights = changed(LUANTI, |record| {
+                record["rights_claims"][0]["scope_kind"] = json!("PATH");
+                record["rights_claims"][0]["scope"] = json!(path);
+            });
+            let errors = validate_manifest(&rights).unwrap_err();
+            assert!(
+                errors.iter().any(|error| error.contains("unsafe rights path scope")),
+                "rights scope {path}: {errors:?}"
+            );
+            let evidence = changed(LUANTI, |record| {
+                record["evidence"][0]["path"] = json!(path);
+            });
+            let errors = validate_manifest(&evidence).unwrap_err();
+            assert!(
+                errors.iter().any(|error| error.contains("invalid pinned repository evidence")),
+                "evidence path {path}: {errors:?}"
+            );
+        }
     }
 
     #[test]
