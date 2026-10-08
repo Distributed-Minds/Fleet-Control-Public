@@ -101,7 +101,7 @@ fn validate(root: &Path) -> Vec<String> {
     for forbidden in ["script", "iframe", "form", "object", "embed"] {
         expect(
             &mut errors,
-            !elements.iter().any(|tag| tag.starts_with(&format!("{forbidden} ")))
+            !elements.iter().any(|tag| tag.starts_with(format!("{forbidden} ").as_str()))
                 && !elements.iter().any(|tag| *tag == forbidden),
             format!("Unexpected active/embedded element: {forbidden}"),
         );
