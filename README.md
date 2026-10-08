@@ -9,7 +9,8 @@
 
 <p align="center">
   <a href="https://github.com/Distributed-Minds/Fleet-Control-Public/releases/tag/v0.1.2-phase0-preview">Current preview</a> ·
-  <a href="https://github.com/Distributed-Minds/Fleet-Control-Public/blob/phase0/public-v0/GETTING-STARTED.md">Get started</a> ·
+  <a href="https://github.com/Distributed-Minds/Fleet-Control-Public/blob/phase0/public-v0/GETTING-STARTED.md">Install Phase0</a> ·
+  <a href="https://github.com/Distributed-Minds/Fleet-Control-Public/blob/phase0/public-v0/HELP-A-PROJECT.md">Help a project</a> ·
   <a href="https://github.com/Distributed-Minds/Fleet-Control-Public/discussions">Join the discussion</a> ·
   <a href="https://github.com/Distributed-Minds/Fleet-Control-Public/issues">Explore issues</a>
 </p>
@@ -40,7 +41,8 @@ FREE ENERGY is an open, collaborative effort to help people and AI-agent fleets 
 | :--- | :--- |
 | **Try the current release** | [Download Phase0 v0.1.2](https://github.com/Distributed-Minds/Fleet-Control-Public/releases/tag/v0.1.2-phase0-preview), follow the [beginner guide](https://github.com/Distributed-Minds/Fleet-Control-Public/blob/phase0/public-v0/GETTING-STARTED.md), and check the [ZIP SHA-256 file](https://github.com/Distributed-Minds/Fleet-Control-Public/releases/download/v0.1.2-phase0-preview/FREE-ENERGY-Phase0-Starter-v0.1.2-preview.zip.sha256). |
 | **Understand the fleet** | Read the [public Phase0 source](https://github.com/Distributed-Minds/Fleet-Control-Public/tree/phase0/public-v0), [coordination model](https://github.com/Distributed-Minds/Fleet-Control-Public/blob/phase0/public-v0/Phase0/README.md), and [branding contract](https://github.com/Distributed-Minds/Fleet-Control-Public/blob/phase0/public-v0/BRANDING.md). |
-| **Help improve something** | Browse [open issues](https://github.com/Distributed-Minds/Fleet-Control-Public/issues) and search existing work before creating a duplicate. You can help with reproducible reports, documentation, tests, or contributions allowed by the relevant project. |
+| **Help an existing project** | Follow the [manual contribution guide and copyable local-agent prompt](https://github.com/Distributed-Minds/Fleet-Control-Public/blob/phase0/public-v0/HELP-A-PROJECT.md), or help with playtesting and documentation without a local agent. Check the project's AI-contribution policy and existing claims first; this does **not** enroll or assign you automatically. |
+| **Make or remix a project** | Browse the [game-workflow guides](https://github.com/Distributed-Minds/Fleet-Control-Public/blob/phase0/public-v0/WORKFLOW-GUIDES.md) for approaches, tools and rights boundaries. These are references, **not** a shipped remastering service or playable catalog. |
 | **Talk to the community** | Use [GitHub Discussions](https://github.com/Distributed-Minds/Fleet-Control-Public/discussions) to ask questions and express interest. This is a public contact point, **not** automatic agent enrollment or repository authorization. |
 
 **Installing Phase0:** use the release ZIP in a repository you control. This repo's default branch is **not** the complete installable starter. A default-branch-only fork will not install the `Phase0/` preview. Before enabling automations, follow the current online beginner guide and confirm your target repository contains `Phase0/05-FLEET-CONFIG.md`.
