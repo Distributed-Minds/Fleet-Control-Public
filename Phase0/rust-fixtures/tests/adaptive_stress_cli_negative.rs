@@ -60,8 +60,14 @@ fn change_case(name: &str, field: &str, value: Value) -> Value {
 }
 
 fn assert_rejected(output: Output) {
-    assert!(!output.status.success(), "unexpected CLI acceptance: {output:?}");
-    assert!(output.stdout.is_empty(), "rejected fixture emitted success: {output:?}");
+    assert!(
+        !output.status.success(),
+        "unexpected CLI acceptance: {output:?}"
+    );
+    assert!(
+        output.stdout.is_empty(),
+        "rejected fixture emitted success: {output:?}"
+    );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.starts_with("FAIL: "),
@@ -72,7 +78,10 @@ fn assert_rejected(output: Output) {
 #[test]
 fn actual_binary_executes_complete_historical_fixture() {
     let output = run_contents(BASELINE);
-    assert!(output.status.success(), "historical fixture failed: {output:?}");
+    assert!(
+        output.status.success(),
+        "historical fixture failed: {output:?}"
+    );
     assert!(output.stderr.is_empty(), "unexpected stderr: {output:?}");
     assert_eq!(
         String::from_utf8_lossy(&output.stdout).trim(),
