@@ -215,7 +215,9 @@ mod tests {
         for output in [b"".as_slice(), b" ", b"\n\t\r "] {
             assert!(!has_verification_output(output));
         }
-        assert!(has_verification_output(b"containment fixtures (Rust): 35 passed\n"));
+        assert!(has_verification_output(
+            b"containment fixtures (Rust): 35 passed\n"
+        ));
         assert!(has_verification_output(b"PASS integration_candidate\n"));
     }
 
