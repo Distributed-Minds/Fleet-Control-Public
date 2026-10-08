@@ -1,0 +1,192 @@
+{
+  "schema": "free-energy.project/v0",
+  "id": "game/veloren",
+  "display_name": "Veloren",
+  "kind": "GAME",
+  "upstream": {
+    "discovery_url": "https://veloren.net/",
+    "canonical_source_url": "https://gitlab.com/veloren/veloren",
+    "source_revision": null,
+    "source_revision_reason": "Only the inspected GitHub mirror snapshot is pinned here; the canonical GitLab current head was not independently verified.",
+    "contribution_url": "https://gitlab.com/veloren/veloren",
+    "issue_url": "https://gitlab.com/veloren/veloren/-/issues",
+    "read_only_mirror_urls": [
+      "https://github.com/veloren/veloren"
+    ]
+  },
+  "play": {
+    "status": "UPSTREAM_LINK_ONLY",
+    "upstream_download_url": "https://veloren.net/download",
+    "content_requirements": [
+      "FREE ENERGY has not downloaded, verified, or executed a specific Veloren binary."
+    ],
+    "local_test_evidence_id": null
+  },
+  "rights_claims": [
+    {
+      "claim_id": "workspace-code",
+      "claim_kind": "PUBLISHER_LICENSE",
+      "component": "CODE",
+      "scope_kind": "PROJECT_DEFAULT",
+      "scope": "Veloren workspace code",
+      "statement": "The inspected GitHub mirror Cargo workspace declares GPL-3.0-or-later for workspace package code; this is not a full game/media grant.",
+      "license_id": "GPL-3.0-or-later",
+      "exceptions_or_restrictions": [
+        "The inspected commit is the GitHub mirror, not a verified current GitLab head"
+      ],
+      "evidence_ids": [
+        "cargo-snapshot"
+      ],
+      "status": "OBSERVED_AT"
+    },
+    {
+      "claim_id": "restricted-soundtrack",
+      "claim_kind": "PUBLISHER_LICENSE",
+      "component": "MEDIA",
+      "scope_kind": "PREFIX",
+      "scope": "voxygen/audio/soundtrack",
+      "statement": "The pinned assets/credits.ron records selected soundtrack entries as CC BY-NC-SA 4.0 with additional per-track wording; these exceptions block blanket reuse claims.",
+      "license_id": "CC-BY-NC-SA-4.0",
+      "exceptions_or_restrictions": [
+        "Only identified credits and named tracks are in scope; not every Veloren asset",
+        "Some entries include additional stated cross-game restrictions; legal effect not established"
+      ],
+      "evidence_ids": [
+        "credits-snapshot"
+      ],
+      "status": "OBSERVED_AT"
+    }
+  ],
+  "permission_decisions": [
+    {
+      "component": "CODE",
+      "scope": "Veloren workspace code",
+      "use": "BUNDLE",
+      "decision": "REVIEW_REQUIRED",
+      "review_evidence_ids": [],
+      "decision_reason": "No independently authenticated, use-and-scope-specific FREE ENERGY clearance; upstream license/policy evidence is not redistribution authorization.",
+      "decided_at": null,
+      "reviewer": null
+    },
+    {
+      "component": "CODE",
+      "scope": "Veloren workspace code",
+      "use": "HOST",
+      "decision": "REVIEW_REQUIRED",
+      "review_evidence_ids": [],
+      "decision_reason": "No independently authenticated, use-and-scope-specific FREE ENERGY clearance; upstream license/policy evidence is not redistribution authorization.",
+      "decided_at": null,
+      "reviewer": null
+    },
+    {
+      "component": "CODE",
+      "scope": "Veloren workspace code",
+      "use": "TRANSFORM",
+      "decision": "REVIEW_REQUIRED",
+      "review_evidence_ids": [],
+      "decision_reason": "No independently authenticated, use-and-scope-specific FREE ENERGY clearance; upstream license/policy evidence is not redistribution authorization.",
+      "decided_at": null,
+      "reviewer": null
+    },
+    {
+      "component": "CODE",
+      "scope": "Veloren workspace code",
+      "use": "CROSS_GAME_REUSE",
+      "decision": "REVIEW_REQUIRED",
+      "review_evidence_ids": [],
+      "decision_reason": "No independently authenticated, use-and-scope-specific FREE ENERGY clearance; upstream license/policy evidence is not redistribution authorization.",
+      "decided_at": null,
+      "reviewer": null
+    },
+    {
+      "component": "MEDIA",
+      "scope": "voxygen/audio/soundtrack",
+      "use": "BUNDLE",
+      "decision": "REVIEW_REQUIRED",
+      "review_evidence_ids": [],
+      "decision_reason": "No independently authenticated, use-and-scope-specific FREE ENERGY clearance; upstream license/policy evidence is not redistribution authorization.",
+      "decided_at": null,
+      "reviewer": null
+    },
+    {
+      "component": "MEDIA",
+      "scope": "voxygen/audio/soundtrack",
+      "use": "HOST",
+      "decision": "REVIEW_REQUIRED",
+      "review_evidence_ids": [],
+      "decision_reason": "No independently authenticated, use-and-scope-specific FREE ENERGY clearance; upstream license/policy evidence is not redistribution authorization.",
+      "decided_at": null,
+      "reviewer": null
+    },
+    {
+      "component": "MEDIA",
+      "scope": "voxygen/audio/soundtrack",
+      "use": "TRANSFORM",
+      "decision": "REVIEW_REQUIRED",
+      "review_evidence_ids": [],
+      "decision_reason": "No independently authenticated, use-and-scope-specific FREE ENERGY clearance; upstream license/policy evidence is not redistribution authorization.",
+      "decided_at": null,
+      "reviewer": null
+    },
+    {
+      "component": "MEDIA",
+      "scope": "voxygen/audio/soundtrack",
+      "use": "CROSS_GAME_REUSE",
+      "decision": "REVIEW_REQUIRED",
+      "review_evidence_ids": [],
+      "decision_reason": "No independently authenticated, use-and-scope-specific FREE ENERGY clearance; upstream license/policy evidence is not redistribution authorization.",
+      "decided_at": null,
+      "reviewer": null
+    }
+  ],
+  "adapter": {
+    "status": "NONE",
+    "target_id": null,
+    "test_evidence_id": null
+  },
+  "evidence": [
+    {
+      "evidence_id": "cargo-snapshot",
+      "evidence_kind": "PINNED_REPOSITORY_FILE",
+      "subject_scope": "Inspected GitHub mirror code declaration",
+      "url": "https://github.com/veloren/veloren/blob/81283b7babbadd2b9beb17f6763de2e545fff853/Cargo.toml",
+      "observed_at": "2026-10-08T00:00:00Z",
+      "reviewer": "FREE ENERGY research record (not an authorized rights reviewer)",
+      "currentness": "PINNED_SNAPSHOT",
+      "repository": "https://github.com/veloren/veloren",
+      "commit": "81283b7babbadd2b9beb17f6763de2e545fff853",
+      "path": "Cargo.toml"
+    },
+    {
+      "evidence_id": "credits-snapshot",
+      "evidence_kind": "PINNED_REPOSITORY_FILE",
+      "subject_scope": "Soundtrack media licenses and file-specific restrictions",
+      "url": "https://github.com/veloren/veloren/blob/81283b7babbadd2b9beb17f6763de2e545fff853/assets/credits.ron",
+      "observed_at": "2026-10-08T00:00:00Z",
+      "reviewer": "FREE ENERGY research record (not an authorized rights reviewer)",
+      "currentness": "PINNED_SNAPSHOT",
+      "repository": "https://github.com/veloren/veloren",
+      "commit": "81283b7babbadd2b9beb17f6763de2e545fff853",
+      "path": "assets/credits.ron"
+    },
+    {
+      "evidence_id": "contribute-page",
+      "evidence_kind": "MUTABLE_UPSTREAM_PAGE",
+      "subject_scope": "Upstream development and contribution destination",
+      "url": "https://veloren.net/joinus/",
+      "observed_at": "2026-10-08T00:00:00Z",
+      "reviewer": "FREE ENERGY research record (not an authorized rights reviewer)",
+      "currentness": "OBSERVED_AT",
+      "repository": null,
+      "commit": null,
+      "path": null
+    }
+  ],
+  "review": {
+    "reviewed_at": "2026-10-08T00:00:00Z",
+    "reviewer": "FREE ENERGY initial schema pilot; metadata review only, not rights authorization",
+    "record_status": "DRAFT",
+    "supersedes_record_revision": null,
+    "claim_history": []
+  }
+}
