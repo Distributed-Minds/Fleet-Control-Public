@@ -218,7 +218,8 @@ fn main() -> ExitCode {
             for (id, path) in records {
                 // A pathname is untrusted data: newlines must not forge extra
                 // positive CLI records. JSON quoting is reversible for consumers.
-                let path_json = serde_json::to_string(&path).expect("serialize admitted input path");
+                let path_json =
+                    serde_json::to_string(&path).expect("serialize admitted input path");
                 println!("TYPED-BOUNDARY-ONLY {id}: {path_json}");
             }
             ExitCode::SUCCESS
