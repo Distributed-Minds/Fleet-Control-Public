@@ -145,18 +145,22 @@ pub enum Verdict {
 
 fn named(id: &str) -> bool {
     // Provider IDs are opaque, but they appear in operator receipts and logs.
-    // C0/C1 controls and Unicode bidirectional formatting may forge the
-    // displayed relationship between an ID and its authorization receipt.
+    // C0/C1 controls, bidirectional formatting and invisible default-ignorable
+    // scalars may make different exact IDs indistinguishable in receipts/logs.
+    // Reject these at model admission without normalizing opaque provider IDs.
     !id.trim().is_empty()
         && !id.chars().any(|ch| {
             ch.is_control()
                 || matches!(
                     ch,
-                    '\u{061c}'
-                        | '\u{200e}'
-                        | '\u{200f}'
+                    '\u{00ad}'
+                        | '\u{034f}'
+                        | '\u{061c}'
+                        | '\u{180e}'
+                        | '\u{200b}'..='\u{200f}'
                         | '\u{202a}'..='\u{202e}'
-                        | '\u{2066}'..='\u{2069}'
+                        | '\u{2060}'..='\u{206f}'
+                        | '\u{feff}'
                 )
         })
 }
@@ -465,6 +469,74 @@ mod tests {
                 "unsafe ordering ID admitted: {bad:?}"
             );
         }
+    }
+
+    #[test]
+    fn invisible_formatting_cannot_spoof_archival_and_replay_identifiers() {
+        // These characters are not C0/C1 controls, and several are not bidi
+        // controls, yet an ID with one embedded can be visually indistinguishable
+        // from a different exact source, manifest or operation identifier.
+        for marker in [
+            '\u{00ad}', '\u{034f}', '\u{180e}', '\u{200b}', '\u{200c}', '\u{200d}', '\u{2060}',
+            '\u{2064}', '\u{feff}',
+        ] {
+            let bad = format!("R{marker}42");
+
+            // Keep every independent source witness byte-identical: rejection
+            // must come from unsafe presentation, not a mismatched version.
+            let mut witness = fixture();
+            witness.observed_source.record_id = bad.clone();
+            witness.archive.source.record_id = bad.clone();
+            witness.authority.source.record_id = bad.clone();
+            assert_eq!(
+                evaluate(&witness),
+                Verdict::Ineligible(Denial::SourceMoved),
+                "invisible source ID admitted: {marker:?}"
+            );
+
+            let mut witness = fixture();
+            witness.operation_id = bad.clone();
+            witness.authority.operation_id = bad.clone();
+            assert_eq!(
+                evaluate(&witness),
+                Verdict::Ineligible(Denial::AuthorityNotCurrent),
+                "invisible operation ID admitted: {marker:?}"
+            );
+
+            let mut witness = fixture();
+            witness.archive.segment = bad.clone();
+            witness.durability.segment = bad.clone();
+            assert_eq!(
+                evaluate(&witness),
+                Verdict::Ineligible(Denial::ArchiveNotExact),
+                "invisible archive segment admitted: {marker:?}"
+            );
+
+            let mut witness = fixture();
+            witness.horizon.basis.identity = bad.clone();
+            witness.durability.horizon.identity = bad.clone();
+            assert_eq!(
+                evaluate(&witness),
+                Verdict::Ineligible(Denial::HorizonNotAuthorized),
+                "invisible horizon basis admitted: {marker:?}"
+            );
+
+            let mut record = item("a", 10);
+            record.stable_id = bad;
+            assert_eq!(
+                replay(&[record, item("b", 11)], &[item("c", 12)], &cut()),
+                Err(ReplayFailure::UntrustedCut),
+                "invisible replay identity admitted: {marker:?}"
+            );
+        }
+
+        // Human-readable non-ASCII is not rejected merely for being Unicode.
+        assert_eq!(evaluate(&fixture()), Verdict::EligibleModelOnly);
+        let ordinary = item("histórico-λ", 10);
+        assert_eq!(
+            replay(&[ordinary.clone(), item("b", 11)], &[item("c", 12)], &cut()).unwrap()[0],
+            ordinary
+        );
     }
 
     #[test]
