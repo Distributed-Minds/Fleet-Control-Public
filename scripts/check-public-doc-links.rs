@@ -326,7 +326,26 @@ fn check(root: &Path, docs: &[&str]) -> Report {
     };
     for document in docs {
         let page = root.join(document);
-        let source = match fs::read_to_string(&page) {
+        // Target links are checked against the checkout; mandatory source inputs
+        // need the same boundary before their content is read.
+        let canonical_page = match page.canonicalize() {
+            Ok(path) if !path.starts_with(&root) => {
+                report.errors.push(format!(
+                    "{document}: source document escapes repository (symlink)"
+                ));
+                continue;
+            }
+            Ok(path) if !path.is_file() => {
+                report.errors.push(format!("{document}: source document is not a file"));
+                continue;
+            }
+            Ok(path) => path,
+            Err(e) => {
+                report.errors.push(format!("{document}: document unreadable or missing: {e}"));
+                continue;
+            }
+        };
+        let source = match fs::read_to_string(&canonical_page) {
             Ok(text) => text,
             Err(e) => {
                 report.errors.push(format!("{document}: document unreadable or missing: {e}"));
@@ -554,6 +573,35 @@ mod tests {
         let mut sorted = first.errors.clone();
         sorted.sort();
         assert_eq!(first.errors, sorted);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn mandatory_input_symlink_cannot_escape_checkout() {
+        use std::os::unix::fs::symlink;
+        let sandbox = Sandbox::new();
+        let outside = Sandbox::new();
+        outside.write("outside.md", "[secret](missing.md)\\n");
+        symlink(outside.0.join("outside.md"), sandbox.0.join("README.md"))
+            .expect("source symlink");
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 0);
+        assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+        assert!(report.errors[0].contains("source document escapes repository (symlink)"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn mandatory_input_symlink_inside_checkout_is_readable() {
+        use std::os::unix::fs::symlink;
+        let sandbox = Sandbox::new();
+        sandbox.write("source.md", "[works](target.md)\\n");
+        sandbox.write("target.md", "present");
+        symlink(sandbox.0.join("source.md"), sandbox.0.join("README.md"))
+            .expect("source symlink");
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 1);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
     }
 
     #[cfg(unix)]
