@@ -188,7 +188,13 @@ fn route_card_count(html: &str) -> usize {
 fn has_unique_main_landmark(elements: &[&str]) -> bool {
     let mut mains = elements.iter().filter(|tag| is_open_element(tag, "main"));
     match (mains.next(), mains.next()) {
-        (Some(main), None) => attribute(main, "id") == Some("main"),
+        (Some(main), None) => {
+            attribute(main, "id") == Some("main")
+                && elements
+                    .iter()
+                    .filter(|tag| attribute(tag, "id") == Some("main"))
+                    .count() == 1
+        },
         _ => false,
     }
 }
@@ -630,6 +636,20 @@ mod tests {
     fn main_landmark_rejects_missing_or_duplicate_main_elements() {
         assert!(!has_unique_main_landmark(&tags(r##"<div id="main"></div>"##)));
         assert!(!has_unique_main_landmark(&tags(r##"<main id="main"></main><main></main>"##)));
+    }
+
+    #[test]
+    fn duplicate_main_id_on_non_main_element_must_fail_skip_target_check() {
+        // HTML IDs must be unique: a preceding duplicate intercepts #main,
+        // while a later duplicate leaves fragment navigation ambiguous.
+        let preceding = tags(r##"<div id="main"></div><main id="main"></main>"##);
+        assert!(!has_unique_main_landmark(&preceding));
+
+        let following = tags(r##"<main id="main"></main><section id="main"></section>"##);
+        assert!(!has_unique_main_landmark(&following));
+
+        let clean = tags(r##"<div id="other"></div><main id="main"></main>"##);
+        assert!(has_unique_main_landmark(&clean));
     }
 
     #[test]
