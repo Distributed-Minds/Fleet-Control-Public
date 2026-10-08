@@ -256,9 +256,9 @@ The Markdown state machine coordinates work; it does not replace ordinary reposi
 The public documentation link checker is maintained in **Rust**, not Python or npm. This step is for contributors editing the source checkout, **not** a prerequisite for installing Phase0 or using the published v0.1.2 ZIP. With `rustc` available, run from the checkout root:
 
 ```sh
-rustc --edition=2021 -D warnings --test scripts/check-public-doc-links.rs -o /tmp/free-energy-doc-links-tests
-/tmp/free-energy-doc-links-tests
-rustc --edition=2021 -D warnings scripts/check-public-doc-links.rs -o /tmp/free-energy-doc-links
+rustc --edition=2021 -D warnings --test scripts/check-public-doc-links.rs -o /tmp/free-energy-doc-links-tests &&
+/tmp/free-energy-doc-links-tests &&
+rustc --edition=2021 -D warnings scripts/check-public-doc-links.rs -o /tmp/free-energy-doc-links &&
 /tmp/free-energy-doc-links --root "$PWD"
 ```
 
