@@ -234,6 +234,25 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "UPSTREAM_LINK_ONLY"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "upstream_download_url": {
+                "$ref": "#/$defs/url"
+              }
+            }
+          }
         }
       ]
     },
