@@ -111,7 +111,6 @@ fn read_render_manifest(path: &Path) -> Result<String, String> {
     fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))
 }
 
-
 /// Collect the complete manifest set only from a real project directory.
 /// A symlink at the directory boundary could otherwise redirect the preview
 /// renderer to unrelated JSON files before per-file admission takes place.
@@ -490,7 +489,6 @@ mod render_manifest_file_admission_tests {
             fs::remove_dir_all(&self.0).expect("remove isolated fixture");
         }
     }
-
 
     #[test]
     fn only_json_children_of_a_real_project_directory_are_sorted() {
