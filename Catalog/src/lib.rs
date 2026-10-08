@@ -143,7 +143,8 @@ pub struct Review {
 }
 
 fn is_full_git_sha(value: &str) -> bool {
-    value.len() == 40 && value.bytes().all(|b| b.is_ascii_hexdigit())
+    // The pinned v0 schema requires lowercase SHA-1 literals, not uppercase aliases.
+    value.len() == 40 && value.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 fn is_relative_path(value: &str) -> bool {
@@ -288,7 +289,7 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
         if item.evidence_kind == "PINNED_REPOSITORY_FILE" {
             if item.commit.as_deref().is_none_or(|s| !is_full_git_sha(s))
                 || item.path.as_deref().is_none_or(|s| !is_relative_path(s))
-                || item.repository.is_none()
+                || item.repository.as_deref().is_none_or(|url| !is_public_https_url(url))
             {
                 problems.push(format!("invalid pinned repository evidence: {}", item.evidence_id));
             }
@@ -344,6 +345,32 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
         for id in &item.review_evidence_ids {
             if !evidence.contains_key(id.as_str()) {
                 problems.push(format!("permission references missing evidence {id}"));
+            }
+        }
+    }
+
+    // Local-play evidence must not be borrowed from an unrelated rights or
+    // upstream snapshot, or attached to a status that makes no play-test claim.
+    if let Some(id) = record.play.local_test_evidence_id.as_deref() {
+        if evidence.get(id).is_none_or(|item| {
+            item.evidence_kind != "FREE_ENERGY_LOCAL_TEST" || item.currentness == "INVALIDATED"
+        }) {
+            problems.push(format!("local play references missing or ineligible test evidence {id}"));
+        }
+        if record.play.status != PlayStatus::FreeEnergyVerified {
+            problems.push("unverified play status must not assert local test evidence".to_string());
+        }
+    }
+
+    // v0 history is a current-snapshot review note, not an append-only ledger.
+    // Both sides of an asserted supersession must resolve in this manifest.
+    for event in &record.review.claim_history {
+        if !claims.contains(event.old_claim_id.as_str()) {
+            problems.push(format!("supersession references unknown old claim {}", event.old_claim_id));
+        }
+        if let Some(new_id) = event.new_claim_id.as_deref() {
+            if !claims.contains(new_id) {
+                problems.push(format!("supersession references unknown new claim {new_id}"));
             }
         }
     }
@@ -474,6 +501,40 @@ mod tests {
             include_str!("../fixtures/url-policy-semantic-v0.json"),
             "expected_allowed",
         );
+    }
+
+    #[test]
+    fn authored_semantic_identity_fixture_covers_all_cases() {
+        let base: Value = serde_json::from_str(LUANTI).expect("Luanti baseline");
+        let suite: Value = serde_json::from_str(include_str!(
+            "../fixtures/semantic-id-resolution-v0.json"
+        ))
+        .expect("semantic ID fixture");
+        let cases = suite["cases"].as_array().expect("fixture cases");
+        assert_eq!(cases.len(), 13, "all authored semantic ID cases must run");
+        for case in cases {
+            let mut record = base.clone();
+            for change in case["changes"].as_array().expect("case changes") {
+                assert_eq!(change["op"].as_str(), Some("replace"));
+                let pointer = change["pointer"].as_str().expect("JSON pointer");
+                *record.pointer_mut(pointer).expect("existing target") = change["value"].clone();
+            }
+            let expected = case["expected_semantic_valid"].as_bool().expect("expected verdict");
+            let actual = validate_manifest(&record.to_string()).is_ok();
+            assert_eq!(actual, expected, "semantic fixture {}", case["id"]);
+        }
+    }
+
+    #[test]
+    fn pins_and_repository_coordinates_must_be_canonical() {
+        let uppercase = changed(LUANTI, |v| {
+            v["evidence"][0]["commit"] = json!("9A1B92D0D4D2C47FCED18E6077722C6301EB04F5");
+        });
+        assert!(validate_manifest(&uppercase).is_err());
+        let empty_repo = changed(LUANTI, |v| {
+            v["evidence"][0]["repository"] = json!("");
+        });
+        assert!(validate_manifest(&empty_repo).is_err());
     }
 
     #[test]
