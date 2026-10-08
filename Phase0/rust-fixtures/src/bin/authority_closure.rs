@@ -127,23 +127,30 @@ fn verdict(label: &str) -> (String, Value) {
 }
 
 fn composition(case: &Map<String, Value>) -> Result<Option<(String, Value)>, String> {
-    let output = match string(case, "composition") {
-        None => None,
-        Some("ALL_REQUIRED") => Some(verdict(
-            if number(case, "surviving_roots") >= number(case, "required_roots") {
-                "BOUNDED_AUTHORITY"
-            } else {
-                "NO_AUTHORITY"
-            },
-        )),
-        Some("ANY_OF_DECLARED") => Some(verdict(if number(case, "surviving_roots") > 0 {
-            "BOUNDED_AUTHORITY"
-        } else {
-            "NO_AUTHORITY"
-        })),
-        Some(other) => return Err(format!("unsupported composition: {other}")),
+    let Some(rule) = string(case, "composition") else {
+        return Ok(None);
     };
-    Ok(output)
+    // A missing or empty set of declared roots must never mint authority by
+    // vacuous ALL_REQUIRED truth (0 >= 0) or an undeclared ANY_OF_DECLARED root.
+    let required = case
+        .get("required_roots")
+        .and_then(Value::as_u64)
+        .ok_or("composition requires an explicit required_roots count")?;
+    let surviving = case
+        .get("surviving_roots")
+        .and_then(Value::as_u64)
+        .ok_or("composition requires an explicit surviving_roots count")?;
+    if required == 0 || surviving > required {
+        return Err("composition has no declared roots or impossible root counts".to_owned());
+    }
+    let result = match rule {
+        "ALL_REQUIRED" if surviving == required => "BOUNDED_AUTHORITY",
+        "ALL_REQUIRED" => "NO_AUTHORITY",
+        "ANY_OF_DECLARED" if surviving > 0 => "BOUNDED_AUTHORITY",
+        "ANY_OF_DECLARED" => "NO_AUTHORITY",
+        other => return Err(format!("unsupported composition: {other}")),
+    };
+    Ok(Some(verdict(result)))
 }
 
 /// Deliberately receives *only* semantic inputs; never receives fixture expected labels.
@@ -375,6 +382,39 @@ mod tests {
         let mut fixture: Value = serde_json::from_str(source).unwrap();
         fixture["cases"][0]["name"] = fixture["cases"][1]["name"].clone();
         assert!(validate_fixture(&fixture.to_string()).is_err());
+    }
+
+    #[test]
+    fn multi_root_composition_does_not_mint_authority_from_absent_roots() {
+        for rule in ["ALL_REQUIRED", "ANY_OF_DECLARED"] {
+            for bad in [
+                json!({"composition":rule}),
+                json!({"composition":rule,"surviving_roots":0}),
+                json!({"composition":rule,"required_roots":0}),
+                json!({"composition":rule,"surviving_roots":0,"required_roots":0}),
+                json!({"composition":rule,"surviving_roots":1,"required_roots":0}),
+                json!({"composition":rule,"surviving_roots":3,"required_roots":2}),
+            ] {
+                assert!(
+                    evaluate(&input(bad.clone())).is_err(),
+                    "unbounded root composition must be rejected: {bad}"
+                );
+            }
+            assert_eq!(
+                evaluate(&input(json!({
+                    "composition":rule,"surviving_roots":0,"required_roots":2
+                })))
+                .unwrap(),
+                verdict("NO_AUTHORITY")
+            );
+            assert_eq!(
+                evaluate(&input(json!({
+                    "composition":rule,"surviving_roots":2,"required_roots":2
+                })))
+                .unwrap(),
+                verdict("BOUNDED_AUTHORITY")
+            );
+        }
     }
 
     #[test]
