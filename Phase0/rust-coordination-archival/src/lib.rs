@@ -420,15 +420,39 @@ mod tests {
     #[test]
     fn each_independent_base_is_required() {
         let cases: [(fn(&mut DeleteWitness), Denial); 9] = [
-            (|w| w.archive.exact_remote_readback = false, Denial::ArchiveNotExact),
-            (|w| w.ordering.frontier_complete = false, Denial::OrderNotProven),
-            (|w| w.manifest.unique_current_selection = false, Denial::ManifestNotCurrent),
-            (|w| w.snapshot.coherent_cut = false, Denial::SnapshotNotCoherent),
-            (|w| w.observed_source.version = "etag-3".into(), Denial::ArchiveNotExact),
+            (
+                |w| w.archive.exact_remote_readback = false,
+                Denial::ArchiveNotExact,
+            ),
+            (
+                |w| w.ordering.frontier_complete = false,
+                Denial::OrderNotProven,
+            ),
+            (
+                |w| w.manifest.unique_current_selection = false,
+                Denial::ManifestNotCurrent,
+            ),
+            (
+                |w| w.snapshot.coherent_cut = false,
+                Denial::SnapshotNotCoherent,
+            ),
+            (
+                |w| w.observed_source.version = "etag-3".into(),
+                Denial::ArchiveNotExact,
+            ),
             (|w| w.authority.current = false, Denial::AuthorityNotCurrent),
-            (|w| w.horizon.uniquely_current = false, Denial::HorizonNotAuthorized),
-            (|w| w.durability.keys_recoverable = false, Denial::DurabilityInsufficient),
-            (|w| w.protections.active_ownership_chain = true, Denial::ProtectedRecord),
+            (
+                |w| w.horizon.uniquely_current = false,
+                Denial::HorizonNotAuthorized,
+            ),
+            (
+                |w| w.durability.keys_recoverable = false,
+                Denial::DurabilityInsufficient,
+            ),
+            (
+                |w| w.protections.active_ownership_chain = true,
+                Denial::ProtectedRecord,
+            ),
         ];
         for (change, reason) in cases {
             let mut w = fixture();
@@ -459,27 +483,43 @@ mod tests {
     fn unauthorized_horizon_downgrade_cannot_free_predecessor_records() {
         let mut w = fixture();
         w.horizon.predecessor_protects_source = true;
-        assert_eq!(evaluate(&w), Verdict::Ineligible(Denial::HorizonNotAuthorized));
+        assert_eq!(
+            evaluate(&w),
+            Verdict::Ineligible(Denial::HorizonNotAuthorized)
+        );
         w.horizon.exact_retirement_authorized = true;
         assert_eq!(evaluate(&w), Verdict::EligibleModelOnly);
         w.horizon.uniquely_current = false;
-        assert_eq!(evaluate(&w), Verdict::Ineligible(Denial::HorizonNotAuthorized));
+        assert_eq!(
+            evaluate(&w),
+            Verdict::Ineligible(Denial::HorizonNotAuthorized)
+        );
     }
 
     #[test]
     fn durability_must_reach_actual_current_authorized_horizon() {
         let mut w = fixture();
         w.horizon.preserve_through_epoch = 101;
-        assert_eq!(evaluate(&w), Verdict::Ineligible(Denial::DurabilityInsufficient));
+        assert_eq!(
+            evaluate(&w),
+            Verdict::Ineligible(Denial::DurabilityInsufficient)
+        );
         w.durability.reconstructed_through_epoch = 101;
         assert_eq!(evaluate(&w), Verdict::EligibleModelOnly);
         w.durability.current = false;
-        assert_eq!(evaluate(&w), Verdict::Ineligible(Denial::DurabilityInsufficient));
+        assert_eq!(
+            evaluate(&w),
+            Verdict::Ineligible(Denial::DurabilityInsufficient)
+        );
     }
 
     #[test]
     fn all_nonclean_retry_states_reconcile_instead_of_repeating_delete() {
-        for state in [EffectState::AckUnknown, EffectState::PartialEffect, EffectState::AlreadyApplied] {
+        for state in [
+            EffectState::AckUnknown,
+            EffectState::PartialEffect,
+            EffectState::AlreadyApplied,
+        ] {
             let mut w = fixture();
             w.effect_state = state;
             assert_eq!(evaluate(&w), Verdict::ReconcilePriorEffect);
@@ -518,7 +558,10 @@ mod tests {
             &cut(),
         )
         .unwrap();
-        assert_eq!(records.iter().map(|r| r.sequence).collect::<Vec<_>>(), vec![10, 11, 12]);
+        assert_eq!(
+            records.iter().map(|r| r.sequence).collect::<Vec<_>>(),
+            vec![10, 11, 12]
+        );
     }
 
     #[test]
@@ -534,7 +577,11 @@ mod tests {
         let mut changed = item("b", 11);
         changed.payload_digest = [99; 32];
         assert_eq!(
-            replay(&[item("a", 10), item("b", 11)], &[changed, item("c", 12)], &cut()),
+            replay(
+                &[item("a", 10), item("b", 11)],
+                &[changed, item("c", 12)],
+                &cut()
+            ),
             Err(ReplayFailure::ConflictingDuplicate)
         );
         assert_eq!(
@@ -547,10 +594,16 @@ mod tests {
     fn untrusted_ordering_or_moved_snapshot_never_replays() {
         let mut snapshot = cut();
         snapshot.authoritative_order = false;
-        assert_eq!(replay(&[], &[], &snapshot), Err(ReplayFailure::UntrustedCut));
+        assert_eq!(
+            replay(&[], &[], &snapshot),
+            Err(ReplayFailure::UntrustedCut)
+        );
         snapshot = cut();
         snapshot.coherent_snapshot = false;
-        assert_eq!(replay(&[], &[], &snapshot), Err(ReplayFailure::UntrustedCut));
+        assert_eq!(
+            replay(&[], &[], &snapshot),
+            Err(ReplayFailure::UntrustedCut)
+        );
         snapshot = cut();
         let mut moved = item("a", 10);
         moved.order_basis.generation += 1;
@@ -565,6 +618,9 @@ mod tests {
         let mut snapshot = cut();
         snapshot.first_sequence = 0;
         snapshot.last_sequence = u64::MAX;
-        assert_eq!(replay(&[], &[], &snapshot), Err(ReplayFailure::IncompleteHistory));
+        assert_eq!(
+            replay(&[], &[], &snapshot),
+            Err(ReplayFailure::IncompleteHistory)
+        );
     }
 }
