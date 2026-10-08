@@ -123,13 +123,8 @@ fn exact_batch_is_sorted_by_authoritative_position_not_witness_order() {
     let first = witness(&live[0]);
     let second = witness(&live[1]);
 
-    let forward = plan_compaction(
-        &archived,
-        &live,
-        &cut(),
-        &[first.clone(), second.clone()],
-    )
-    .expect("both exact copies are model eligible");
+    let forward = plan_compaction(&archived, &live, &cut(), &[first.clone(), second.clone()])
+        .expect("both exact copies are model eligible");
     let reverse = plan_compaction(&archived, &live, &cut(), &[second, first])
         .expect("candidate page ordering does not grant new authority");
 
@@ -160,10 +155,7 @@ fn one_failed_rights_or_durability_guard_poison_the_entire_batch_in_any_position
     let good = witness(&live[0]);
     let mut bad = witness(&live[1]);
     bad.horizon.predecessor_protects_source = true;
-    for candidates in [
-        [good.clone(), bad.clone()],
-        [bad.clone(), good.clone()],
-    ] {
+    for candidates in [[good.clone(), bad.clone()], [bad.clone(), good.clone()]] {
         assert_eq!(
             plan_compaction(&archived, &live, &cut(), &candidates),
             Err(PlanFailure::Ineligible(Denial::HorizonNotAuthorized))
