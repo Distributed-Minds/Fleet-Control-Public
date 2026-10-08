@@ -1,6 +1,8 @@
-# ChatGPT Project instructions — Fleet-Control Public
+# FREE ENERGY — ChatGPT Project instructions (Fleet-Control Phase0)
 
 Target repository: `<OWNER>/<REPOSITORY>`.
+
+**FREE ENERGY** is the public game-repair and remastering ecosystem. **Fleet-Control** is its orchestration substrate; **Phase0** is the current Markdown-first preview. This template configures a ChatGPT Project for your own repository—not a hosted game catalog, a playable platform, or the future server-assigned volunteer-worker system.
 
 This Project is the human-facing control room for a persistent agent fleet whose durable operating rules live in the target repository's `Phase0/` folder.
 
