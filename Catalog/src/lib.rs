@@ -187,7 +187,7 @@ fn is_relative_path(value: &str) -> bool {
 /// IP literals, ports, userinfo and non-ASCII DNS names are intentionally out
 /// of scope until their admission/normalization semantics are specified.
 fn is_public_https_url(url: &str) -> bool {
-    if !url.starts_with("https://")
+    if url.chars().count() > 2048 || !url.starts_with("https://")
         || url
             .chars()
             .any(|c| c.is_control() || c.is_whitespace() || c == '\\')
@@ -368,6 +368,19 @@ fn validate_vocabulary(record: &Project, problems: &mut Vec<String>) {
     );
 }
 
+// Match the published schema's ASCII slug vocabulary. Identifiers have a
+// semantic role in rights/evidence references, not just a display role.
+fn check_slug(problems: &mut Vec<String>, path: &str, value: &str) {
+    let mut bytes = value.bytes();
+    let valid = bytes.next().is_some_and(|b| b.is_ascii_lowercase())
+        && bytes.all(|b| {
+            b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'_' | b'-')
+        });
+    if !valid {
+        problems.push(format!("{path}: invalid slug identifier"));
+    }
+}
+
 /// Parse the closed object layout and reject a bounded set of dangerous
 /// cross-record claims. Success is NOT full JSON Schema or rights approval.
 pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
@@ -375,6 +388,17 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
         serde_json::from_str(json).map_err(|e| vec![format!("JSON/typed manifest: {e}")])?;
     let mut problems = Vec::new();
     validate_vocabulary(&record, &mut problems);
+    // These cardinality rules are required by the checked-in v5 JSON Schema;
+    // serde accepts an empty Vec, so typed decoding alone cannot enforce them.
+    for (path, count) in [
+        ("rights_claims", record.rights_claims.len()),
+        ("permission_decisions", record.permission_decisions.len()),
+        ("evidence", record.evidence.len()),
+    ] {
+        if count == 0 {
+            problems.push(format!("{path} requires at least one item"));
+        }
+    }
     // Subset of checked-in Draft 2020-12 string/array shape constraints.
     // This is not a replacement for the full pinned offline schema engine.
     if record.display_name.trim().is_empty() || record.display_name.chars().count() > 140 {
@@ -470,7 +494,11 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
             problems.push(format!("inadmissible external URL: {field}"));
         }
     }
+    let mut mirror_urls = HashSet::new();
     for (index, url) in record.upstream.read_only_mirror_urls.iter().enumerate() {
+        if !mirror_urls.insert(url.as_str()) {
+            problems.push(format!("duplicate upstream read-only mirror URL at index {index}"));
+        }
         if !is_public_https_url(url) {
             problems.push(format!(
                 "inadmissible external URL: upstream.read_only_mirror_urls[{index}]"
@@ -485,6 +513,7 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
 
     let mut evidence = HashMap::new();
     for item in &record.evidence {
+        check_slug(&mut problems, "evidence.evidence_id", &item.evidence_id);
         if !is_public_https_url(&item.url) {
             problems.push(format!(
                 "inadmissible external URL: evidence {}",
@@ -512,6 +541,14 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
     let mut claims = HashSet::new();
     let mut scopes = HashSet::new();
     for item in &record.rights_claims {
+        check_slug(&mut problems, "rights_claims.claim_id", &item.claim_id);
+        let mut referenced = HashSet::new();
+        for id in &item.evidence_ids {
+            check_slug(&mut problems, "rights_claims.evidence_ids", id);
+            if !referenced.insert(id.as_str()) {
+                problems.push(format!("claim {} duplicates evidence reference {id}", item.claim_id));
+            }
+        }
         if !claims.insert(item.claim_id.as_str()) {
             problems.push(format!("duplicate rights claim ID: {}", item.claim_id));
         }
@@ -540,6 +577,13 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
 
     let mut permission_keys = HashSet::new();
     for item in &record.permission_decisions {
+        let mut reviewed = HashSet::new();
+        for id in &item.review_evidence_ids {
+            check_slug(&mut problems, "permission_decisions.review_evidence_ids", id);
+            if !reviewed.insert(id.as_str()) {
+                problems.push(format!("duplicate permission review evidence reference {id}"));
+            }
+        }
         if !scopes.contains(&(item.component.as_str(), item.scope.as_str())) {
             problems.push(format!(
                 "permission scope has no rights claim: {} / {}",
@@ -576,6 +620,13 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
         }
     }
 
+    if let Some(id) = record.adapter.test_evidence_id.as_deref() {
+        check_slug(&mut problems, "adapter.test_evidence_id", id);
+    }
+    if let Some(id) = record.play.local_test_evidence_id.as_deref() {
+        check_slug(&mut problems, "play.local_test_evidence_id", id);
+    }
+
     // Local-play evidence must not be borrowed from an unrelated rights or
     // upstream snapshot, or attached to a status that makes no play-test claim.
     if let Some(id) = record.play.local_test_evidence_id.as_deref() {
@@ -597,6 +648,10 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
     let mut history_sources = HashSet::new();
     let mut history_links = HashMap::new();
     for event in &record.review.claim_history {
+        check_slug(&mut problems, "review.claim_history.old_claim_id", &event.old_claim_id);
+        if let Some(new_id) = event.new_claim_id.as_deref() {
+            check_slug(&mut problems, "review.claim_history.new_claim_id", new_id);
+        }
         if !claims.contains(event.old_claim_id.as_str()) {
             problems.push(format!(
                 "supersession references unknown old claim {}",
