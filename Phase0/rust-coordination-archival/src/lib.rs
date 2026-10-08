@@ -466,8 +466,7 @@ mod tests {
         // Non-ASCII ordinary opaque identities remain valid.
         let ordinary = item("μ-opaque", 10);
         assert_eq!(
-            replay(&[ordinary.clone(), item("b", 11)], &[item("c", 12)], &cut())
-                .unwrap()[0],
+            replay(&[ordinary.clone(), item("b", 11)], &[item("c", 12)], &cut()).unwrap()[0],
             ordinary
         );
     }
