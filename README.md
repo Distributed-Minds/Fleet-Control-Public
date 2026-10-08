@@ -70,6 +70,8 @@ The installing human may deliberately change those policies.
 
 If GitHub, branches, ChatGPT Projects, or automations are new to you, read [`GETTING-STARTED.md`](GETTING-STARTED.md).
 
+For game-project routes—from finding something playable to passthrough mods, ports, debugging and sharing—see the [FREE ENERGY workflow guide map](WORKFLOW-GUIDES.md), with links to independently maintained examples and tutorials.
+
 For the normative machine read order, see [`Phase0/README.md`](Phase0/README.md).
 
 ## License
