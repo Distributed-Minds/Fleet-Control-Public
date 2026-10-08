@@ -49,7 +49,10 @@ fn output(command: &mut Command, path: &Path) -> Output {
 fn check_both(fixture: &Value, expected_pass: bool, label: &str) {
     let file = fixture_file(fixture);
     let python = output(&mut Command::new("python3").arg(historical_script()), &file);
-    let rust = output(&mut Command::new(env!("CARGO_BIN_EXE_ad_hoc_research")), &file);
+    let rust = output(
+        &mut Command::new(env!("CARGO_BIN_EXE_ad_hoc_research")),
+        &file,
+    );
     fs::remove_file(&file).expect("remove temporary input");
 
     for (implementation, result) in [("historical Python", python), ("compiled Rust", rust)] {
@@ -125,7 +128,9 @@ json.dump(answer, sys.stdout, sort_keys=True, ensure_ascii=False)
                 .as_bytes(),
         )
         .expect("provide historical semantic facts");
-    let result = child.wait_with_output().expect("historical model completes");
+    let result = child
+        .wait_with_output()
+        .expect("historical model completes");
     assert!(
         result.status.success(),
         "historical reducer {group}/{id} failed: {}",
@@ -141,12 +146,32 @@ fn forty_seven_cases_and_six_causal_mutations_match_historical_semantics() {
     check_both(&original, true, "unaltered 47-case baseline");
 
     let mutations = [
-        ("publication_cases", "complete-absent-current-authority", "authority_current"),
-        ("identity_cases", "changed-content-new-identity", "retry_packet_ref"),
-        ("source_cases", "default-authority-first", "default_head_resolved"),
-        ("recovery_cases", "cutoff-before-create", "authority_current"),
+        (
+            "publication_cases",
+            "complete-absent-current-authority",
+            "authority_current",
+        ),
+        (
+            "identity_cases",
+            "changed-content-new-identity",
+            "retry_packet_ref",
+        ),
+        (
+            "source_cases",
+            "default-authority-first",
+            "default_head_resolved",
+        ),
+        (
+            "recovery_cases",
+            "cutoff-before-create",
+            "authority_current",
+        ),
         ("concurrency_cases", "two-empty-blind-create", "strategy"),
-        ("packet_field_cases", "required-handoff-fields-preserved", "discovery_vocabulary"),
+        (
+            "packet_field_cases",
+            "required-handoff-fields-preserved",
+            "discovery_vocabulary",
+        ),
     ];
     for (group, id, field) in mutations {
         let mut changed = original.clone();
