@@ -504,8 +504,12 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
             problems.push("NOT_AUTHORIZED requires review date and reviewer".to_string());
         }
         for id in &item.review_evidence_ids {
-            if !evidence.contains_key(id.as_str()) {
-                problems.push(format!("permission references missing evidence {id}"));
+            match evidence.get(id.as_str()) {
+                None => problems.push(format!("permission references missing evidence {id}")),
+                Some(source) if source.currentness == "INVALIDATED" => {
+                    problems.push(format!("permission references invalidated evidence {id}"));
+                }
+                _ => {}
             }
         }
     }
@@ -699,6 +703,38 @@ mod tests {
             v["evidence"][1]["evidence_id"] = first_id;
         });
         assert!(validate_manifest(&duplicate).is_err());
+    }
+
+
+    #[test]
+    fn invalidated_review_evidence_cannot_support_permission_decisions() {
+        let revoked = changed(OPENRA, |manifest| {
+            let mut review = manifest["evidence"][0].clone();
+            review["evidence_id"] = json!("revoked-review-evidence");
+            review["evidence_kind"] = json!("HUMAN_RIGHTS_REVIEW");
+            review["currentness"] = json!("INVALIDATED");
+            manifest["evidence"].as_array_mut().unwrap().push(review);
+            manifest["permission_decisions"][0]["review_evidence_ids"] =
+                json!(["revoked-review-evidence"]);
+        });
+        let errors = validate_manifest(&revoked).unwrap_err();
+        assert!(
+            errors.iter().any(|message| message.contains("permission references invalidated evidence")),
+            "{errors:?}"
+        );
+
+        // Referencing a still-observed review record does not grant approval:
+        // all existing project permission decisions remain REVIEW_REQUIRED.
+        let observed = changed(OPENRA, |manifest| {
+            let mut review = manifest["evidence"][0].clone();
+            review["evidence_id"] = json!("observed-review-evidence");
+            review["evidence_kind"] = json!("HUMAN_RIGHTS_REVIEW");
+            review["currentness"] = json!("OBSERVED_AT");
+            manifest["evidence"].as_array_mut().unwrap().push(review);
+            manifest["permission_decisions"][0]["review_evidence_ids"] =
+                json!(["observed-review-evidence"]);
+        });
+        assert!(validate_manifest(&observed).is_ok());
     }
 
     #[test]
