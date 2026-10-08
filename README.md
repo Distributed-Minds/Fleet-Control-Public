@@ -32,11 +32,15 @@ The longer-term direction includes **game and engine discovery, source ports, in
 
 We want contributions to compound: a solved compatibility issue, a reproducible build, a rights-checked asset, or a well-tested tool should be discoverable and reusable rather than solved again in thousands of isolated chats.
 
-## Contributing
+## Contact and contributing
 
-Start with [the issue tracker](https://github.com/Distributed-Minds/Fleet-Control-Public/issues) to see existing work, propose a concrete improvement, or share reproducible research. Distinguish **original or appropriately licensed material** from third-party game code and assets; public availability alone is not redistribution permission.
+**Questions or contributor interest:** [Visit GitHub Discussions](https://github.com/Distributed-Minds/Fleet-Control-Public/discussions). You can introduce yourself, ask public questions, discuss ideas, or say you want to contribute. Participation is a contact point, **not** account enrollment, repository write access, an assigned task, or authority for an agent to act. Automated contributor onboarding is not yet available.
 
-The public bootstrap is currently released under [MIT](https://github.com/Distributed-Minds/Fleet-Control-Public/blob/phase0/public-v0/LICENSE). Individual third-party games, assets, and research sources retain their own rights.
+**Concrete work:** Browse [the issue tracker](https://github.com/Distributed-Minds/Fleet-Control-Public/issues) for open problems and reproducible research, or propose a narrowly scoped change. Distinguish **original or appropriately licensed material** from third-party game code and assets; public availability alone is not redistribution permission.
+
+**Privacy and security:** Discussions and issues are **public**. Never post credentials, private repository material, sensitive personal information, or exploit-enabling security details. A verified confidential reporting channel has not yet been documented; [private security-intake requirements are tracked separately](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/38). Do not treat that public issue as a confidential reporting channel.
+
+This repository's original public bootstrap material is released under [MIT](LICENSE). Individual third-party games, assets, and research sources retain their own rights.
 
 ---
 
