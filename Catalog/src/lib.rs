@@ -262,12 +262,98 @@ fn is_public_https_url(url: &str) -> bool {
     true
 }
 
+// These enum vocabularies are part of the checked-in v5 JSON Schema, but
+// serde String fields otherwise accept arbitrary values. Enforce the exact
+// closed sets at the typed admission boundary until full schema execution
+// is implemented; a structurally valid JSON string is not a valid status.
+fn check_vocabulary(problems: &mut Vec<String>, path: &str, value: &str, allowed: &[&str]) {
+    if !allowed.contains(&value) {
+        problems.push(format!("{path}: unsupported schema vocabulary value {value:?}"));
+    }
+}
+
+fn validate_vocabulary(record: &Project, problems: &mut Vec<String>) {
+    check_vocabulary(
+        problems,
+        "project.kind",
+        &record.kind,
+        &["ENGINE", "GAME", "MOD", "REMASTER", "TOOL"],
+    );
+    for (index, claim) in record.rights_claims.iter().enumerate() {
+        check_vocabulary(
+            problems,
+            &format!("rights_claims[{index}].claim_kind"),
+            &claim.claim_kind,
+            &["PUBLISHER_LICENSE", "UPSTREAM_POLICY", "INTERPRETATION"],
+        );
+        check_vocabulary(
+            problems,
+            &format!("rights_claims[{index}].component"),
+            &claim.component,
+            &["CODE", "MEDIA", "THIRD_PARTY_DATA", "TRADEMARK", "BUILD", "OTHER"],
+        );
+        check_vocabulary(
+            problems,
+            &format!("rights_claims[{index}].scope_kind"),
+            &claim.scope_kind,
+            &["PROJECT_DEFAULT", "PATH", "PREFIX", "CONTENT_PACK"],
+        );
+        check_vocabulary(
+            problems,
+            &format!("rights_claims[{index}].status"),
+            &claim.status,
+            &["OBSERVED_AT", "SUPERSEDED", "RETRACTED", "UNKNOWN"],
+        );
+    }
+    for (index, permission) in record.permission_decisions.iter().enumerate() {
+        check_vocabulary(
+            problems,
+            &format!("permission_decisions[{index}].component"),
+            &permission.component,
+            &["CODE", "MEDIA", "THIRD_PARTY_DATA", "TRADEMARK", "BUILD", "OTHER"],
+        );
+        check_vocabulary(
+            problems,
+            &format!("permission_decisions[{index}].use"),
+            &permission.use_kind,
+            &["BUNDLE", "HOST", "TRANSFORM", "CROSS_GAME_REUSE"],
+        );
+    }
+    for (index, evidence) in record.evidence.iter().enumerate() {
+        check_vocabulary(
+            problems,
+            &format!("evidence[{index}].evidence_kind"),
+            &evidence.evidence_kind,
+            &[
+                "PINNED_REPOSITORY_FILE",
+                "MUTABLE_UPSTREAM_PAGE",
+                "FREE_ENERGY_LOCAL_TEST",
+                "HUMAN_RIGHTS_REVIEW",
+                "EXTERNAL_RESEARCH_CLAIM",
+            ],
+        );
+        check_vocabulary(
+            problems,
+            &format!("evidence[{index}].currentness"),
+            &evidence.currentness,
+            &["PINNED_SNAPSHOT", "OBSERVED_AT", "INVALIDATED", "UNKNOWN"],
+        );
+    }
+    check_vocabulary(
+        problems,
+        "review.record_status",
+        &record.review.record_status,
+        &["DRAFT", "REVIEWED", "WITHDRAWN"],
+    );
+}
+
 /// Parse the closed object layout and reject a bounded set of dangerous
 /// cross-record claims. Success is NOT full JSON Schema or rights approval.
 pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
     let record: Project =
         serde_json::from_str(json).map_err(|e| vec![format!("JSON/typed manifest: {e}")])?;
     let mut problems = Vec::new();
+    validate_vocabulary(&record, &mut problems);
 
     if record.schema != "free-energy.project/v0" {
         problems.push("unsupported catalog schema version".to_string());
@@ -513,6 +599,40 @@ mod tests {
         let mut value: Value = serde_json::from_str(base).expect("valid test source");
         f(&mut value);
         serde_json::to_string(&value).expect("serializable mutated fixture")
+    }
+
+    #[test]
+    fn schema_vocabulary_rejects_unsupported_statuses_and_components() {
+        // Each mutation is a syntactically valid JSON string and must be
+        // rejected on its own, not just because another field becomes invalid.
+        for (pointer, field) in [
+            ("/kind", "project.kind"),
+            ("/rights_claims/0/claim_kind", "rights_claims[0].claim_kind"),
+            ("/rights_claims/0/component", "rights_claims[0].component"),
+            ("/rights_claims/0/scope_kind", "rights_claims[0].scope_kind"),
+            ("/rights_claims/0/status", "rights_claims[0].status"),
+            (
+                "/permission_decisions/0/component",
+                "permission_decisions[0].component",
+            ),
+            ("/permission_decisions/0/use", "permission_decisions[0].use"),
+            ("/evidence/0/evidence_kind", "evidence[0].evidence_kind"),
+            ("/evidence/0/currentness", "evidence[0].currentness"),
+            ("/review/record_status", "review.record_status"),
+        ] {
+            let forged = changed(LUANTI, |v| {
+                *v.pointer_mut(pointer).expect("existing catalog field") =
+                    json!("FORGED_STATUS");
+            });
+            let errors = validate_manifest(&forged).unwrap_err();
+            assert!(
+                errors.iter().any(|error| error.contains(field)),
+                "{pointer} escaped schema vocabulary admission: {errors:?}"
+            );
+        }
+        for manifest in [LUANTI, OPENRA, VELOREN] {
+            assert!(validate_manifest(manifest).is_ok());
+        }
     }
 
     #[test]
