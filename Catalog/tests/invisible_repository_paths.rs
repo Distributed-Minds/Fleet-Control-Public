@@ -13,23 +13,18 @@ fn pilot() -> Value {
 fn rights_paths_fail_closed_for_invisible_format_codepoints() {
     assert!(validate_manifest(LUANTI).is_ok());
     for invisible in [
-        '\u{00ad}',
-        '\u{034f}',
-        '\u{180e}',
-        '\u{200b}',
-        '\u{200c}',
-        '\u{200d}',
-        '\u{2060}',
+        '\u{00ad}', '\u{034f}', '\u{180e}', '\u{200b}', '\u{200c}', '\u{200d}', '\u{2060}',
         '\u{feff}',
     ] {
         let mut input = pilot();
         input["rights_claims"][0]["scope_kind"] = json!("PATH");
-        input["rights_claims"][0]["scope"] =
-            json!(format!("assets/LI{invisible}CENSE.txt"));
+        input["rights_claims"][0]["scope"] = json!(format!("assets/LI{invisible}CENSE.txt"));
         let errors =
             validate_manifest(&input.to_string()).expect_err("invisible rights path accepted");
         assert!(
-            errors.iter().any(|message| message.contains("unsafe rights path scope")),
+            errors
+                .iter()
+                .any(|message| message.contains("unsafe rights path scope")),
             "U+{:04X} not rejected as a rights path: {errors:?}",
             invisible as u32
         );
@@ -39,13 +34,7 @@ fn rights_paths_fail_closed_for_invisible_format_codepoints() {
 #[test]
 fn pinned_evidence_paths_fail_closed_even_when_commit_is_valid() {
     for invisible in [
-        '\u{00ad}',
-        '\u{034f}',
-        '\u{180e}',
-        '\u{200b}',
-        '\u{200c}',
-        '\u{200d}',
-        '\u{2060}',
+        '\u{00ad}', '\u{034f}', '\u{180e}', '\u{200b}', '\u{200c}', '\u{200d}', '\u{2060}',
         '\u{feff}',
     ] {
         let mut input = pilot();
@@ -68,6 +57,13 @@ fn ordinary_scoped_and_pinned_paths_still_pass() {
     input["rights_claims"][0]["scope_kind"] = json!("PATH");
     input["rights_claims"][0]["scope"] = json!("assets/LICENSE.txt");
     input["evidence"][0]["path"] = json!("docs/LICENSE.txt");
+    // A changed rights scope also changes which scope each related decision
+    // refers to; preserve semantic consistency in this positive control.
+    for decision in input["permission_decisions"].as_array_mut().unwrap() {
+        if decision["component"] == "CODE" {
+            decision["scope"] = json!("assets/LICENSE.txt");
+        }
+    }
     validate_manifest(&input.to_string())
         .unwrap_or_else(|errors| panic!("ordinary paths rejected: {errors:?}"));
 }
