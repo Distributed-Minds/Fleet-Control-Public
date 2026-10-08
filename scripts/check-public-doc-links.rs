@@ -228,13 +228,18 @@ fn collect_links(markdown: &str, document: &str, report: &mut Report) -> Vec<Str
                 i += 1;
                 continue;
             }
-            let after = match bytes[i + 1..].iter().position(|&c| c == b']') {
-                Some(k) => i + 1 + k,
-                None => {
-                    i += 1;
-                    continue;
-                }
-            };
+            // An escaped ] belongs to the label, not the closing delimiter.
+            // Keep the same odd/even backslash rule used for opening brackets.
+            let mut after = i + 1;
+            while after < bytes.len()
+                && (bytes[after] != b']' || preceded_by_escape(bytes, after))
+            {
+                after += 1;
+            }
+            if after == bytes.len() {
+                i += 1;
+                continue;
+            }
             if bytes.get(after + 1) != Some(&b'(') {
                 i = after + 1;
                 continue;
@@ -508,6 +513,28 @@ mod tests {
         );
         assert_eq!(paths, vec!["a.md", "b.md"]);
         assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn escaped_closing_brackets_in_labels_still_check_real_targets() {
+        let mut report = Report::default();
+        let paths = collect_links(
+            r#"[odd \] text](a.md) [triple \\\] text](b.md) [even \\](c.md) \[ignored](none.md)"#,
+            "README.md",
+            &mut report,
+        );
+        assert_eq!(paths, vec!["a.md", "b.md", "c.md"]);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn escaped_closing_label_bracket_cannot_hide_missing_target() {
+        let sandbox = Sandbox::new();
+        sandbox.write("README.md", r#"[label \] more](missing.md)"#);
+        let result = sandbox.scan();
+        assert_eq!(result.local_links, 1);
+        assert_eq!(result.errors.len(), 1, "{:?}", result.errors);
+        assert!(result.errors[0].contains("target missing"));
     }
 
     #[test]
