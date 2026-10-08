@@ -325,7 +325,12 @@ fn historical_python_and_rust_authority_closure_agree_on_negative_controls() {
     // A changed expected label cannot be accepted as a computed decision.
     checked_authority(
         "forged-verdict",
-        &change(&baseline, "child-after-cutoff-denied", "expected", json!("BOUNDED_AUTHORITY")),
+        &change(
+            &baseline,
+            "child-after-cutoff-denied",
+            "expected",
+            json!("BOUNDED_AUTHORITY"),
+        ),
         false,
     );
 
@@ -336,10 +341,30 @@ fn historical_python_and_rust_authority_closure_agree_on_negative_controls() {
 
     // These are independent semantic input mutations, not changed labels.
     for (label, name, field, replacement) in [
-        ("cutoff-revoked", "child-after-cutoff-denied", "ancestor_cutoff", json!(false)),
-        ("root-restored", "multi-root-all-required-loses-one-root", "surviving_roots", json!(2)),
-        ("provider-debt-settled", "provider-valid-revoked-credential-denied-with-debt", "external_invalidation_complete", json!(true)),
-        ("cycle-root-restored", "cycle-without-external-root", "external_root", json!(true)),
+        (
+            "cutoff-revoked",
+            "child-after-cutoff-denied",
+            "ancestor_cutoff",
+            json!(false),
+        ),
+        (
+            "root-restored",
+            "multi-root-all-required-loses-one-root",
+            "surviving_roots",
+            json!(2),
+        ),
+        (
+            "provider-debt-settled",
+            "provider-valid-revoked-credential-denied-with-debt",
+            "external_invalidation_complete",
+            json!(true),
+        ),
+        (
+            "cycle-root-restored",
+            "cycle-without-external-root",
+            "external_root",
+            json!(true),
+        ),
     ] {
         checked_authority(label, &change(&baseline, name, field, replacement), false);
     }
