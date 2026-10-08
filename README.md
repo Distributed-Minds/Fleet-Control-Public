@@ -5,7 +5,7 @@
   <em>Engine for Networked Entertainment, Remixing, Games &amp; You</em>
 </p>
 
-<p align="center"><strong>FREE ENERGY Remasters Everything.</strong></p>
+<p align="center"><strong>FREE ENERGY Controls Melting.</strong></p>
 
 <p align="center">
   <a href="https://github.com/Distributed-Minds/Fleet-Control-Public/releases/tag/v0.1.2-phase0-preview">Current preview</a> ·
