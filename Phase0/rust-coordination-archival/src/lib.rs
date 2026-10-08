@@ -477,15 +477,8 @@ mod tests {
         // controls, yet an ID with one embedded can be visually indistinguishable
         // from a different exact source, manifest or operation identifier.
         for marker in [
-            '\u{00ad}',
-            '\u{034f}',
-            '\u{180e}',
-            '\u{200b}',
-            '\u{200c}',
-            '\u{200d}',
-            '\u{2060}',
-            '\u{2064}',
-            '\u{feff}',
+            '\u{00ad}', '\u{034f}', '\u{180e}', '\u{200b}', '\u{200c}', '\u{200d}', '\u{2060}',
+            '\u{2064}', '\u{feff}',
         ] {
             let bad = format!("R{marker}42");
 
@@ -541,8 +534,7 @@ mod tests {
         assert_eq!(evaluate(&fixture()), Verdict::EligibleModelOnly);
         let ordinary = item("histórico-λ", 10);
         assert_eq!(
-            replay(&[ordinary.clone(), item("b", 11)], &[item("c", 12)], &cut())
-                .unwrap()[0],
+            replay(&[ordinary.clone(), item("b", 11)], &[item("c", 12)], &cut()).unwrap()[0],
             ordinary
         );
     }
