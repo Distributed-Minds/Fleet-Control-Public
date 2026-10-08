@@ -21,10 +21,19 @@ const FAMILY_BINARIES: [(&str, &str); 8] = [
     ("adaptive_stress", env!("CARGO_BIN_EXE_adaptive_stress")),
     ("ad_hoc_research", env!("CARGO_BIN_EXE_ad_hoc_research")),
     ("authority_closure", env!("CARGO_BIN_EXE_authority_closure")),
-    ("containment_capacity", env!("CARGO_BIN_EXE_containment_capacity")),
-    ("coordination_history", env!("CARGO_BIN_EXE_coordination_history")),
+    (
+        "containment_capacity",
+        env!("CARGO_BIN_EXE_containment_capacity"),
+    ),
+    (
+        "coordination_history",
+        env!("CARGO_BIN_EXE_coordination_history"),
+    ),
     ("github_capability", env!("CARGO_BIN_EXE_github_capability")),
-    ("integration_candidate", env!("CARGO_BIN_EXE_integration_candidate")),
+    (
+        "integration_candidate",
+        env!("CARGO_BIN_EXE_integration_candidate"),
+    ),
 ];
 
 fn with_fixture_input(input: &str, f: impl FnOnce(&str) -> Output) -> Output {
