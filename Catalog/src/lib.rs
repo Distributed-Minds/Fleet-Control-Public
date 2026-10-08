@@ -537,9 +537,93 @@ fn check_slug(problems: &mut Vec<String>, path: &str, value: &str) {
     }
 }
 
+// Serde Option<T> otherwise accepts a missing field as None. The published
+// schema requires these keys to be present even when their values are null.
+// Keep this shape gate separate from semantic rights/permission decisions.
+fn validate_required_nullable_presence(json: &str) -> Result<(), Vec<String>> {
+    use serde_json::Value;
+
+    let root: Value = serde_json::from_str(json)
+        .map_err(|error| vec![format!("JSON/typed manifest: {error}")])?;
+
+    fn require_keys(value: Option<&Value>, path: &str, keys: &[&str], problems: &mut Vec<String>) {
+        if let Some(object) = value.and_then(Value::as_object) {
+            for key in keys {
+                if !object.contains_key(*key) {
+                    problems.push(format!("{path}.{key}: missing schema-required field"));
+                }
+            }
+        }
+    }
+
+    let mut problems = Vec::new();
+    require_keys(
+        root.get("upstream"),
+        "upstream",
+        &["source_revision", "source_revision_reason"],
+        &mut problems,
+    );
+    require_keys(
+        root.get("play"),
+        "play",
+        &["upstream_download_url", "local_test_evidence_id"],
+        &mut problems,
+    );
+    require_keys(
+        root.get("adapter"),
+        "adapter",
+        &["target_id", "test_evidence_id"],
+        &mut problems,
+    );
+    require_keys(
+        root.get("review"),
+        "review",
+        &["supersedes_record_revision"],
+        &mut problems,
+    );
+
+    for (collection, keys) in [
+        ("rights_claims", &["license_id"][..]),
+        ("permission_decisions", &["decided_at", "reviewer"][..]),
+        ("evidence", &["repository", "commit", "path"][..]),
+    ] {
+        if let Some(items) = root.get(collection).and_then(Value::as_array) {
+            for (index, item) in items.iter().enumerate() {
+                require_keys(
+                    Some(item),
+                    &format!("{collection}[{index}]"),
+                    keys,
+                    &mut problems,
+                );
+            }
+        }
+    }
+    if let Some(events) = root
+        .pointer("/review/claim_history")
+        .and_then(Value::as_array)
+    {
+        for (index, event) in events.iter().enumerate() {
+            require_keys(
+                Some(event),
+                &format!("review.claim_history[{index}]"),
+                &["new_claim_id"],
+                &mut problems,
+            );
+        }
+    }
+
+    problems.sort();
+    if problems.is_empty() {
+        Ok(())
+    } else {
+        Err(problems)
+    }
+}
+
 /// Parse the closed object layout and reject a bounded set of dangerous
 /// cross-record claims. Success is NOT full JSON Schema or rights approval.
 pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
+    validate_required_nullable_presence(json)?;
     let record: Project =
         serde_json::from_str(json).map_err(|e| vec![format!("JSON/typed manifest: {e}")])?;
     let mut problems = Vec::new();
