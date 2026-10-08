@@ -384,7 +384,33 @@
         "reviewer": {
           "$ref": "#/$defs/maybe_string"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "decision": {
+                "const": "NOT_AUTHORIZED"
+              }
+            },
+            "required": [
+              "decision"
+            ]
+          },
+          "then": {
+            "properties": {
+              "decided_at": {
+                "$ref": "#/$defs/time"
+              },
+              "reviewer": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              }
+            }
+          }
+        }
+      ]
     },
     "adapter": {
       "type": "object",
