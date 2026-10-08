@@ -394,3 +394,186 @@ https://ntrs.nasa.gov/citations/20260008222
 Evidence class: **primary/institutional current technical source**.
 
 L4 relevance: explicitly states that heterogeneous simulation interoperability requires more than compatible software and needs common semantics for time, space, physical entities, and execution control. It also describes evolution through operational experience and multi-organization adoption. This supports a small, versioned semantic core that evolves from independent implementation evidence.
+
+---
+
+> **Historical L1 correction-source bibliography (2026-10-05).** The following dated research-source sections are reproduced verbatim from corrected L1 source commit [`f109e15`](https://github.com/Distributed-Minds/Fleet-Control-Public/commit/f109e15ed1c73b0c76876524ec3c126e34bd63ae), original `Source-Ledger.md` blob `c4a80024abb93649b89c79882be71fa4f2c6af6b`. They are retained for evidence provenance; links and claims are historical and **not freshly verified**, and they do not replace the newer L4, Signet 2 response, or source/rights cautions above.
+
+## L1 continuation sources — 2026-10-05
+
+### Current capability/extension standards
+
+**OpenXR 1.1.63 specification**  
+https://registry.khronos.org/OpenXR/specs/1.1/html/xrspec.html
+
+**OpenXR extension process**  
+https://registry.khronos.org/OpenXR/specs/1.1/extprocess.html
+
+Evidence class: **primary standards organization**.
+
+L1 use: query-available-then-enable semantics; controlled extension namespaces; support is not activation.
+
+### glTF extension/versioning model
+
+**glTF 2.0 specification**  
+https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
+
+Evidence class: **primary standards organization**.
+
+L1 use: `extensionsUsed` versus `extensionsRequired`; minor evolution must not change existing behavior.
+
+### Current IEEE HLA family
+
+**IEEE 1516-2025 — HLA Framework and Rules**  
+https://standards.ieee.org/ieee/1516/6687/
+
+**IEEE 1516.1-2025 — Federate Interface Specification**  
+https://standards.ieee.org/ieee/1516.1/6688/
+
+**IEEE 1516.2-2025 — Object Model Template Specification**  
+https://standards.ieee.org/ieee/1516.2/6689/
+
+Evidence class: **primary standard metadata**.
+
+L1 use: federation contract/services; OMT separates object-model format/syntax from domain content.
+
+### SISO HLA data files
+
+https://www.sisostandards.org/page/DataFiles
+
+Evidence class: **primary standards organization**.
+
+L1 use: public modular FOM examples, reference enumeration artifacts, evidence that composable object-model modules are a deployed HLA pattern.
+
+### Conceptual interoperability
+
+Tolk & Muguira, **The Levels of Conceptual Interoperability Model**  
+https://www.researchgate.net/publication/240319008_The_Levels_of_Conceptual_Interoperability_Model
+
+Tolk, **Conceptual alignment for simulation interoperability: lessons learned from 30 years of interoperability research**  
+https://journals.sagepub.com/doi/full/10.1177/00375497231216471
+
+Evidence class: **research literature**.
+
+L1 use: technical/syntactic/semantic/pragmatic distinction; conceptual alignment as separate from transport/schema compatibility.
+
+### URI / URN identity mechanics
+
+**IANA URN namespace registry**  
+https://www.iana.org/assignments/urn-namespaces
+
+**RFC 8141 — Uniform Resource Names**  
+https://www.rfc-editor.org/rfc/rfc8141.html
+
+**RFC 3986 — URI Generic Syntax**  
+https://www.rfc-editor.org/rfc/rfc3986.html
+
+Evidence class: **primary Internet standards/registry**.
+
+L1 use: a `urn:signet:...` identifier is not a valid public URN unless a `signet` namespace is registered; draft semantic IDs therefore use project-controlled URI space instead.
+
+### Native-language recursion disposition
+
+Spanish SCFHLA material already present in this ledger was re-evaluated and remains material: it explicitly separates HLA/FOM syntactic structure from semantic agreement and favors a modular ontology network.
+
+Chinese/Japanese searches in this pass mostly rediscovered already-ledgered HLA adapter/distributed-simulation material. Disposition: **NO MATERIAL DELTA**; no duplicate source entries added.
+
+
+---
+
+## L1 Signet 2 response sources — 2026-10-05
+
+### Signet 2 architecture proposal
+
+**Signet Protocol — “Signet 2: intents, archetypes and translation profiles”**  
+Draft proposal v0.1, 2026-10-05.  
+Public source commit: `490dfa9423841a45f2917d8d013e010ca0eb5548`
+
+- proposal source: https://github.com/kian-cx/signetprotocol/blob/490dfa9423841a45f2917d8d013e010ca0eb5548/docs/content/proposals/translation-profiles.mdx
+- architecture PDF: https://github.com/kian-cx/signetprotocol/blob/490dfa9423841a45f2917d8d013e010ca0eb5548/docs/public/signet-2-architecture.pdf
+- Forge overview: https://github.com/kian-cx/signetprotocol/blob/490dfa9423841a45f2917d8d013e010ca0eb5548/docs/content/forge/index.mdx
+
+Evidence class: **primary project design source / draft proposal**.
+
+L1 use:
+
+- strong convergence on game→meaning→game rather than pairwise bridges;
+- intent versus authoritative-effect separation;
+- capability declaration;
+- deterministic human-confirmed translation profiles;
+- closed-list resolver;
+- AI outside the per-tick simulation path;
+- explicit open questions on motion calibration, vocabulary/catalog governance, resolver placement, and conflicting profiles.
+
+Important qualification: the upstream document explicitly states that Signet 2 is a draft proposal and is not implemented.
+
+### W3C SKOS mapping relations
+
+**SKOS Simple Knowledge Organization System Reference**, W3C Recommendation.  
+https://www.w3.org/TR/skos-reference/#mapping
+
+Evidence class: **primary Web standard**.
+
+L1 use: mature precedent for distinguishing mapping relations such as `exactMatch`, `closeMatch`, `broadMatch`, and `narrowMatch`. L1 does not propose adopting SKOS wholesale for gameplay semantics; operational mappings also need unit/coordinate transforms, loss, assumptions, validity, and conformance evidence.
+
+### Source chronology / provenance
+
+Public timestamps relevant to this response:
+
+- L1 candidate semantic contract: `e4ba7160ed400960fbee20375fa2b618219af304` — 2026-10-05T16:13:53Z
+- L1 pass-1 ledger completion: `57048f8982289d751616d29b54b9aa4901c6ddd6` — 2026-10-05T16:17:48Z
+- Signet 2 proposal/PDF commit: `490dfa9423841a45f2917d8d013e010ca0eb5548` — 2026-10-05T16:31:40Z
+
+This chronology is retained for research provenance only. It does **not** establish or claim priority, independence, or upstream awareness.
+
+
+### JSON Schema structural encoding
+
+**JSON Schema Draft 2020-12**  
+https://json-schema.org/specification  
+https://json-schema.org/draft/2020-12/schema
+
+Evidence class: **primary specification/project source**.
+
+The JSON Schema project currently identifies Draft 2020-12 as its latest published specification.
+
+L1 use: structural encoding for the candidate semantic envelope, capability declaration, session requirements and negotiated contract. This source supports the schema dialect only; it does **not** establish semantic interoperability or replace L1 conformance tests.
+
+
+---
+
+## L1 canonicalization and composition sources — 2026-10-05
+
+### RFC 8785 — JSON Canonicalization Scheme
+
+https://www.rfc-editor.org/rfc/rfc8785.html
+
+Evidence class: **primary Internet specification**.
+
+L1 use:
+
+- deterministic JSON primitive serialization;
+- recursive object-property ordering;
+- preserved array ordering;
+- canonical UTF-8 bytes suitable for hashing/signing.
+
+Important qualification: JCS does **not** canonicalize semantically unordered arrays. L1 therefore requires schema-declared set arrays to be source-canonical (sorted + unique) before JCS.
+
+### HLA Evolved Modular FOM composition
+
+Möller, Löfstrand, Karlsson.  
+**An Overview of the HLA Evolved Modular FOMs**. 2007 Spring Simulation Interoperability Workshop.
+
+Primary public copy from Pitch Technologies:  
+https://pitchtechnologies.com/wp-content/uploads/2020/09/07s-siw-108-1.pdf
+
+Evidence class: **technical paper by HLA standards/tooling participants**.
+
+L1 use:
+
+- exact equivalence for duplicated singleton/table definitions;
+- union of distinct elements while requiring duplicate identifiers to be equivalent;
+- structural extension instead of mutating an already-defined class;
+- selected FOM-module loads fail atomically on hard composition conflicts.
+
+The paper explicitly states that full normative merge rules live in the HLA OMT standard; L1 uses these principles as precedent rather than claiming the paper itself is the complete standard.
