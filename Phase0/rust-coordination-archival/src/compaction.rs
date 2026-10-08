@@ -80,8 +80,11 @@ pub fn plan_compaction(
     // Source IDs are now unique, so this ordering is deterministic. Successful
     // removals are still ordered by certified sequence below.
     let mut ordered_witnesses: Vec<_> = witnesses.iter().collect();
-    ordered_witnesses
-        .sort_unstable_by(|a, b| a.observed_source.record_id.cmp(&b.observed_source.record_id));
+    ordered_witnesses.sort_unstable_by(|a, b| {
+        a.observed_source
+            .record_id
+            .cmp(&b.observed_source.record_id)
+    });
     let mut selected = BTreeSet::new();
     let mut model_removals = Vec::with_capacity(witnesses.len());
     // A batch is admitted against one coherent archive manifest generation.
@@ -545,10 +548,7 @@ mod tests {
         same_source.archive.source.record_id = first.observed_source.record_id.clone();
         same_source.authority.source.record_id = first.observed_source.record_id.clone();
         same_source.effect_state = EffectState::AckUnknown;
-        for candidates in [
-            [first.clone(), same_source.clone()],
-            [same_source, first],
-        ] {
+        for candidates in [[first.clone(), same_source.clone()], [same_source, first]] {
             assert_eq!(
                 plan_compaction(&archived, &live, &cut(), &candidates),
                 Err(PlanFailure::DuplicateCandidate)
