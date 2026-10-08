@@ -39,7 +39,10 @@ fn run(fixture: &Value) -> Output {
 }
 
 fn assert_denied(result: &Output) {
-    assert!(!result.status.success(), "invalid fixture accepted: {result:?}");
+    assert!(
+        !result.status.success(),
+        "invalid fixture accepted: {result:?}"
+    );
     assert!(
         result.stdout.is_empty(),
         "invalid fixture produced a misleading success record: {result:?}"
@@ -62,8 +65,14 @@ fn case<'a>(fixture: &'a mut Value, name: &str) -> &'a mut Value {
 #[test]
 fn compiled_binary_accepts_exact_historical_26_case_fixture() {
     let result = run_source(HISTORICAL);
-    assert!(result.status.success(), "historical fixture rejected: {result:?}");
-    assert!(result.stderr.is_empty(), "unexpected diagnostics: {result:?}");
+    assert!(
+        result.status.success(),
+        "historical fixture rejected: {result:?}"
+    );
+    assert!(
+        result.stderr.is_empty(),
+        "unexpected diagnostics: {result:?}"
+    );
     assert!(
         String::from_utf8_lossy(&result.stdout)
             .contains("authority closure Rust semantic fixtures: 26 cases passed"),
@@ -74,8 +83,7 @@ fn compiled_binary_accepts_exact_historical_26_case_fixture() {
 #[test]
 fn fabricated_expected_verdict_cannot_change_computed_result() {
     let mut fixture: Value = serde_json::from_str(HISTORICAL).unwrap();
-    case(&mut fixture, "child-after-cutoff-denied")["expected"] =
-        json!("BOUNDED_AUTHORITY");
+    case(&mut fixture, "child-after-cutoff-denied")["expected"] = json!("BOUNDED_AUTHORITY");
     assert_denied(&run(&fixture));
 }
 
@@ -107,13 +115,11 @@ fn duplicate_and_missing_case_identifiers_fail_closed() {
 fn unknown_authority_input_and_invalid_type_fail_closed() {
     let baseline: Value = serde_json::from_str(HISTORICAL).unwrap();
     let mut unknown = baseline.clone();
-    case(&mut unknown, "child-after-cutoff-denied")["mint_new_authority"] =
-        json!(true);
+    case(&mut unknown, "child-after-cutoff-denied")["mint_new_authority"] = json!(true);
     assert_denied(&run(&unknown));
 
     let mut wrong_type = baseline;
-    case(&mut wrong_type, "child-after-cutoff-denied")["ancestor_cutoff"] =
-        json!("true");
+    case(&mut wrong_type, "child-after-cutoff-denied")["ancestor_cutoff"] = json!("true");
     assert_denied(&run(&wrong_type));
 }
 
