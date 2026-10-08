@@ -45,3 +45,69 @@ jobs:
           rustup run 1.85.1 rustc --edition=2021 -D warnings \
             scripts/check-public-doc-links.rs -o "$RUNNER_TEMP/free-energy-doc-links"
           "$RUNNER_TEMP/free-energy-doc-links" --root "$GITHUB_WORKSPACE"
+      - name: Exercise compiled CLI rejection cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary="$RUNNER_TEMP/free-energy-doc-links"
+          fixture="$(mktemp -d "$RUNNER_TEMP/free-energy-doclink-fixture-XXXXXXXX")"
+          outside="$(mktemp "$RUNNER_TEMP/free-energy-doclink-outside-XXXXXXXX")"
+          trap 'rm -rf -- "$fixture"; rm -f -- "$outside"' EXIT
+          mkdir -p "$fixture/release-kit"
+          for doc in \
+            README.md GETTING-STARTED.md HELP-A-PROJECT.md WORKFLOW-GUIDES.md \
+            TROUBLESHOOTING.md BRANDING.md \
+            release-kit/README-FIRST.md release-kit/INSTALL-CHECKLIST.md; do
+            : > "$fixture/$doc"
+          done
+
+          # Positive control: a real local file, an ignored external URI, and all
+          # eight required inputs. This calls the compiled product CLI, not a mock.
+          printf '%s\n' 'present' > "$fixture/target.md"
+          printf '%s\n' '[valid](target.md)' '[external](https://example.org)' > "$fixture/README.md"
+          "$binary" --root "$fixture" > "$fixture/cli-output.txt" 2>&1
+          grep -Fq 'Checked 1 local links across 8 documents; 0 errors' "$fixture/cli-output.txt"
+
+          expect_rejected() {
+            local label="$1" expected="$2" exit_code=0
+            "$binary" --root "$fixture" > "$fixture/cli-output.txt" 2>&1 || exit_code=$?
+            if [[ "$exit_code" != 1 ]] || ! grep -Fq -- "$expected" "$fixture/cli-output.txt"; then
+              echo "FAIL: $label: expected exit 1 and diagnostic '$expected', got $exit_code" >&2
+              cat "$fixture/cli-output.txt" >&2
+              exit 1
+            fi
+          }
+
+          printf '%s\n' '[missing](missing.md)' > "$fixture/README.md"
+          expect_rejected missing-target 'target missing'
+
+          # Repeat the same failing input: errors must be sorted and deterministic.
+          cp "$fixture/cli-output.txt" "$fixture/first-output.txt"
+          expect_rejected repeated-missing-target 'target missing'
+          cmp "$fixture/first-output.txt" "$fixture/cli-output.txt"
+
+          printf '%s\n' '[escape](../outside.md)' > "$fixture/README.md"
+          expect_rejected lexical-traversal 'link escapes repository'
+
+          printf '%s\n' '[percent](%ZZ)' > "$fixture/README.md"
+          expect_rejected malformed-percent 'malformed percent escape'
+
+          printf '%s\n' '[invalid-utf8](%FF)' > "$fixture/README.md"
+          expect_rejected invalid-utf8 'invalid UTF-8'
+
+          printf '%s\n' '[absolute](/etc/passwd)' > "$fixture/README.md"
+          expect_rejected absolute-path 'absolute path not permitted'
+
+          printf '%s\n' '[nested](a(b).md)' > "$fixture/README.md"
+          expect_rejected unsupported-nested-destination 'unsupported nested/angle destination syntax'
+
+          printf '%s\n' 'external file' > "$outside"
+          ln -s "$outside" "$fixture/leak.md"
+          printf '%s\n' '[symlink](leak.md)' > "$fixture/README.md"
+          expect_rejected symlink-escape 'link escapes repository (symlink)'
+
+          printf '%s\n' '[valid](target.md)' > "$fixture/README.md"
+          rm "$fixture/BRANDING.md"
+          expect_rejected missing-mandatory-document 'document unreadable or missing'
+
+          echo 'PASS: compiled CLI positive control, eight failing-input cases, and deterministic diagnostics'
