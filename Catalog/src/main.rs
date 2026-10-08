@@ -216,7 +216,10 @@ fn main() -> ExitCode {
     match result {
         Ok(records) if errors.is_empty() => {
             for (id, path) in records {
-                println!("TYPED-BOUNDARY-ONLY {id}: {path}");
+                // A pathname is untrusted data: newlines must not forge extra
+                // positive CLI records. JSON quoting is reversible for consumers.
+                let path_json = serde_json::to_string(&path).expect("serialize admitted input path");
+                println!("TYPED-BOUNDARY-ONLY {id}: {path_json}");
             }
             ExitCode::SUCCESS
         }
