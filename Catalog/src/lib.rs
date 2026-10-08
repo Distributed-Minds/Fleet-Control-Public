@@ -294,6 +294,21 @@ fn is_portable_repository_segment(part: &str) -> bool {
     )
 }
 
+// Invisible formatting characters can make two distinct Git paths look
+// identical in rights and pinned-evidence reviews. Do not normalize them:
+// repository identity and scoped license decisions require exact visible paths.
+fn is_invisible_path_format(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{00ad}'
+            | '\u{034f}'
+            | '\u{180e}'
+            | '\u{200b}'..='\u{200d}'
+            | '\u{2060}'
+            | '\u{feff}'
+    )
+}
+
 fn is_relative_path(value: &str) -> bool {
     // Repository paths are identity-bearing, not URL paths. Until an
     // authoritative percent-decoding/canonicalization contract exists, reject
@@ -304,7 +319,9 @@ fn is_relative_path(value: &str) -> bool {
         && !value.contains('\\')
         && !value
             .chars()
-            .any(|ch| ch.is_control() || is_bidi_format_character(ch))
+            .any(|ch| {
+                ch.is_control() || is_bidi_format_character(ch) || is_invisible_path_format(ch)
+            })
         && value.split('/').all(|part| {
             !part.is_empty()
                 && part != "."
