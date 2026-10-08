@@ -1,0 +1,8 @@
+descriptor-sha256: 29663431523e65018681c1644020750af03edc4d82bf478c97966960da0981a5
+ISignetAdapterShim.cs: sha256:74ed97fde58bb717b665bc80fb03d495aea8489a8e80321bcf750e70bde169bc
+signet-adapter-shim.ts: sha256:366253479f7073a66bf65c8c7b2712c16f77f90c357d3e91804bdec48e4332a4
+signet_adapter_shim.h: sha256:1750f7f62e7b36868183166a06f488449aa76e6d5ebeda2359c21e0ad06559bb
+signet_adapter_shim.rs: sha256:4b0308e7efb754b3f83655c392ece5327ff1588cf321624cce37b6813417461f
+deterministic-generation: PASS
+c-header-syntax: PASS
+typescript-syntax: PASS

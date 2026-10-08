@@ -1,0 +1,9 @@
+[configuration]
+entry_symbol = "signet_l2_godot_library_init"
+compatibility_minimum = "4.5"
+compatibility_maximum = "4.7"
+reloadable = true
+
+[libraries]
+linux.debug.x86_64 = "./libsignet_l2_godot.so"
+linux.release.x86_64 = "./libsignet_l2_godot.so"

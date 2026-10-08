@@ -1,0 +1,6 @@
+minecraft.example.json: schema PASS
+godot.example.json: schema PASS
+minecraft-responsibility-coverage: 7/7
+minecraft-role-contract: PASS
+godot-generic-gameplay-claims: 0
+godot-engine-vs-game-boundary: PASS

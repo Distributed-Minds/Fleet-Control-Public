@@ -1,0 +1,6 @@
+godot-entry-init: PASS
+godot-version-discovery: 0x040702
+generated-shim-surface: PASS
+0000000000001201 T sg_adapter_surface_version
+000000000000113f T signet_l2_godot_library_init
+00000000000011f4 T signet_l2_godot_shim

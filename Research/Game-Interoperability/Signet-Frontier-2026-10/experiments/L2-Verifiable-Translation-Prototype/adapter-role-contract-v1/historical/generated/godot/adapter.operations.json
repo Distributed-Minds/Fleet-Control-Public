@@ -1,0 +1,11 @@
+{
+  "schema": "signet-adapter-generated-operations@1",
+  "generator": "l2-role-contract-generator@1",
+  "descriptor_sha256": "2c3b3d9f374172435ec505358e9fc084b844e0914fd2bd77b12f6aacaebd12e2",
+  "target": "Godot 4.7.2 GDExtension host boundary",
+  "integration_mode": "OPEN_ENGINE",
+  "surface_fingerprint": "godot@ed1daf0bf:gdextension-interface@9b55cc98",
+  "operations": [
+    {"id":"host.surface_version","role":"HOST","direction":"DESCRIBE","local_mechanism":"GDExtension get_godot_version2","semantic_contract_ref":null,"authority_class":"INTEGRATION_EVIDENCE","evidence":"HARNESS"}
+  ]
+}

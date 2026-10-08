@@ -1,0 +1,40 @@
+{
+  "schema": "signet-adapter-shim@0",
+  "package": {
+    "id": "l2-research-adapter-shim",
+    "version": "0.0.0-research"
+  },
+  "semantic_contract_refs": [
+    "signet2:intents-draft@0",
+    "signet2:archetypes-draft@0"
+  ],
+  "functions": [
+    {
+      "name": "surface_version",
+      "description": "Version of the game/engine integration surface exposed by this shim.",
+      "params": [],
+      "returns": "u32"
+    },
+    {
+      "name": "capture_control",
+      "description": "Read one local control by adapter-defined identifier.",
+      "params": [{"name": "control_id", "type": "string"}],
+      "returns": "optional_f32"
+    },
+    {
+      "name": "observe_metric",
+      "description": "Read one calibration metric when the legitimate integration surface exposes it.",
+      "params": [{"name": "metric_id", "type": "string"}],
+      "returns": "optional_f64"
+    },
+    {
+      "name": "present_choice",
+      "description": "Present one already-resolved local appearance choice.",
+      "params": [
+        {"name": "choice_id", "type": "string"},
+        {"name": "payload_json", "type": "string"}
+      ],
+      "returns": "bool"
+    }
+  ]
+}
