@@ -4,19 +4,20 @@ This directory is a zero-dependency landing-page prototype. It does **not** publ
 
 ## Local preview
 
-From the repository root, run: python3 -m http.server 8000 --directory docs
+Open [`docs/index.html`](index.html) in a browser directly, or use an already available, trusted standalone static-file server for HTTP testing. The relative CSS path does not require a JavaScript runtime, Python, npm, remote fonts, tracking scripts, or remote images. Browser security policies may differ between local-file and HTTP previews.
 
-Then open http://localhost:8000/. No npm dependencies, JavaScript runtime, remote fonts, tracking scripts, or remote images are required.
+## Offline structural smoke check (Rust)
 
-## Offline structural smoke check
-
-From the repository root:
+Compile and run from the repository root with an installed Rust compiler:
 
 ```sh
-python3 tests/check_free_energy_site.py
+rustc --edition=2021 -D warnings tests/check_free_energy_site.rs -o /tmp/free-energy-site-check
+/tmp/free-energy-site-check
+rustc --edition=2021 -D warnings --test tests/check_free_energy_site.rs -o /tmp/free-energy-site-tests
+/tmp/free-energy-site-tests
 ```
 
-This standard-library-only check validates local fragment links, the relative stylesheet, the direct starter ZIP and corrected-guide links, public Discussions/contact notices, implemented-versus-future disclosures, and basic keyboard-focus, responsive, and reduced-motion CSS hooks. It makes **no network requests** and is not a substitute for a browser accessibility review, external-link checks, release installation, or a deployed-site test.
+No Cargo crates, dependency download, npm installation, scripting interpreter or external network requests are needed for this test. The checker validates local fragment links, the relative stylesheet, the direct starter ZIP and corrected-guide URLs, public Discussions/contact notices, PLAY/HELP/MAKE routes, implemented-versus-future disclosures, and basic keyboard-focus, responsive and reduced-motion CSS hooks. It is **not** a browser accessibility audit, live HTTP check, release installation test or deployment verification.
 
 ## Deployment and migration
 
