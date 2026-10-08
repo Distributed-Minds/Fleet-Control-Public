@@ -17,6 +17,22 @@ rustc --edition=2021 -D warnings --test tests/check_free_energy_site.rs -o /tmp/
 /tmp/free-energy-site-tests
 ```
 
+
+On **Windows PowerShell**, `/tmp/...` is not a native output path. From the repository root, compile and run the same Rust checker and unit tests as Windows executables:
+
+```powershell
+rustc --edition=2021 -D warnings tests/check_free_energy_site.rs -o .\free-energy-site-check.exe
+if ($LASTEXITCODE -ne 0) { throw "Site checker compilation failed" }
+.\free-energy-site-check.exe
+if ($LASTEXITCODE -ne 0) { throw "Site checker failed" }
+rustc --edition=2021 -D warnings --test tests/check_free_energy_site.rs -o .\free-energy-site-tests.exe
+if ($LASTEXITCODE -ne 0) { throw "Unit-test compilation failed" }
+.\free-energy-site-tests.exe
+if ($LASTEXITCODE -ne 0) { throw "Unit tests failed" }
+```
+
+These Windows commands produce two local `.exe` files in the repository root; remove the generated executables when finished and do not commit them. A successful source smoke check remains narrower than actual browser, network, or installation validation.
+
 No Cargo crates, dependency download, npm installation, scripting interpreter or external network requests are needed for this test. The checker validates local fragment links, the relative stylesheet, the direct starter ZIP and corrected-guide URLs, public Discussions/contact notices, PLAY/HELP/MAKE routes, implemented-versus-future disclosures, and basic keyboard-focus, responsive and reduced-motion CSS hooks. It is **not** a browser accessibility audit, live HTTP check, release installation test or deployment verification.
 
 ## Deployment and migration
