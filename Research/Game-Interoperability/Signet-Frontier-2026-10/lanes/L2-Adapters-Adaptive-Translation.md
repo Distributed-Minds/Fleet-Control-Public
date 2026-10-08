@@ -168,3 +168,24 @@ Hand off to:
 ## Success condition
 
 L2 is useful when a new adapter can be built mostly by filling a well-defined contract, and any AI assistance produces inspectable artifacts rather than hidden runtime semantics.
+
+## Corrected L2 research archive (integrated 2026-10-08)
+
+The corrected L2 experiment sources were preserved, without replacing this
+original planning brief, by [merged research PR #78](https://github.com/Distributed-Minds/Fleet-Control-Public/pull/78)
+on the **non-default Signet research integration branch**. For current archival
+source and the correction history, use:
+
+- [Role-contract v1 correction notes](../experiments/L2-Verifiable-Translation-Prototype/adapter-role-contract-v1/CORRECTION-NOTES.md) — the repaired descriptor/generated outputs and the deliberately retained `historical/` broken artifacts.
+- [Resolver pilot README](../experiments/L2-Resolver-Pilot/README.md) — historical baseline/ordering observations; the gold-label oracle is not an independent resolver.
+- [L2 third-party provenance and rights boundary](../experiments/L2-THIRD-PARTY-PROVENANCE.md) — source attribution with **RIGHTS_PENDING**, not clearance to redistribute or deploy.
+
+These files are **historical experimental evidence**, not an installed FREE ENERGY
+adapter, currently maintained validator, or live Godot/Minecraft runtime result.
+Embedded Python/JavaScript/TypeScript and C experiments are archival source, not
+maintained project executable dependencies; new maintained tooling must meet the
+[Rust/no-npm policy in #70](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/70).
+Prior logged PASS/FAIL results are provenance, not freshly rerun tests. PR #78
+preserved source bytes; it did **not** establish independent third-party rights,
+security approval, runtime conformance, publication permission or integration
+into public `main`. Keep these decisions distinct from the L2 research agenda above.
