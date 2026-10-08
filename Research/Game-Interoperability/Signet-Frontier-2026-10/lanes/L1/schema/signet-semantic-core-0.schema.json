@@ -1,0 +1,572 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Distributed-Minds/Fleet-Control-Public/schemas/signet-semantic-core-0.schema.json",
+  "title": "Candidate cross-game semantic core contract",
+  "description": "Unaffiliated L1 research draft. Defines coordination-level shapes only; profile-specific meaning remains external.",
+  "type": "object",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/envelope"
+    },
+    {
+      "$ref": "#/$defs/capabilities"
+    },
+    {
+      "$ref": "#/$defs/sessionRequirements"
+    },
+    {
+      "$ref": "#/$defs/negotiatedContract"
+    }
+  ],
+  "$defs": {
+    "semanticRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "definition_hash"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uri"
+        },
+        "definition_hash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "semanticId": {
+      "type": "string",
+      "format": "uri"
+    },
+    "conceptRoles": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "publish": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/semanticId"
+          }
+        },
+        "consume": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/semanticId"
+          }
+        },
+        "observe": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/semanticId"
+          }
+        }
+      }
+    },
+    "fallback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "concept",
+        "behavior",
+        "lossy"
+      ],
+      "properties": {
+        "concept": {
+          "$ref": "#/$defs/semanticId"
+        },
+        "behavior": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mapping_relation": {
+          "type": "string",
+          "enum": [
+            "exact",
+            "close",
+            "narrowing",
+            "broadening",
+            "unit-transform",
+            "coordinate-transform",
+            "approximate",
+            "presentation-only",
+            "unsupported"
+          ]
+        },
+        "lossy": {
+          "type": "boolean"
+        }
+      }
+    },
+    "profileCapability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "semantic",
+        "roles",
+        "required",
+        "optional"
+      ],
+      "properties": {
+        "semantic": {
+          "$ref": "#/$defs/semanticRef"
+        },
+        "roles": {
+          "$ref": "#/$defs/conceptRoles"
+        },
+        "required": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/semanticId"
+          }
+        },
+        "optional": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/semanticId"
+          }
+        },
+        "fallbacks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fallback"
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "ordering": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model",
+        "value"
+      ],
+      "properties": {
+        "model": {
+          "$ref": "#/$defs/semanticRef"
+        },
+        "value": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "session_id",
+        "message_id",
+        "semantic",
+        "issuer",
+        "payload"
+      ],
+      "properties": {
+        "kind": {
+          "const": "signet.semantic-envelope"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "intent",
+            "state",
+            "event",
+            "ack",
+            "control"
+          ]
+        },
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contract_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "semantic": {
+          "$ref": "#/$defs/semanticRef"
+        },
+        "issuer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority_scope": {
+          "$ref": "#/$defs/semanticId"
+        },
+        "authority_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ordering": {
+          "$ref": "#/$defs/ordering"
+        },
+        "caused_by": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "visibility_policy": {
+          "$ref": "#/$defs/semanticRef"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "core",
+        "participant",
+        "protocols",
+        "profiles",
+        "ordering_models"
+      ],
+      "properties": {
+        "kind": {
+          "const": "signet.capabilities"
+        },
+        "core": {
+          "$ref": "#/$defs/semanticRef"
+        },
+        "participant": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "participant_id",
+            "game_id",
+            "adapter"
+          ],
+          "properties": {
+            "participant_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "game_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "adapter": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "implementation_id",
+                "version"
+              ],
+              "properties": {
+                "implementation_id": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "version": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        },
+        "protocols": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "profiles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/profileCapability"
+          }
+        },
+        "ordering_models": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/semanticRef"
+          }
+        },
+        "authority_publish": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/semanticId"
+          }
+        },
+        "authority_consume": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/semanticId"
+          }
+        },
+        "visibility_policies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/semanticRef"
+          }
+        }
+      }
+    },
+    "sessionRequirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "core",
+        "required_profiles",
+        "ruleset"
+      ],
+      "properties": {
+        "kind": {
+          "const": "signet.session-requirements"
+        },
+        "core": {
+          "$ref": "#/$defs/semanticRef"
+        },
+        "required_profiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "semantic",
+              "required"
+            ],
+            "properties": {
+              "semantic": {
+                "$ref": "#/$defs/semanticRef"
+              },
+              "required": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/$defs/semanticId"
+                }
+              },
+              "optional": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/$defs/semanticId"
+                }
+              }
+            }
+          }
+        },
+        "ordering_model": {
+          "$ref": "#/$defs/semanticRef"
+        },
+        "ruleset": {
+          "$ref": "#/$defs/semanticRef"
+        },
+        "visibility_policy": {
+          "$ref": "#/$defs/semanticRef"
+        },
+        "allowed_fallbacks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fallback"
+          }
+        },
+        "observers_allowed": {
+          "type": "boolean"
+        },
+        "ordering_preferences": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Ordered session preference list. Negotiation selects the first model accepted by every activated profile.",
+          "items": {
+            "$ref": "#/$defs/semanticRef"
+          }
+        },
+        "visibility_preferences": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Ordered session preference list. Negotiation selects the first policy accepted by every activated profile.",
+          "items": {
+            "$ref": "#/$defs/semanticRef"
+          }
+        },
+        "optional_profile_preferences": {
+          "type": "array",
+          "uniqueItems": true,
+          "description": "Ordered optional-profile preference list. Each candidate is tentatively activated in order and retained only if the complete candidate set remains compatible.",
+          "items": {
+            "$ref": "#/$defs/semanticRef"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "required": [
+                "ordering_model"
+              ]
+            },
+            {
+              "required": [
+                "ordering_preferences"
+              ]
+            }
+          ]
+        },
+        {
+          "not": {
+            "required": [
+              "visibility_policy",
+              "visibility_preferences"
+            ]
+          }
+        }
+      ]
+    },
+    "negotiatedContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "contract_id",
+        "result",
+        "core",
+        "ordering_model",
+        "ruleset",
+        "activated_profiles",
+        "reason_codes"
+      ],
+      "properties": {
+        "kind": {
+          "const": "signet.negotiated-contract"
+        },
+        "contract_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "result": {
+          "type": "string",
+          "enum": [
+            "SUPPORTED",
+            "SUPPORTED_WITH_FALLBACKS",
+            "OBSERVE_ONLY",
+            "INCOMPATIBLE"
+          ]
+        },
+        "core": {
+          "$ref": "#/$defs/semanticRef"
+        },
+        "ordering_model": {
+          "$ref": "#/$defs/semanticRef"
+        },
+        "ruleset": {
+          "$ref": "#/$defs/semanticRef"
+        },
+        "visibility_policy": {
+          "$ref": "#/$defs/semanticRef"
+        },
+        "activated_profiles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/semanticRef"
+          }
+        },
+        "fallbacks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fallback"
+          }
+        },
+        "disabled_optional": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/semanticId"
+          }
+        },
+        "reason_codes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/reasonCode"
+          }
+        },
+        "activated_optional_profiles": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/semanticRef"
+          }
+        },
+        "skipped_optional_profiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "profile",
+              "reason"
+            ],
+            "properties": {
+              "profile": {
+                "$ref": "#/$defs/semanticRef"
+              },
+              "reason": {
+                "$ref": "#/$defs/reasonCode"
+              }
+            }
+          }
+        }
+      }
+    },
+    "reasonCode": {
+      "type": "string",
+      "enum": [
+        "AUTHORITY_MODEL_UNSUPPORTED",
+        "CONCEPT_DEFINITION_CONFLICT",
+        "INVALID_EXTENSION_TARGET",
+        "LEGACY_SEMANTICS_ONLY",
+        "NO_SAFE_FALLBACK",
+        "OPTIONAL_CONCEPT_DISABLED",
+        "ORDERING_MODEL_CONFLICT",
+        "ORDERING_MODEL_UNSUPPORTED",
+        "PROFILE_CONFLICT",
+        "PROTOCOL_MAJOR_MISMATCH",
+        "REQUIRED_CONCEPT_UNSUPPORTED",
+        "REQUIRED_PROFILE_CYCLE",
+        "REQUIRED_PROFILE_UNSUPPORTED",
+        "RULESET_DEPENDENCY_CONFLICT",
+        "SEMANTIC_DEFINITION_CONFLICT",
+        "SET_ARRAY_NOT_CANONICAL",
+        "VISIBILITY_POLICY_CONFLICT",
+        "VISIBILITY_POLICY_UNSUPPORTED",
+        "WORLD_REPRESENTATION_UNSUPPORTED"
+      ]
+    }
+  }
+}

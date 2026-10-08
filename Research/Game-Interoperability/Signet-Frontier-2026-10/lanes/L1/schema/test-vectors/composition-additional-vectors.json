@@ -1,0 +1,323 @@
+[
+  {
+    "vector_id": "COMP-VECTOR-002",
+    "purpose": "Selection order must not affect canonical composition.",
+    "input": {
+      "selected_profiles": [
+        {
+          "id": "https://example.org/sem/profile/b/1",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        {
+          "id": "https://example.org/sem/profile/a/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "catalog": [
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/a/1",
+            "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "requires": [],
+          "exports": [
+            {
+              "id": "https://example.org/sem/profile/a/1#x",
+              "definition_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+            }
+          ]
+        },
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/b/1",
+            "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "requires": [],
+          "exports": [
+            {
+              "id": "https://example.org/sem/profile/b/1#y",
+              "definition_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            }
+          ]
+        }
+      ]
+    },
+    "expected_composition": {
+      "profiles": [
+        {
+          "id": "https://example.org/sem/profile/a/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "id": "https://example.org/sem/profile/b/1",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "concepts": [
+        {
+          "id": "https://example.org/sem/profile/a/1#x",
+          "definition_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        },
+        {
+          "id": "https://example.org/sem/profile/b/1#y",
+          "definition_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        }
+      ]
+    },
+    "expected_profile_set_hash": "sha256:a4af56511382a57f6d7c08147144a86354652268c84f3136540c1bf11bb7b1ef"
+  },
+  {
+    "vector_id": "COMP-VECTOR-003",
+    "purpose": "Duplicate required dependency paths coalesce one exact profile.",
+    "input": {
+      "selected_profiles": [
+        {
+          "id": "https://example.org/sem/profile/a/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "id": "https://example.org/sem/profile/b/1",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "catalog": [
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/a/1",
+            "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "requires": [
+            {
+              "id": "https://example.org/sem/profile/c/1",
+              "definition_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+            }
+          ],
+          "exports": []
+        },
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/b/1",
+            "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "requires": [
+            {
+              "id": "https://example.org/sem/profile/c/1",
+              "definition_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+            }
+          ],
+          "exports": []
+        },
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/c/1",
+            "definition_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          },
+          "requires": [],
+          "exports": [
+            {
+              "id": "https://example.org/sem/profile/c/1#z",
+              "definition_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            }
+          ]
+        }
+      ]
+    },
+    "expected_composition": {
+      "profiles": [
+        {
+          "id": "https://example.org/sem/profile/a/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "id": "https://example.org/sem/profile/b/1",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        {
+          "id": "https://example.org/sem/profile/c/1",
+          "definition_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      ],
+      "concepts": [
+        {
+          "id": "https://example.org/sem/profile/c/1#z",
+          "definition_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        }
+      ]
+    },
+    "expected_profile_set_hash": "sha256:f512d35489cb5108f3730541317bd4ffe57c9fb4b327487e45bb274c0b976b8a"
+  },
+  {
+    "vector_id": "COMP-VECTOR-004",
+    "purpose": "Optional dependency is not activated merely because it is available.",
+    "input": {
+      "selected_profiles": [
+        {
+          "id": "https://example.org/sem/profile/a/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "catalog": [
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/a/1",
+            "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "requires": [],
+          "optional_requires": [
+            {
+              "id": "https://example.org/sem/profile/b/1",
+              "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ],
+          "exports": []
+        },
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/b/1",
+            "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "requires": [],
+          "exports": []
+        }
+      ]
+    },
+    "expected_composition": {
+      "profiles": [
+        {
+          "id": "https://example.org/sem/profile/a/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "concepts": []
+    },
+    "expected_profile_set_hash": "sha256:ef70bd99c2f5dc20a3e721f7abd8e4dad989469341e9d43817909bd396bfedff"
+  },
+  {
+    "vector_id": "COMP-VECTOR-005",
+    "purpose": "Optional dependency may be explicitly activated and must use the declared exact definition.",
+    "input": {
+      "selected_profiles": [
+        {
+          "id": "https://example.org/sem/profile/a/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "id": "https://example.org/sem/profile/b/1",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "catalog": [
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/a/1",
+            "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "requires": [],
+          "optional_requires": [
+            {
+              "id": "https://example.org/sem/profile/b/1",
+              "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ],
+          "exports": []
+        },
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/b/1",
+            "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "requires": [],
+          "exports": []
+        }
+      ]
+    },
+    "expected_composition": {
+      "profiles": [
+        {
+          "id": "https://example.org/sem/profile/a/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "id": "https://example.org/sem/profile/b/1",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "concepts": []
+    },
+    "expected_profile_set_hash": "sha256:08267249455b748a838e1e55003bd06d2445f1f3f29024b7f4301d85d0ebab5a"
+  },
+  {
+    "vector_id": "COMP-VECTOR-006",
+    "purpose": "A profile may extend an imported concept only through a distinct exported child semantic ID.",
+    "input": {
+      "selected_profiles": [
+        {
+          "id": "https://example.org/sem/profile/b/1",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "catalog": [
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/a/1",
+            "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "requires": [],
+          "exports": [
+            {
+              "id": "https://example.org/sem/profile/a/1#concept/base",
+              "definition_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+            }
+          ]
+        },
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/b/1",
+            "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "requires": [
+            {
+              "id": "https://example.org/sem/profile/a/1",
+              "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          ],
+          "exports": [
+            {
+              "id": "https://example.org/sem/profile/b/1#concept/child",
+              "definition_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            }
+          ],
+          "extends": [
+            {
+              "child": "https://example.org/sem/profile/b/1#concept/child",
+              "parent": "https://example.org/sem/profile/a/1#concept/base"
+            }
+          ]
+        }
+      ]
+    },
+    "expected_composition": {
+      "profiles": [
+        {
+          "id": "https://example.org/sem/profile/a/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "id": "https://example.org/sem/profile/b/1",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "concepts": [
+        {
+          "id": "https://example.org/sem/profile/a/1#concept/base",
+          "definition_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        },
+        {
+          "id": "https://example.org/sem/profile/b/1#concept/child",
+          "definition_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        }
+      ]
+    },
+    "expected_profile_set_hash": "sha256:547bd2f045ec75dff984a7a690427798e72a3a3c3591817ec9dec6504ee5e9cf"
+  }
+]

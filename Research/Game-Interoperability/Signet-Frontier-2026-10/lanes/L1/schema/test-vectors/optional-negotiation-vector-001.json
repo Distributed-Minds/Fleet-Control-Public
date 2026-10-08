@@ -1,0 +1,132 @@
+{
+  "vector_id": "OPTIONAL-NEGOTIATION-VECTOR-001",
+  "purpose": "Optional profiles are attempted in explicit session preference order; an optional profile is kept only when the complete candidate set still composes.",
+  "input": {
+    "selected_profiles": [
+      {
+        "id": "https://example.org/sem/profile/required/1",
+        "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    "optional_profile_preferences": [
+      {
+        "id": "https://example.org/sem/profile/optional-event/1",
+        "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      {
+        "id": "https://example.org/sem/profile/optional-fixed/1",
+        "definition_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      {
+        "id": "https://example.org/sem/profile/missing/1",
+        "definition_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      }
+    ],
+    "ordering_preferences": [
+      {
+        "id": "https://example.org/sem/ordering/fixed-tick/1",
+        "definition_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      {
+        "id": "https://example.org/sem/ordering/event-sequence/1",
+        "definition_hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+    ],
+    "catalog": [
+      {
+        "semantic": {
+          "id": "https://example.org/sem/profile/required/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "requires": [],
+        "exports": [],
+        "ordering_constraints": {
+          "accepted": [
+            {
+              "id": "https://example.org/sem/ordering/fixed-tick/1",
+              "definition_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+            },
+            {
+              "id": "https://example.org/sem/ordering/event-sequence/1",
+              "definition_hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            }
+          ]
+        }
+      },
+      {
+        "semantic": {
+          "id": "https://example.org/sem/profile/optional-event/1",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "requires": [],
+        "exports": [],
+        "ordering_constraints": {
+          "accepted": [
+            {
+              "id": "https://example.org/sem/ordering/event-sequence/1",
+              "definition_hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            }
+          ]
+        }
+      },
+      {
+        "semantic": {
+          "id": "https://example.org/sem/profile/optional-fixed/1",
+          "definition_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        },
+        "requires": [],
+        "exports": [],
+        "ordering_constraints": {
+          "accepted": [
+            {
+              "id": "https://example.org/sem/ordering/fixed-tick/1",
+              "definition_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "expected_result": {
+    "composition": {
+      "profiles": [
+        {
+          "id": "https://example.org/sem/profile/optional-event/1",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        {
+          "id": "https://example.org/sem/profile/required/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "concepts": [],
+      "ordering_model": {
+        "id": "https://example.org/sem/ordering/event-sequence/1",
+        "definition_hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+    },
+    "activated_optional": [
+      {
+        "id": "https://example.org/sem/profile/optional-event/1",
+        "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ],
+    "skipped_optional": [
+      {
+        "profile": {
+          "id": "https://example.org/sem/profile/optional-fixed/1",
+          "definition_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        },
+        "reason": "ORDERING_MODEL_CONFLICT"
+      },
+      {
+        "profile": {
+          "id": "https://example.org/sem/profile/missing/1",
+          "definition_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "reason": "REQUIRED_PROFILE_UNSUPPORTED"
+      }
+    ]
+  },
+  "expected_result_hash": "sha256:5df2fb5f3c1660aa844027f1980d0a0a9165d539650c9414a7e698b307860dd2"
+}

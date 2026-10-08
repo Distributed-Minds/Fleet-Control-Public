@@ -1,0 +1,356 @@
+[
+  {
+    "vector_id": "COMP-NEG-001",
+    "expected_reason": "SEMANTIC_DEFINITION_CONFLICT",
+    "input": {
+      "selected_profiles": [
+        {
+          "id": "https://example.org/sem/profile/a/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "catalog": [
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/a/1",
+            "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "requires": [],
+          "exports": []
+        }
+      ]
+    }
+  },
+  {
+    "vector_id": "COMP-NEG-002",
+    "expected_reason": "REQUIRED_PROFILE_CYCLE",
+    "input": {
+      "selected_profiles": [
+        {
+          "id": "https://example.org/sem/profile/a/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "catalog": [
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/a/1",
+            "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "requires": [
+            {
+              "id": "https://example.org/sem/profile/b/1",
+              "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ],
+          "exports": []
+        },
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/b/1",
+            "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "requires": [
+            {
+              "id": "https://example.org/sem/profile/a/1",
+              "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          ],
+          "exports": []
+        }
+      ]
+    }
+  },
+  {
+    "vector_id": "COMP-NEG-003",
+    "expected_reason": "CONCEPT_DEFINITION_CONFLICT",
+    "input": {
+      "selected_profiles": [
+        {
+          "id": "https://example.org/sem/profile/a/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "id": "https://example.org/sem/profile/b/1",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "catalog": [
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/a/1",
+            "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "requires": [],
+          "exports": [
+            {
+              "id": "https://example.org/sem/concept/shared/1",
+              "definition_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+            }
+          ]
+        },
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/b/1",
+            "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "requires": [],
+          "exports": [
+            {
+              "id": "https://example.org/sem/concept/shared/1",
+              "definition_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "vector_id": "COMP-NEG-004",
+    "expected_reason": "ORDERING_MODEL_CONFLICT",
+    "input": {
+      "selected_profiles": [
+        {
+          "id": "https://example.org/sem/profile/a/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "id": "https://example.org/sem/profile/b/1",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "ordering_model": {
+        "id": "https://example.org/sem/ordering/fixed-tick/1",
+        "definition_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "catalog": [
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/a/1",
+            "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "requires": [],
+          "exports": [],
+          "ordering_constraints": {
+            "accepted": [
+              {
+                "id": "https://example.org/sem/ordering/fixed-tick/1",
+                "definition_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+              }
+            ]
+          }
+        },
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/b/1",
+            "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "requires": [],
+          "exports": [],
+          "ordering_constraints": {
+            "accepted": [
+              {
+                "id": "https://example.org/sem/ordering/turn-sequence/1",
+                "definition_hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "vector_id": "COMP-NEG-005",
+    "expected_reason": "PROFILE_CONFLICT",
+    "input": {
+      "selected_profiles": [
+        {
+          "id": "https://example.org/sem/profile/a/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "id": "https://example.org/sem/profile/b/1",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "catalog": [
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/a/1",
+            "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "requires": [],
+          "conflicts": [
+            {
+              "id": "https://example.org/sem/profile/b/1",
+              "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ],
+          "exports": []
+        },
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/b/1",
+            "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "requires": [],
+          "exports": []
+        }
+      ]
+    }
+  },
+  {
+    "vector_id": "COMP-NEG-006",
+    "expected_reason": "VISIBILITY_POLICY_CONFLICT",
+    "input": {
+      "selected_profiles": [
+        {
+          "id": "https://example.org/sem/profile/a/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "id": "https://example.org/sem/profile/b/1",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "visibility_policy": {
+        "id": "https://example.org/sem/visibility/public/1",
+        "definition_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "catalog": [
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/a/1",
+            "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "requires": [],
+          "exports": [],
+          "visibility_constraints": {
+            "accepted": [
+              {
+                "id": "https://example.org/sem/visibility/private/1",
+                "definition_hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+              }
+            ]
+          }
+        },
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/b/1",
+            "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "requires": [],
+          "exports": [],
+          "visibility_constraints": {
+            "accepted": [
+              {
+                "id": "https://example.org/sem/visibility/public/1",
+                "definition_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "vector_id": "COMP-NEG-007",
+    "expected_reason": "REQUIRED_PROFILE_UNSUPPORTED",
+    "input": {
+      "selected_profiles": [
+        {
+          "id": "https://example.org/sem/profile/a/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "catalog": [
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/a/1",
+            "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "requires": [
+            {
+              "id": "https://example.org/sem/profile/b/1",
+              "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ],
+          "exports": []
+        }
+      ]
+    }
+  },
+  {
+    "vector_id": "COMP-NEG-008",
+    "expected_reason": "SEMANTIC_DEFINITION_CONFLICT",
+    "input": {
+      "selected_profiles": [
+        {
+          "id": "https://example.org/sem/profile/a/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "id": "https://example.org/sem/profile/b/1",
+          "definition_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      ],
+      "catalog": [
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/a/1",
+            "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "requires": [],
+          "optional_requires": [
+            {
+              "id": "https://example.org/sem/profile/b/1",
+              "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ],
+          "exports": []
+        },
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/b/1",
+            "definition_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          },
+          "requires": [],
+          "exports": []
+        }
+      ]
+    }
+  },
+  {
+    "vector_id": "COMP-NEG-009",
+    "expected_reason": "INVALID_EXTENSION_TARGET",
+    "input": {
+      "selected_profiles": [
+        {
+          "id": "https://example.org/sem/profile/b/1",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "catalog": [
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/b/1",
+            "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "requires": [],
+          "exports": [
+            {
+              "id": "https://example.org/sem/profile/b/1#concept/child",
+              "definition_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            }
+          ],
+          "extends": [
+            {
+              "child": "https://example.org/sem/profile/b/1#concept/child",
+              "parent": "https://example.org/sem/profile/a/1#concept/base"
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

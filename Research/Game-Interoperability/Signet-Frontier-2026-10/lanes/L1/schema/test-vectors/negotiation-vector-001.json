@@ -1,0 +1,124 @@
+{
+  "vector_id": "NEGOTIATION-VECTOR-001",
+  "purpose": "Session preference order selects the first ordering and visibility models accepted by every activated profile.",
+  "input": {
+    "selected_profiles": [
+      {
+        "id": "https://example.org/sem/profile/a/1",
+        "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "id": "https://example.org/sem/profile/b/1",
+        "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ],
+    "ordering_preferences": [
+      {
+        "id": "https://example.org/sem/ordering/fixed-tick/1",
+        "definition_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      {
+        "id": "https://example.org/sem/ordering/event-sequence/1",
+        "definition_hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      {
+        "id": "https://example.org/sem/ordering/turn-sequence/1",
+        "definition_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+      }
+    ],
+    "visibility_preferences": [
+      {
+        "id": "https://example.org/sem/visibility/public/1",
+        "definition_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      {
+        "id": "https://example.org/sem/visibility/private/1",
+        "definition_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      }
+    ],
+    "catalog": [
+      {
+        "semantic": {
+          "id": "https://example.org/sem/profile/a/1",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "requires": [],
+        "exports": [],
+        "ordering_constraints": {
+          "accepted": [
+            {
+              "id": "https://example.org/sem/ordering/fixed-tick/1",
+              "definition_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+            },
+            {
+              "id": "https://example.org/sem/ordering/event-sequence/1",
+              "definition_hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            }
+          ]
+        },
+        "visibility_constraints": {
+          "accepted": [
+            {
+              "id": "https://example.org/sem/visibility/public/1",
+              "definition_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+            },
+            {
+              "id": "https://example.org/sem/visibility/private/1",
+              "definition_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+            }
+          ]
+        }
+      },
+      {
+        "semantic": {
+          "id": "https://example.org/sem/profile/b/1",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "requires": [],
+        "exports": [],
+        "ordering_constraints": {
+          "accepted": [
+            {
+              "id": "https://example.org/sem/ordering/event-sequence/1",
+              "definition_hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            },
+            {
+              "id": "https://example.org/sem/ordering/turn-sequence/1",
+              "definition_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          ]
+        },
+        "visibility_constraints": {
+          "accepted": [
+            {
+              "id": "https://example.org/sem/visibility/private/1",
+              "definition_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "expected_composition": {
+    "profiles": [
+      {
+        "id": "https://example.org/sem/profile/a/1",
+        "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "id": "https://example.org/sem/profile/b/1",
+        "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ],
+    "concepts": [],
+    "ordering_model": {
+      "id": "https://example.org/sem/ordering/event-sequence/1",
+      "definition_hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    "visibility_policy": {
+      "id": "https://example.org/sem/visibility/private/1",
+      "definition_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+    }
+  },
+  "expected_profile_set_hash": "sha256:58a4897daca9b857f4caeabcffba293ba3b9c54ce1d08605ebf5c903bb1a5fb2"
+}
