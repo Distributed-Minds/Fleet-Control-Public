@@ -391,7 +391,7 @@ mod tests {
     fn python_utf8_and_embedded_newline_bytes_do_not_become_ascii_escapes() {
         let mut candidate = sample().cases.remove(0).candidate;
         candidate.metadata.author = "Jörg ∑ 東京".to_owned();
-        candidate.metadata.message = "Line one\\nLine two".to_owned();
+        candidate.metadata.message = "Line one\nLine two".to_owned();
         let bytes = canonical_candidate_bytes(&candidate).unwrap();
         assert_eq!(bytes, r###"{"compatibility_basis":"constructor-v1-exact","constructor_version":"constructor-v1","metadata":{"author":"Jörg ∑ 東京","author_time":"1700000000 +0000","committer":"Example Committer <committer@example.invalid>","committer_time":"1700000000 +0000","encoding":"UTF-8","message":"Line one\nLine two","signature_policy":"none"},"operation_kind":"explicit-merge","parent_count":2,"parents":["1111111111111111111111111111111111111111","2222222222222222222222222222222222222222"],"schema_version":"integration-candidate-v1","source_commit":"2222222222222222222222222222222222222222","target_commit":"1111111111111111111111111111111111111111","tree":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"###.as_bytes());
         let decoded = String::from_utf8(bytes).expect("canonical material is UTF-8");
