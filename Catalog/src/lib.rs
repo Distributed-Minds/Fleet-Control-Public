@@ -812,7 +812,9 @@ mod tests {
             });
             let errors = validate_manifest(&rights).unwrap_err();
             assert!(
-                errors.iter().any(|error| error.contains("unsafe rights path scope")),
+                errors
+                    .iter()
+                    .any(|error| error.contains("unsafe rights path scope")),
                 "rights scope {path}: {errors:?}"
             );
             let evidence = changed(LUANTI, |record| {
@@ -820,7 +822,9 @@ mod tests {
             });
             let errors = validate_manifest(&evidence).unwrap_err();
             assert!(
-                errors.iter().any(|error| error.contains("invalid pinned repository evidence")),
+                errors
+                    .iter()
+                    .any(|error| error.contains("invalid pinned repository evidence")),
                 "evidence path {path}: {errors:?}"
             );
         }
