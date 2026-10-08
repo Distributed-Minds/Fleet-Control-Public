@@ -1,0 +1,9 @@
+[package]
+name = "free-energy-coordination-archival"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85.1"
+publish = false
+
+# Pure model only. No external crates, provider API or maintained runtime tooling.
+[dependencies]
