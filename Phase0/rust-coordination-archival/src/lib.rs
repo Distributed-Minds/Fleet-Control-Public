@@ -145,12 +145,13 @@ pub enum Verdict {
 
 fn named(id: &str) -> bool {
     // Provider IDs are opaque, but they appear in operator receipts and logs.
-    // C0/C1 controls, bidirectional formatting and invisible default-ignorable
-    // scalars may make different exact IDs indistinguishable in receipts/logs.
-    // Reject these at model admission without normalizing opaque provider IDs.
+    // C0/C1 controls, Unicode whitespace, bidi and default-ignorable
+    // formatting may spoof identity in receipts or operator logs.
+    // Reject such characters without normalizing opaque provider IDs.
     !id.trim().is_empty()
         && !id.chars().any(|ch| {
             ch.is_control()
+                || (!ch.is_ascii() && ch.is_whitespace())
                 || matches!(
                     ch,
                     '\u{00ad}'
@@ -706,6 +707,57 @@ mod tests {
             w.effect_state = state;
             assert_eq!(evaluate(&w), Verdict::ReconcilePriorEffect);
         }
+    }
+
+    #[test]
+    fn unicode_whitespace_cannot_spoof_archive_or_replay_identifiers() {
+        for marker in [
+            '\u{00a0}', '\u{1680}', '\u{2000}', '\u{2028}', '\u{2029}', '\u{202f}', '\u{3000}',
+        ] {
+            let bad = format!("record{marker}split");
+            // Make every independent copy agree: this must fail because the
+            // identifier is unsafe, not because witness copies disagree.
+            let mut w = fixture();
+            w.observed_source.record_id = bad.clone();
+            w.archive.source.record_id = bad.clone();
+            w.authority.source.record_id = bad.clone();
+            assert_eq!(
+                evaluate(&w),
+                Verdict::Ineligible(Denial::SourceMoved),
+                "unicode-space source ID admitted: {marker:?}"
+            );
+
+            let mut w = fixture();
+            w.archive.segment = bad.clone();
+            w.durability.segment = bad.clone();
+            assert_eq!(
+                evaluate(&w),
+                Verdict::Ineligible(Denial::ArchiveNotExact),
+                "unicode-space segment ID admitted: {marker:?}"
+            );
+
+            let mut w = fixture();
+            w.operation_id = bad.clone();
+            w.authority.operation_id = bad.clone();
+            assert_eq!(
+                evaluate(&w),
+                Verdict::Ineligible(Denial::AuthorityNotCurrent),
+                "unicode-space operation ID admitted: {marker:?}"
+            );
+
+            let mut record = item("a", 10);
+            record.stable_id = bad;
+            assert_eq!(
+                replay(&[record, item("b", 11)], &[item("c", 12)], &cut()),
+                Err(ReplayFailure::UntrustedCut),
+                "unicode-space replay identity admitted: {marker:?}"
+            );
+        }
+
+        // Opaque IDs may contain harmless Unicode, and internal ASCII spaces
+        // remain valid; the guard is specific to display-spoofing whitespace.
+        assert!(named("source id"));
+        assert!(named("source-λ"));
     }
 
     fn item(id: &str, sequence: u64) -> ReplayRecord {
