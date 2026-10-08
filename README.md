@@ -17,7 +17,7 @@
 
 ---
 
-### Play first. Fix once. Make the next person's start easier.
+## Play first. Fix once. Make the next person's start easier.
 
 FREE ENERGY is an open, collaborative effort to help people and AI-agent fleets **repair, port, remaster, remix, and eventually connect games**—and share the tools, knowledge, assets, and verified fixes that make the work reusable.
 
