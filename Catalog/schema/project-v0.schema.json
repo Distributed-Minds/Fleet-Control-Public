@@ -424,8 +424,7 @@
           "then": {
             "properties": {
               "target_id": {
-                "type": "string",
-                "minLength": 1
+                "$ref": "#/properties/id"
               },
               "test_evidence_id": {
                 "$ref": "#/$defs/slug"

@@ -1,0 +1,125 @@
+{
+  "fixture_schema": "free-energy.catalog-tested-target-fragment-tests/v0",
+  "target_schema": "Catalog/schema/project-v0.schema.json",
+  "target_pointer": "#/$defs/adapter",
+  "description": "TESTED adapter target_id must match the exact root catalog manifest kind/name project ID shape. These structural cases do not establish that the referenced project exists, that the adapter works or that its test evidence is authentic; a Rust semantic validator remains required.",
+  "base_adapter": {
+    "status": "NONE",
+    "target_id": null,
+    "test_evidence_id": null
+  },
+  "cases": [
+    {
+      "id": "none-null-target",
+      "overrides": {},
+      "expected_valid": true
+    },
+    {
+      "id": "proposed-text-target-not-test-claim",
+      "overrides": {
+        "status": "PROPOSED",
+        "target_id": "draft idea"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "tested-valid-engine-target",
+      "overrides": {
+        "status": "TESTED",
+        "target_id": "engine/luanti",
+        "test_evidence_id": "adapter-test-1"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "tested-valid-hyphenated-target",
+      "overrides": {
+        "status": "TESTED",
+        "target_id": "game/open-ra",
+        "test_evidence_id": "adapter-test-2"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "tested-null-target",
+      "overrides": {
+        "status": "TESTED",
+        "target_id": null,
+        "test_evidence_id": "adapter-test-1"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "tested-empty-target",
+      "overrides": {
+        "status": "TESTED",
+        "target_id": "",
+        "test_evidence_id": "adapter-test-1"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "tested-whitespace-target",
+      "overrides": {
+        "status": "TESTED",
+        "target_id": "  ",
+        "test_evidence_id": "adapter-test-1"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "tested-single-token-target",
+      "overrides": {
+        "status": "TESTED",
+        "target_id": "luanti",
+        "test_evidence_id": "adapter-test-1"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "tested-uppercase-target",
+      "overrides": {
+        "status": "TESTED",
+        "target_id": "ENGINE/luanti",
+        "test_evidence_id": "adapter-test-1"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "tested-nested-slash-target",
+      "overrides": {
+        "status": "TESTED",
+        "target_id": "engine/games/luanti",
+        "test_evidence_id": "adapter-test-1"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "tested-percent-encoded-target",
+      "overrides": {
+        "status": "TESTED",
+        "target_id": "engine/luanti%2fother",
+        "test_evidence_id": "adapter-test-1"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "tested-leading-hyphen-target",
+      "overrides": {
+        "status": "TESTED",
+        "target_id": "engine/-luanti",
+        "test_evidence_id": "adapter-test-1"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "tested-invalid-evidence-ref",
+      "overrides": {
+        "status": "TESTED",
+        "target_id": "engine/luanti",
+        "test_evidence_id": "bad ref"
+      },
+      "expected_valid": false
+    }
+  ]
+}
