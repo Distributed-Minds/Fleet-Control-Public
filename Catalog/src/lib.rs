@@ -375,6 +375,64 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
         serde_json::from_str(json).map_err(|e| vec![format!("JSON/typed manifest: {e}")])?;
     let mut problems = Vec::new();
     validate_vocabulary(&record, &mut problems);
+    // Subset of checked-in Draft 2020-12 string/array shape constraints.
+    // This is not a replacement for the full pinned offline schema engine.
+    if record.display_name.trim().is_empty() || record.display_name.chars().count() > 140 {
+        problems.push("display_name must contain 1..=140 nonblank characters".to_string());
+    }
+    for (index, requirement) in record.play.content_requirements.iter().enumerate() {
+        if requirement.trim().is_empty() {
+            problems.push(format!(
+                "play.content_requirements[{index}] must be nonblank"
+            ));
+        }
+    }
+    for (index, claim) in record.rights_claims.iter().enumerate() {
+        for (field, value) in [
+            ("scope", claim.scope.as_str()),
+            ("statement", claim.statement.as_str()),
+        ] {
+            if value.trim().is_empty() {
+                problems.push(format!("rights_claims[{index}].{field} must be nonblank"));
+            }
+        }
+        for (part, exception) in claim.exceptions_or_restrictions.iter().enumerate() {
+            if exception.trim().is_empty() {
+                problems.push(format!(
+                    "rights_claims[{index}].exceptions_or_restrictions[{part}] must be nonblank"
+                ));
+            }
+        }
+    }
+    for (index, item) in record.evidence.iter().enumerate() {
+        for (field, value) in [
+            ("subject_scope", item.subject_scope.as_str()),
+            ("reviewer", item.reviewer.as_str()),
+            ("observed_at", item.observed_at.as_str()),
+        ] {
+            if value.trim().is_empty() {
+                problems.push(format!("evidence[{index}].{field} must be nonblank"));
+            }
+        }
+    }
+    for (field, value) in [
+        ("reviewer", record.review.reviewer.as_str()),
+        ("reviewed_at", record.review.reviewed_at.as_str()),
+    ] {
+        if value.trim().is_empty() {
+            problems.push(format!("review.{field} must be nonblank"));
+        }
+    }
+    for (index, event) in record.review.claim_history.iter().enumerate() {
+        for (field, value) in [
+            ("reason", event.reason.as_str()),
+            ("at", event.at.as_str()),
+        ] {
+            if value.trim().is_empty() {
+                problems.push(format!("review.claim_history[{index}].{field} must be nonblank"));
+            }
+        }
+    }
 
     if record.schema != "free-energy.project/v0" {
         problems.push("unsupported catalog schema version".to_string());
