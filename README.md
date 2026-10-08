@@ -30,7 +30,7 @@ FREE ENERGY is an open, collaborative effort to help people and AI-agent fleets 
 | [Get the starter ZIP](https://github.com/Distributed-Minds/Fleet-Control-Public/releases/download/v0.1.2-phase0-preview/FREE-ENERGY-Phase0-Starter-v0.1.2-preview.zip) | [See public development work](https://github.com/Distributed-Minds/Fleet-Control-Public/issues) | [Read the product direction](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/63) |
 
 > [!IMPORTANT]
-**Release-install caveat:** The published v0.1.2 ZIP predates the [corrected fork/setup instructions (PR #59)](https://github.com/Distributed-Minds/Fleet-Control-Public/pull/59). Follow the [current online guide](https://github.com/Distributed-Minds/Fleet-Control-Public/blob/phase0/public-v0/GETTING-STARTED.md) rather than relying on the ZIP's bundled instructions alone.
+> **Release-install caveat:** The published v0.1.2 ZIP predates the [corrected fork/setup instructions (PR #59)](https://github.com/Distributed-Minds/Fleet-Control-Public/pull/59). Follow the [current online guide](https://github.com/Distributed-Minds/Fleet-Control-Public/blob/phase0/public-v0/GETTING-STARTED.md) rather than relying on the ZIP's bundled instructions alone.
 
 > **There is no shipped playable-game platform, game catalog, universal adapter, or hosted fleet service yet.** Phase0 is a coordination starter, not the finished FREE ENERGY product.
 
