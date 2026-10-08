@@ -2,6 +2,17 @@ name: Rust FREE ENERGY landing source checks
 
 # Read-only, dependency-free source validation. No release or deployment authority.
 on:
+  # Run against the actual non-default integration tree after a push as well as
+  # against proposed PR changes. Neither event deploys or publishes anything.
+  push:
+    branches:
+      - phase0/public-v0
+    paths:
+      - .github/workflows/rust-free-energy-site.yml
+      - tests/check_free_energy_site.rs
+      - docs/index.html
+      - docs/styles.css
+      - docs/README.md
   pull_request:
     branches:
       - phase0/public-v0
