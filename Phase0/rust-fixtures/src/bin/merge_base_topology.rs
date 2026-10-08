@@ -8,6 +8,22 @@ use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 
 const HISTORICAL_CASE_COUNT: usize = 12;
+// The historical Python migration must not silently replace one of the named
+// semantic cases with an unrelated case while retaining the same count.
+const HISTORICAL_CASE_NAMES: [&str; HISTORICAL_CASE_COUNT] = [
+    "unique-complete",
+    "multiple-complete",
+    "multiple-reordered",
+    "none-complete",
+    "incomplete-view",
+    "multi-no-virtual",
+    "multi-virtual-a",
+    "multi-virtual-a-reordered",
+    "multi-virtual-version-drift",
+    "multi-virtual-intermediate-drift",
+    "same-heads-replaced-history",
+    "best-base-moved",
+];
 const FIXTURES: &str = include_str!("../../../fixtures/merge-base-topology-spec2.json");
 
 #[derive(Clone, Debug, Deserialize)]
@@ -188,6 +204,10 @@ fn check(cases: &[Case]) -> Result<usize, Vec<String>> {
     let mut observed = BTreeMap::<String, Observed>::new();
 
     for case in cases {
+        if !HISTORICAL_CASE_NAMES.contains(&case.name.as_str()) {
+            errors.push(format!("unknown historical merge-base case: {}", case.name));
+            continue;
+        }
         if observed.contains_key(&case.name) {
             errors.push(format!("duplicate case name: {}", case.name));
             continue;
@@ -334,6 +354,14 @@ mod tests {
         let mut cases = baseline();
         case_mut(&mut cases, "unique-complete").expect = Some("NONE".into());
         assert!(check(&cases).is_err());
+    }
+
+    #[test]
+    fn substituted_case_cannot_masquerade_as_complete_historical_suite() {
+        let mut cases = baseline();
+        case_mut(&mut cases, "unique-complete").name = "invented-equivalent-case".to_owned();
+        assert_eq!(cases.len(), HISTORICAL_CASE_COUNT);
+        assert!(check(&cases).is_err(), "same count must not permit replaced historical case");
     }
 
     #[test]
