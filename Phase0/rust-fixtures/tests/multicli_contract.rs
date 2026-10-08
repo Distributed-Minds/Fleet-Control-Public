@@ -185,7 +185,10 @@ fn every_staged_external_file_cli_fails_closed_on_missing_fixture_path() {
         process::id(),
         NEXT_INPUT.fetch_add(1, Ordering::Relaxed)
     ));
-    assert!(!never_created.exists(), "negative input unexpectedly exists");
+    assert!(
+        !never_created.exists(),
+        "negative input unexpectedly exists"
+    );
     for (family, binary, _) in CLIS {
         let output = invoke(
             binary,
