@@ -324,6 +324,23 @@ fn is_bidi_format(ch: char) -> bool {
     )
 }
 
+// An HTTPS link can look different after URL decoding when it contains
+// default-ignorable/invisible formatting. Reject these presentation aliases
+// for evidence and contributor destinations rather than normalizing them.
+// Ordinary visible Unicode path text remains permitted.
+fn is_invisible_url_format(ch: char) -> bool {
+    is_bidi_format(ch)
+        || matches!(
+            ch,
+            '\u{00ad}'
+                | '\u{034f}'
+                | '\u{180e}'
+                | '\u{200b}'..='\u{200d}'
+                | '\u{2060}'
+                | '\u{feff}'
+        )
+}
+
 /// Conservative, offline admission for externally displayed links. This does
 /// not resolve DNS, follow redirects, authenticate a host or prove its rights.
 /// IP literals, ports, userinfo and non-ASCII DNS names are intentionally out
@@ -419,7 +436,7 @@ fn is_public_https_url(url: &str) -> bool {
     }
     // Reject invalid UTF-8 after decoding; its browser presentation is not
     // reliably equivalent to the evidence URL being reviewed.
-    if !std::str::from_utf8(&decoded_url).is_ok_and(|s| !s.chars().any(is_bidi_format)) {
+    if !std::str::from_utf8(&decoded_url).is_ok_and(|s| !s.chars().any(is_invisible_url_format)) {
         return false;
     }
     true
