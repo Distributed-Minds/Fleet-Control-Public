@@ -5,6 +5,8 @@
 //! checks supported operations, parent cardinality, and live-head staleness.
 //! No external digest executable, network access, or additional Cargo crate is used.
 
+use serde::de::{self, MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 use std::collections::HashSet;
 use std::env;
@@ -92,8 +94,114 @@ fn sha256_hex(input: &[u8]) -> String {
     result
 }
 
+// Strict JSON parsing is necessary for identity-bearing envelopes: decoding
+// directly into serde_json::Value silently keeps the last duplicate object key.
+// Two different byte representations must not become an unreviewed identity
+// through parser-dependent duplicate-key selection. Keys are compared *after*
+// JSON escape decoding, at every nesting level.
+struct StrictJson(Value);
+
+impl<'de> Deserialize<'de> for StrictJson {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct StrictVisitor;
+
+        impl<'de> Visitor<'de> for StrictVisitor {
+            type Value = StrictJson;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("JSON without duplicate object keys")
+            }
+
+            fn visit_unit<E>(self) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::Null))
+            }
+
+            fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::Bool(value)))
+            }
+
+            fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::from(value)))
+            }
+
+            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::from(value)))
+            }
+
+            fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                serde_json::Number::from_f64(value)
+                    .map(|number| StrictJson(Value::Number(number)))
+                    .ok_or_else(|| de::Error::custom("non-finite JSON number"))
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::String(value.to_owned())))
+            }
+
+            fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::String(value)))
+            }
+
+            fn visit_seq<A>(self, mut sequence: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut values = Vec::new();
+                while let Some(StrictJson(value)) = sequence.next_element::<StrictJson>()? {
+                    values.push(value);
+                }
+                Ok(StrictJson(Value::Array(values)))
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut values = serde_json::Map::new();
+                while let Some((key, StrictJson(value))) =
+                    map.next_entry::<String, StrictJson>()?
+                {
+                    if values.contains_key(&key) {
+                        return Err(de::Error::custom(format!(
+                            "duplicate JSON object key: {key}"
+                        )));
+                    }
+                    values.insert(key, value);
+                }
+                Ok(StrictJson(Value::Object(values)))
+            }
+        }
+
+        deserializer.deserialize_any(StrictVisitor)
+    }
+}
+
 fn candidate_ids(fixture_text: &str) -> Result<Vec<(String, String)>, String> {
-    let root: Value = serde_json::from_str(fixture_text).map_err(|e| e.to_string())?;
+    let StrictJson(root) = serde_json::from_str(fixture_text).map_err(|e| e.to_string())?;
     if root.get("schema_version").and_then(Value::as_str)
         != Some("integration-candidate-fixture-v1")
         || root.get("digest").and_then(Value::as_str) != Some("sha256")
@@ -252,6 +360,58 @@ mod tests {
             candidate_ids(&baseline.to_string()).unwrap()[0].1,
             candidate_ids(&reordered.to_string()).unwrap()[0].1
         );
+    }
+
+    #[test]
+    fn identity_rejects_duplicate_keys_at_all_nesting_levels() {
+        // serde_json::Value by itself accepts these and silently overwrites
+        // earlier values. In an identity envelope that is not safe.
+        let cases = [
+            HISTORICAL.replacen(
+                "\"digest\":",
+                "\"digest\": \"sha1\", \"digest\":",
+                1,
+            ),
+            HISTORICAL.replacen(
+                "\"name\":",
+                "\"name\": \"forged\", \"name\":",
+                1,
+            ),
+            HISTORICAL.replacen(
+                "\"operation_kind\":",
+                "\"operation_kind\": \"fast-forward\", \"operation_kind\":",
+                1,
+            ),
+            HISTORICAL.replacen(
+                "\"author\":",
+                "\"author\": \"forged\", \"author\":",
+                1,
+            ),
+        ];
+        for input in cases {
+            assert_ne!(input, HISTORICAL, "test must inject a duplicate key");
+            assert!(
+                serde_json::from_str::<Value>(&input).is_ok(),
+                "regression control: generic Value parsing accepts duplicate keys"
+            );
+            assert!(
+                candidate_ids(&input).is_err(),
+                "identity calculator accepted ambiguous JSON"
+            );
+        }
+        assert!(candidate_ids(HISTORICAL).is_ok());
+    }
+
+    #[test]
+    fn escaped_key_aliases_are_rejected_after_json_unescaping() {
+        let input = HISTORICAL.replacen(
+            "\"digest\":",
+            r#""di\u0067est": "sha1", "digest":"#,
+            1,
+        );
+        assert_ne!(input, HISTORICAL);
+        assert!(serde_json::from_str::<Value>(&input).is_ok());
+        assert!(candidate_ids(&input).is_err());
     }
 
     #[test]
