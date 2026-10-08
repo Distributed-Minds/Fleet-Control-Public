@@ -34,7 +34,9 @@ fn write_complete_page(output: &Path, html: &str) -> io::Result<()> {
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
             Err(error) => return Err(error),
         };
-        let written = file.write_all(html.as_bytes()).and_then(|_| file.sync_all());
+        let written = file
+            .write_all(html.as_bytes())
+            .and_then(|_| file.sync_all());
         drop(file);
         let result = written.and_then(|_| fs::rename(&temporary, output));
         if result.is_err() {
