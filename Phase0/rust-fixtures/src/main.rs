@@ -264,6 +264,64 @@ fn trace(c: &TraceCase) -> Result<&'static str, String> {
     }
 }
 
+const REQUIRED_DECISION_CASE_IDS: &[&str] = &[
+    "least-harm",
+    "explicit-broader",
+    "stale-subject",
+    "stale-detector-evidence",
+    "ambiguous-attribution-bounds-to-observation",
+    "incompatible-detector-versions",
+    "stale-dependency",
+    "incompatible-dependency",
+    "missing-authority-block-action",
+    "missing-authority",
+    "single-lineage-high-impact",
+    "correlated-duplicate-does-not-count",
+    "contradiction-bounds-action",
+    "expired-no-renewal",
+    "expired-renewed",
+    "one-agent-human-independent-control",
+    "destructive-needs-authority",
+];
+
+const REQUIRED_RECOVERY_CASE_IDS: &[&str] = &[
+    "false-positive-recovery",
+    "recovery-stale-subject",
+    "recovery-dependency-moved",
+    "recovery-missing-authority",
+    "recovery-insufficient-evidence",
+];
+
+const REQUIRED_TRACE_CASE_IDS: &[&str] = &[
+    "cutoff-retry",
+    "changed-intent-new-operation",
+    "locator-reuse",
+    "effect-dependency-moved",
+    "effect-dependency-compatible-upgrade",
+    "closure-dependency-moved",
+    "evidence-assurance-moved",
+    "recovery-dependency-moved-trace",
+    "termination-without-closure-proof",
+    "termination-with-closure-proof",
+    "pure-model-no-production-authority",
+    "production-authority-present",
+    "secondary-harm-preserved",
+];
+
+fn require_historical_case_ids<'a>(
+    family: &str,
+    expected_ids: &[&str],
+    observed_ids: impl Iterator<Item = &'a str>,
+    failures: &mut Vec<String>,
+) {
+    let observed: HashSet<&str> = observed_ids.collect();
+    for id in expected_ids {
+        if !observed.contains(id) {
+            failures.push(format!("missing required {family} case id: {id}"));
+        }
+    }
+}
+
 fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
     let mut failures = Vec::new();
     if f.schema_version != 1 || f.spec_version != 3 {
@@ -286,6 +344,24 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
             ));
         }
     }
+    require_historical_case_ids(
+        "decision",
+        REQUIRED_DECISION_CASE_IDS,
+        f.decision_cases.iter().map(|c| c.id.as_str()),
+        &mut failures,
+    );
+    require_historical_case_ids(
+        "recovery",
+        REQUIRED_RECOVERY_CASE_IDS,
+        f.recovery_cases.iter().map(|c| c.id.as_str()),
+        &mut failures,
+    );
+    require_historical_case_ids(
+        "trace",
+        REQUIRED_TRACE_CASE_IDS,
+        f.trace_cases.iter().map(|c| c.id.as_str()),
+        &mut failures,
+    );
     let mut ids = HashSet::new();
 
     for c in &f.decision_cases {
@@ -534,4 +610,28 @@ mod tests {
         assert!(trace(&typed.trace_cases[3]).is_err());
         assert!(validate(&typed).is_err());
     }
+    #[test]
+    fn renamed_historical_id_cannot_hide_missing_coverage() {
+        for family in ["decision_cases", "recovery_cases", "trace_cases"] {
+            let mut changed = original();
+            let first_id = changed[family][0]["id"].as_str().unwrap().to_owned();
+            changed[family][0]["id"] = json!(format!("{first_id}-renamed"));
+            let result = validate(&fixture(changed));
+            assert!(result.is_err(), "{family}: renamed baseline case was accepted");
+            assert!(
+                result.unwrap_err().iter().any(|error| error.contains("missing required")),
+                "{family}: expected missing historical ID diagnostic"
+            );
+        }
+    }
+
+    #[test]
+    fn independent_extra_case_does_not_invalidate_historical_coverage() {
+        let mut changed = original();
+        let mut additional = changed["decision_cases"][0].clone();
+        additional["id"] = json!("additional-valid-decision-case");
+        changed["decision_cases"].as_array_mut().unwrap().push(additional);
+        assert_eq!(validate(&fixture(changed)), Ok(36));
+    }
+
 }
