@@ -203,6 +203,74 @@ fn has_unapproved_resource_markup(elements: &[&str]) -> bool {
     })
 }
 
+/// Reject executable inline HTML event handlers on any element. An inert
+/// attribute value containing "onclick=" is not itself a handler. Scan the
+/// actual attribute names while honoring quoted values and comments (which
+/// the source tag tokenizer already strips). This intentionally fails closed
+/// for unknown or future "on..." event names, not just onclick/onload.
+fn has_inline_event_handler(elements: &[&str]) -> bool {
+    elements.iter().any(|tag| {
+        let bytes = tag.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() && !bytes[i].is_ascii_whitespace() {
+            i += 1; // element name
+        }
+        while i < bytes.len() {
+            while i < bytes.len() && (bytes[i].is_ascii_whitespace() || bytes[i] == b'/') {
+                i += 1;
+            }
+            let start = i;
+            while i < bytes.len()
+                && !bytes[i].is_ascii_whitespace()
+                && bytes[i] != b'='
+                && bytes[i] != b'/'
+            {
+                i += 1;
+            }
+            if start == i {
+                if i < bytes.len() {
+                    i += 1;
+                }
+                continue;
+            }
+            let name = &bytes[start..i];
+            if name.len() > 2
+                && name[0].to_ascii_lowercase() == b'o'
+                && name[1].to_ascii_lowercase() == b'n'
+                && name[2..].iter().all(|b| b.is_ascii_alphabetic())
+            {
+                return true;
+            }
+            while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+                i += 1;
+            }
+            if bytes.get(i) != Some(&b'=') {
+                continue;
+            }
+            i += 1;
+            while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+                i += 1;
+            }
+            if let Some(&quote) = bytes.get(i) {
+                if quote == b'"' || quote == b'\'' {
+                    i += 1;
+                    while i < bytes.len() && bytes[i] != quote {
+                        i += 1;
+                    }
+                    if i < bytes.len() {
+                        i += 1;
+                    }
+                } else {
+                    while i < bytes.len() && !bytes[i].is_ascii_whitespace() {
+                        i += 1;
+                    }
+                }
+            }
+        }
+        false
+    })
+}
+
 /// Catch ordinary CSS network-resource syntax and reject CSS escapes rather
 /// than attempt to interpret escaped fetch-token names. Not a CSS engine:
 /// browser QA is still required before publication.
@@ -392,6 +460,11 @@ fn validate(root: &Path) -> Vec<String> {
         &mut errors,
         !has_unapproved_resource_markup(&elements),
         "Unexpected browser resource-loading markup",
+    );
+    expect(
+        &mut errors,
+        !has_inline_event_handler(&elements),
+        "Inline JavaScript event-handler attribute is forbidden",
     );
     expect(
         &mut errors,
@@ -791,6 +864,41 @@ data="x"></OBject><EMBED/>"#;
 <meta data-http-equiv="refresh" content="0">"##,
         );
         assert!(!has_browser_navigation_override(&decoys));
+    }
+
+    #[test]
+    fn inline_event_handlers_are_forbidden_even_without_script_tags() {
+        for bad in [
+            r#"<a href="https://example.org/" onclick="alert(1)">Link</a>"#,
+            r#"<BODY ONLOAD='alert(1)'>Safe-looking text</BODY>"#,
+            r#"<button ONPOINTERDOWN="steal()">Go</button>"#,
+            r#"<div onmouseover>Text</div>"#,
+            r#"<a href='https://example.org/' title="quoted > is text" onfocusin = 'go()'>Link</a>"#,
+            r#"<a href="https://example.org/" oNcLiCk>Boolean-style handler</a>"#,
+        ] {
+            assert!(
+                has_inline_event_handler(&tags(bad)),
+                "Executable inline handler escaped source guard: {bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn event_handler_scanner_ignores_attribute_values_comments_and_data_names() {
+        let allowed = r#"
+<!-- <body onload="evil()"> -->
+<a title='literal onclick="evil()" > not markup' data-onclick="inert" href="https://example.org/">Link</a>
+<p aria-label='onload=alert(1)' data-onload="inert">Real text</p>
+"#;
+        assert!(!has_inline_event_handler(&tags(allowed)));
+        assert!(!has_inline_event_handler(&tags(
+            r#"<main id="main"><p>Static landing</p></main>"#
+        )));
+        // Non-ASCII attribute names are legal source bytes; scanning must
+        // never panic by slicing through a UTF-8 code point.
+        assert!(!has_inline_event_handler(&tags(
+            r#"<p μeta="ordinary" title="onclick is just text">Text</p>"#
+        )));
     }
 
     #[test]
