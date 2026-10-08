@@ -1,0 +1,85 @@
+{
+  "fixture_schema": "free-energy.catalog-evidence-fragment-tests/v0",
+  "target_schema": "Catalog/schema/project-v0.schema.json",
+  "target_pointer": "#/$defs/evidence",
+  "description": "Expected JSON Schema fragment acceptance after applying overrides to base_evidence. This checks shape only, not reviewer authority, source authenticity, URL safety or actual pin existence. The Rust Draft 2020-12 validation suite must execute these cases.",
+  "base_evidence": {
+    "evidence_id": "test-source-snapshot",
+    "evidence_kind": "PINNED_REPOSITORY_FILE",
+    "subject_scope": "Fixture only; no rights assertion",
+    "url": "https://github.com/example/project/blob/0123456789abcdef0123456789abcdef01234567/LICENSE",
+    "observed_at": "2026-10-08T00:00:00Z",
+    "reviewer": "fixture-not-rights-review",
+    "currentness": "PINNED_SNAPSHOT",
+    "repository": "https://github.com/example/project",
+    "commit": "0123456789abcdef0123456789abcdef01234567",
+    "path": "LICENSE"
+  },
+  "cases": [
+    {
+      "id": "pinned-complete",
+      "overrides": {},
+      "expected_valid": true
+    },
+    {
+      "id": "pinned-null-repository",
+      "overrides": {
+        "repository": null
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "pinned-null-commit",
+      "overrides": {
+        "commit": null
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "pinned-null-path",
+      "overrides": {
+        "path": null
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "pinned-empty-path",
+      "overrides": {
+        "path": ""
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "pinned-invalid-commit",
+      "overrides": {
+        "commit": "unknown"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "pinned-http-repository",
+      "overrides": {
+        "repository": "http://github.com/example/project"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "pinned-invalidated-but-traceable",
+      "overrides": {
+        "currentness": "INVALIDATED"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "mutable-page-no-revision",
+      "overrides": {
+        "evidence_kind": "MUTABLE_UPSTREAM_PAGE",
+        "currentness": "OBSERVED_AT",
+        "repository": null,
+        "commit": null,
+        "path": null
+      },
+      "expected_valid": true
+    }
+  ]
+}
