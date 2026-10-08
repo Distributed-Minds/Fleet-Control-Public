@@ -18,6 +18,8 @@ Copy the complete top-level `Phase0/` folder into the root of the repository you
 
 Do not keep Phase0 only on your computer. Every persistent agent needs to read the same committed Phase0 files from GitHub.
 
+**ZIP layout versus source checkout:** The `COPY-INTO-CHATGPT/` and `COPY-INTO-AUTOMATIONS/` locations below describe the starter ZIP layout; **they do not exist in a checkout or fork of the current `phase0/public-v0` source tree**. For that source checkout, use [`Phase0/templates/PROJECT-INSTRUCTIONS.md`](../Phase0/templates/PROJECT-INSTRUCTIONS.md) for your ChatGPT Project and [`Phase0/templates/AUTOMATION-PROMPT.md`](../Phase0/templates/AUTOMATION-PROMPT.md) for each scheduled agent. Replace `<OWNER>/<REPOSITORY>` in both templates and give **each copy** of the automation prompt a unique `<AGENT_ID>` (for example, `A1` through `A5`), aligned with `Phase0/05-FLEET-CONFIG.md`. These templates are instructions, not evidence that a scheduled context has GitHub mutation capabilities; verify those separately using the current online setup guide.
+
 ### Into ChatGPT Project instructions
 
 Open:
