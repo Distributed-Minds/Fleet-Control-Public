@@ -4,6 +4,8 @@
 
 If GitHub or ChatGPT Projects are new to you, begin with `GETTING-STARTED.md` before copying anything.
 
+**Preview fork warning:** The upstream repository's default `main` is still a placeholder. Forking only the default branch does **not** install Phase0. Either use the starter ZIP to populate a repository you own, or follow `GETTING-STARTED.md` to copy all branches and set `phase0/public-v0` as **your fork's** default branch. Before creating automations, verify that your repository's default view contains `Phase0/05-FLEET-CONFIG.md`.
+
 ## What goes where
 
 ### Into your GitHub repository
