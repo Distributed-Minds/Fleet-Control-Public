@@ -7,7 +7,7 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use crate::{
-    evaluate, replay, DeleteWitness, Denial, EffectState, ReplayCut, ReplayFailure, ReplayRecord,
+    evaluate, replay, DeleteWitness, Denial, ReplayCut, ReplayFailure, ReplayRecord,
     Source, Verdict,
 };
 
@@ -136,7 +136,8 @@ pub fn plan_compaction(
 mod tests {
     use super::*;
     use crate::{
-        Archive, Authority, Basis, Durability, Horizon, Manifest, Ordering, Protections, Snapshot,
+        Archive, Authority, Basis, Durability, EffectState, Horizon, Manifest, Ordering, Protections,
+        Snapshot,
     };
 
     fn basis(identity: &str) -> Basis {
