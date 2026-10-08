@@ -242,7 +242,8 @@ mod tests {
     fn rejects_mixed_case_and_whitespace_obfuscated_active_elements() {
         let doc = r#"<ScRiPt
 src="x"></ScRiPt><IFRAME	src="x"></IFRAME><FORM
-method="post"></FORM><OBjectdata="x"></OBject><EMBED/>"#;
+method="post"></FORM><OBject
+data="x"></OBject><EMBED/>"#;
         let elements = tags(doc);
         for forbidden in ["script", "iframe", "form", "object", "embed"] {
             assert!(
