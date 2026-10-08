@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - rust/coordination-archival-admission-22
+      - 'test/archive-*' # validate stacked archival security/model fixes before integration
     paths:
       - 'Phase0/rust-coordination-archival/**'
       - '.github/workflows/rust-coordination-archival.yml'
