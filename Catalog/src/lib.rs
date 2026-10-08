@@ -249,7 +249,12 @@ fn is_public_https_url(url: &str) -> bool {
                 return false;
             };
             let decoded = hi * 16 + lo;
-            if decoded < 0x20 || decoded == 0x7f || decoded == b'\\' {
+            // Reject encoded authority/path separators and a second encoding layer.
+            // This is an offline admission policy, not a URL rewrite parser.
+            if decoded < 0x20
+                || decoded == 0x7f
+                || matches!(decoded, b'/' | b'?' | b'#' | b'@' | b':' | b'\\' | b'%')
+            {
                 return false;
             }
         }
@@ -736,5 +741,39 @@ mod tests {
             v["upstream"]["read_only_mirror_urls"][0] = json!("http://github.com/veloren");
         });
         assert!(validate_manifest(&mirror).is_err());
+    }
+
+    #[test]
+    fn percent_encoded_delimiters_and_double_encoding_fail_closed() {
+        // An external link can cross parse/redirect boundaries after decoding
+        // even if its original HTTPS authority looks syntactically benign.
+        for encoded in [
+            "%2f", "%2F", "%3f", "%3F", "%23", "%40", "%3a", "%3A",
+            "%5c", "%5C", "%25", "%252f",
+        ] {
+            let url = format!("https://example.org/a{encoded}b");
+            assert!(!is_public_https_url(&url), "accepted encoded delimiter: {url}");
+        }
+
+        // Encoded ordinary text still works in existing public links.
+        for url in [
+            "https://github.com/search?q=game%20engine",
+            "https://example.org/Project%20Files/readme",
+            "https://example.org/readme%7Ecurrent",
+        ] {
+            assert!(is_public_https_url(url), "rejected safe encoding: {url}");
+        }
+
+        let forged_upstream = changed(OPENRA, |record| {
+            record["upstream"]["contribution_url"] =
+                json!("https://github.com/OpenRA%2fadmin/commands");
+        });
+        assert!(validate_manifest(&forged_upstream).is_err());
+
+        let forged_evidence = changed(LUANTI, |record| {
+            record["evidence"][0]["url"] =
+                json!("https://github.com/luanti-org%252fprivate/README");
+        });
+        assert!(validate_manifest(&forged_evidence).is_err());
     }
 }
