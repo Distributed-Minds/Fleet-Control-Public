@@ -8,6 +8,16 @@ From the repository root, run: python3 -m http.server 8000 --directory docs
 
 Then open http://localhost:8000/. No npm dependencies, JavaScript runtime, remote fonts, tracking scripts, or remote images are required.
 
+## Offline structural smoke check
+
+From the repository root:
+
+```sh
+python3 tests/check_free_energy_site.py
+```
+
+This standard-library-only check validates local fragment links, the relative stylesheet, the direct starter ZIP and corrected-guide links, public Discussions/contact notices, implemented-versus-future disclosures, and basic keyboard-focus, responsive, and reduced-motion CSS hooks. It makes **no network requests** and is not a substitute for a browser accessibility review, external-link checks, release installation, or a deployed-site test.
+
 ## Deployment and migration
 
 1. Choose and verify the website domain/host first. Do not create a CNAME or assume a domain in this repository.
