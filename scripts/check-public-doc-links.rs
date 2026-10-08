@@ -221,23 +221,38 @@ fn collect_links(markdown: &str, document: &str, report: &mut Report) -> Vec<Str
         let bytes = visible.as_bytes();
         let mut i = 0;
         while i < bytes.len() {
-            if bytes[i] != b'['
-                || preceded_by_escape(bytes, i)
-                || (i > 0 && bytes[i - 1] == b'!' && !preceded_by_escape(bytes, i - 1))
-            {
+            if bytes[i] != b'[' || preceded_by_escape(bytes, i) {
                 i += 1;
                 continue;
             }
-            // An escaped ] belongs to the label, not the closing delimiter.
-            // Keep the same odd/even backslash rule used for opening brackets.
+            // Markdown labels may contain balanced nested brackets. Stopping
+            // at the first ] silently misses a valid [outer [inner]](file.md).
+            // Escaped brackets do not affect the nesting depth.
+            let is_image = i > 0 && bytes[i - 1] == b'!' && !preceded_by_escape(bytes, i - 1);
             let mut after = i + 1;
-            while after < bytes.len()
-                && (bytes[after] != b']' || preceded_by_escape(bytes, after))
-            {
+            let mut label_depth = 1usize;
+            while after < bytes.len() {
+                if !preceded_by_escape(bytes, after) {
+                    match bytes[after] {
+                        b'[' => label_depth += 1,
+                        b']' => {
+                            label_depth -= 1;
+                            if label_depth == 0 {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
                 after += 1;
             }
             if after == bytes.len() {
                 i += 1;
+                continue;
+            }
+            if is_image {
+                // An image's nested alt text is not a local-link target.
+                i = after + 1;
                 continue;
             }
             if bytes.get(after + 1) != Some(&b'(') {
@@ -535,6 +550,32 @@ mod tests {
         assert_eq!(result.local_links, 1);
         assert_eq!(result.errors.len(), 1, "{:?}", result.errors);
         assert!(result.errors[0].contains("target missing"));
+    }
+
+    #[test]
+    fn balanced_nested_labels_are_real_links() {
+        let sandbox = Sandbox::new();
+        sandbox.write("present.md", "present");
+        sandbox.write(
+            "README.md",
+            "[outer [inner]](missing.md) [plain](present.md)\n",
+        );
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 2);
+        assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+        assert!(report.errors[0].contains("target missing: missing.md"));
+    }
+
+    #[test]
+    fn nested_image_alt_labels_do_not_make_missing_links() {
+        let mut report = Report::default();
+        let links = collect_links(
+            "![picture [alt](not-present.md)](missing.png) [real [link]](present.md)",
+            "README.md",
+            &mut report,
+        );
+        assert_eq!(links, vec!["present.md"]);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
     }
 
     #[test]
