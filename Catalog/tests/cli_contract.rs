@@ -78,8 +78,15 @@ fn unreadable_later_manifest_cannot_publish_partial_success() {
 
 #[test]
 fn missing_inputs_and_unsupported_commands_fail_closed() {
-    for args in [vec![], vec!["validate"], vec!["render"]] {
+    for args in [vec![], vec!["validate"], vec!["no-such-command"]] {
         let output = invoke(&args);
         assert_no_partial_success(&output);
     }
+}
+
+#[test]
+fn deterministic_render_check_matches_committed_static_page() {
+    let output = invoke(&["render", "--check"]);
+    assert!(output.status.success(), "committed catalog page is stale: {output:?}");
+    assert!(output.stderr.is_empty(), "unexpected render diagnostics: {output:?}");
 }
