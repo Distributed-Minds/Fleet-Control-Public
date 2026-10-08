@@ -59,7 +59,9 @@ fn historical_python_disposition(case: &Map<String, Value>) -> Map<String, Value
                 .as_bytes(),
         )
         .expect("write Python semantic input");
-    let output = child.wait_with_output().expect("run historical Python model");
+    let output = child
+        .wait_with_output()
+        .expect("run historical Python model");
     assert!(
         output.status.success(),
         "historical Python model failed: {}",
@@ -75,7 +77,11 @@ fn original_expectation(case: &Map<String, Value>) -> Map<String, Value> {
         .filter(|(key, _)| EXPECTED_KEYS.contains(&key.as_str()))
         .map(|(key, value)| (key.clone(), value.clone()))
         .collect();
-    assert_eq!(expected.len(), 1, "fixture must have one expected disposition");
+    assert_eq!(
+        expected.len(),
+        1,
+        "fixture must have one expected disposition"
+    );
     expected
 }
 
@@ -156,7 +162,11 @@ fn python_and_rust_agree_on_all_cases_and_changed_authority_facts() {
     // echoes fixture labels cannot pass both the rejected old answer and the
     // independently recomputed Python answer for the same semantic facts.
     for (name, field, new_value) in [
-        ("cycle-without-external-root", "external_root", Value::Bool(true)),
+        (
+            "cycle-without-external-root",
+            "external_root",
+            Value::Bool(true),
+        ),
         (
             "provider-valid-revoked-credential-denied-with-debt",
             "external_invalidation_complete",
