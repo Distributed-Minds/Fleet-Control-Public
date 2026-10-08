@@ -79,6 +79,8 @@ For the normative Phase0 machine read order, see [`Phase0/README.md`](Phase0/REA
 
 ## Contact and contributing
 
+To propose a change **to FREE ENERGY itself**, follow the [repository-specific contribution guide](CONTRIBUTING.md). This is distinct from [helping another project](HELP-A-PROJECT.md); check existing ownership, use a non-default PR target, and preserve current test, rights, and human-integration boundaries.
+
 For general questions or to express contributor interest, see [public GitHub Discussions](https://github.com/Distributed-Minds/Fleet-Control-Public/discussions). For specific reproducible work, use the [issue tracker](https://github.com/Distributed-Minds/Fleet-Control-Public/issues). These are public contact routes, **not** automatic worker enrollment, task assignment, or repository access.
 
 Do not post credentials, private repository material, sensitive personal information, or security-vulnerability details in public issues or Discussions. A confidential reporting route has **not** been verified; [issue #38](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/38) tracks that separately.
