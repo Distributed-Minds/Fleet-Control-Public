@@ -243,6 +243,53 @@ fn is_bidi_format_character(ch: char) -> bool {
     )
 }
 
+fn is_portable_repository_segment(part: &str) -> bool {
+    // A path used as a rights or evidence identity must not alias another
+    // path on a common checkout platform. Windows trims trailing dots, maps
+    // device names (including extensions) specially, and uses ':' for NTFS
+    // alternate data streams. Reject rather than silently reinterpret these
+    // spellings. This does not prove that an upstream path exists.
+    if part.ends_with('.')
+        || part
+            .chars()
+            .any(|ch| matches!(ch, ':' | '<' | '>' | '"' | '|' | '?' | '*'))
+    {
+        return false;
+    }
+    let stem = part.split('.').next().unwrap_or_default().to_ascii_uppercase();
+    !matches!(
+        stem.as_str(),
+        "CON"
+            | "PRN"
+            | "AUX"
+            | "NUL"
+            | "COM1"
+            | "COM2"
+            | "COM3"
+            | "COM4"
+            | "COM5"
+            | "COM6"
+            | "COM7"
+            | "COM8"
+            | "COM9"
+            | "LPT1"
+            | "LPT2"
+            | "LPT3"
+            | "LPT4"
+            | "LPT5"
+            | "LPT6"
+            | "LPT7"
+            | "LPT8"
+            | "LPT9"
+            | "COM¹"
+            | "COM²"
+            | "COM³"
+            | "LPT¹"
+            | "LPT²"
+            | "LPT³"
+    )
+}
+
 fn is_relative_path(value: &str) -> bool {
     // Repository paths are identity-bearing, not URL paths. Until an
     // authoritative percent-decoding/canonicalization contract exists, reject
@@ -254,10 +301,13 @@ fn is_relative_path(value: &str) -> bool {
         && !value
             .chars()
             .any(|ch| ch.is_control() || is_bidi_format_character(ch))
-        && value
-            .split('/')
-            .all(|part| !part.is_empty() && part != "." && part != ".." && part.trim() == part)
-        && value.as_bytes().get(1).is_none_or(|b| *b != b':')
+        && value.split('/').all(|part| {
+            !part.is_empty()
+                && part != "."
+                && part != ".."
+                && part.trim() == part
+                && is_portable_repository_segment(part)
+        })
 }
 
 // Bidirectional formatting controls change the perceived direction of link
