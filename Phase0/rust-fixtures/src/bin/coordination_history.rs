@@ -98,6 +98,12 @@ fn evaluate(f: &Facts) -> Verdict {
     {
         return Verdict::Reconcile;
     }
+    // A made-up acknowledgement value must not inherit an all-current
+    // historical baseline. Only the explicitly modeled unknown outcome
+    // triggers reconciliation; every other supplied value fails closed.
+    if f.manifest_transition_outcome.is_some() {
+        return Verdict::Ineligible;
+    }
     // Baseline inheritance is for sparse historical fixture scenarios ONLY.
     let current = [
         f.archive_exact,
