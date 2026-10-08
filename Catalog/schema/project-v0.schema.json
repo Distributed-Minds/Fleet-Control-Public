@@ -315,7 +315,34 @@
             "UNKNOWN"
           ]
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "scope_kind": {
+                "enum": [
+                  "PATH",
+                  "PREFIX"
+                ]
+              }
+            },
+            "required": [
+              "scope_kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "scope": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*/$)[^\\x00-\\x1f]+$",
+                "description": "PATH/PREFIX rights scope must be a normalized relative repository path, never a traversal, absolute path or Windows path; semantic Rust checks still apply."
+              }
+            }
+          }
+        }
+      ]
     },
     "permission": {
       "type": "object",
