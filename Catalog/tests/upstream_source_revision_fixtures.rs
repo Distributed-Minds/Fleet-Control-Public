@@ -29,8 +29,7 @@ struct Suite {
 }
 
 fn run_case(base: &Value, case: &Case) -> Result<bool, String> {
-    let mut manifest: Value =
-        serde_json::from_str(MANIFEST).map_err(|error| error.to_string())?;
+    let mut manifest: Value = serde_json::from_str(MANIFEST).map_err(|error| error.to_string())?;
     let mut upstream = base.clone();
     let fields = upstream
         .as_object_mut()
@@ -44,8 +43,7 @@ fn run_case(base: &Value, case: &Case) -> Result<bool, String> {
     }
     manifest["upstream"] = upstream;
 
-    let manifest_json =
-        serde_json::to_string(&manifest).map_err(|error| error.to_string())?;
+    let manifest_json = serde_json::to_string(&manifest).map_err(|error| error.to_string())?;
     Ok(validate_manifest(&manifest_json).is_ok())
 }
 
@@ -59,7 +57,10 @@ fn check_suite(source: &str) -> Result<(usize, usize), String> {
         return Err("unsupported or incomplete fixture contract".to_string());
     }
     if suite.cases.len() != 8 {
-        return Err(format!("expected 8 upstream cases, got {}", suite.cases.len()));
+        return Err(format!(
+            "expected 8 upstream cases, got {}",
+            suite.cases.len()
+        ));
     }
     if !suite.base_upstream.is_object() {
         return Err("base upstream must be an object".to_string());
@@ -132,7 +133,10 @@ fn pin_and_explanation_rejections_use_actual_semantics() {
     // reject an omitted explanation and a mutable or truncated source pin.
     for (pin, reason) in [
         (Value::Null, Value::String("   ".to_string())),
-        (Value::String("deadbeef".to_string()), Value::String("not pinned".to_string())),
+        (
+            Value::String("deadbeef".to_string()),
+            Value::String("not pinned".to_string()),
+        ),
         (Value::Null, Value::Number(42.into())),
     ] {
         let case = Case {
