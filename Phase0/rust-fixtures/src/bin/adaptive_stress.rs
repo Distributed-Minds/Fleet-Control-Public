@@ -97,8 +97,8 @@ struct Case {
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
-struct Computed {
-    disposition: Option<&'static str>,
+struct Computed<'a> {
+    disposition: Option<&'a str>,
     same_evaluation_id: Option<bool>,
     extra_workload_charge: Option<bool>,
     rerun: Option<bool>,
@@ -112,7 +112,7 @@ struct Computed {
 
 // Distinct scenario fields select a semantic rule. The asserted expected
 // fields and the case name NEVER select the computed outcome.
-fn compute(c: &Case) -> Result<Computed, &'static str> {
+fn compute(c: &Case) -> Result<Computed<'_>, &'static str> {
     let mut result = Computed::default();
     if c.fixture.is_some() {
         result.disposition = Some(if c.authority_change == Some(false) {
