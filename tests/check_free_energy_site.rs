@@ -30,11 +30,45 @@ fn primary_contact_link(html: &str) -> bool {
     nav.contains(&expected_link)
 }
 
+/// Collect complete source tags while excluding HTML comments and treating
+/// angle brackets inside quoted attribute values as text, not new markup.
+/// This is a bounded offline checker, not a browser-equivalent HTML parser.
 fn tags(html: &str) -> Vec<&str> {
-    html.split('<')
-        .skip(1)
-        .filter_map(|s| s.split_once('>').map(|(tag, _)| tag))
-        .collect()
+    let bytes = html.as_bytes();
+    let mut found = Vec::new();
+    let mut pos = 0;
+    while pos < bytes.len() {
+        let Some(offset) = html[pos..].find('<') else {
+            break;
+        };
+        let start = pos + offset;
+        if html[start..].starts_with("<!--") {
+            let Some(end) = html[start + 4..].find("-->") else {
+                break; // An unclosed HTML comment consumes the remaining document.
+            };
+            pos = start + 4 + end + 3;
+            continue;
+        }
+
+        let mut cursor = start + 1;
+        let mut quote: Option<u8> = None;
+        while cursor < bytes.len() {
+            let current = bytes[cursor];
+            match quote {
+                Some(delimiter) if current == delimiter => quote = None,
+                None if current == b'"' || current == b'\'' => quote = Some(current),
+                None if current == b'>' => break,
+                _ => {}
+            }
+            cursor += 1;
+        }
+        if cursor == bytes.len() {
+            break; // An unterminated tag cannot supply valid attributes.
+        }
+        found.push(&html[start + 1..cursor]);
+        pos = cursor + 1;
+    }
+    found
 }
 
 /// Match a real opening tag name at a tag boundary. HTML tag names are
@@ -303,6 +337,42 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn commented_markup_cannot_forge_a_required_link_or_active_element() {
+        let doc = r##"<!-- <a href="https://example.com/forged">Pretend</a>
+<script src="not-executed.js"></script><main id="decoy"></main> -->
+<main id="real"><a href="#real">Actual</a></main>"##;
+        let elements = tags(doc);
+        let links: Vec<&str> = elements
+            .iter()
+            .filter(|tag| is_open_element(tag, "a"))
+            .filter_map(|tag| attribute(tag, "href"))
+            .collect();
+        assert_eq!(links, ["#real"]);
+        assert!(!elements.iter().any(|tag| is_open_element(tag, "script")));
+        assert!(!elements.iter().any(|tag| attribute(tag, "id") == Some("decoy")));
+    }
+
+    #[test]
+    fn quoted_angle_brackets_and_greater_than_do_not_forge_links() {
+        let doc = r##"<a title="<a href='https://example.com/forged'> > still text" href="#real">Actual</a>
+<main id="real"></main>"##;
+        let elements = tags(doc);
+        let links: Vec<&str> = elements
+            .iter()
+            .filter(|tag| is_open_element(tag, "a"))
+            .filter_map(|tag| attribute(tag, "href"))
+            .collect();
+        assert_eq!(links, ["#real"]);
+        assert_eq!(elements.iter().filter(|tag| is_open_element(tag, "a")).count(), 1);
+    }
+
+    #[test]
+    fn unclosed_comments_and_tags_do_not_create_pseudo_links() {
+        assert!(tags(r#"<!-- <a href="https://example.com/forged">"#).is_empty());
+        assert!(tags(r#"<a href="#incomplete""#).is_empty());
+    }
 
     #[test]
     fn extracts_attributes_without_external_parser_dependencies() {
