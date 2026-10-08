@@ -1,0 +1,15 @@
+{
+  "schema": "signet-resolver-pilot-cases@0",
+  "provenance": {
+    "signet_2_document": "Signet 2: intents, archetypes and translation profiles, v0.1, 2026-10-05",
+    "note": "Gold mappings come from explicit Signet 2 examples/tables. Some distractor candidates outside the Minecraft ranged-weapon example are synthetic and are marked as such."
+  },
+  "cases": [
+    {"id":"mc.weapon.ranged","game":"minecraft","archetype":"weapon.ranged","gold":"minecraft:bow","candidates":["minecraft:bow","minecraft:crossbow","minecraft:fishing_rod","minecraft:snowball","minecraft:trident"],"candidate_set_origin":"SIGNET_DRAFT_EXPLICIT","gold_origin":"SIGNET_DRAFT_EXPLICIT"},
+    {"id":"mc.health_pickup","game":"minecraft","archetype":"health_pickup","gold":"minecraft:golden_apple","candidates":["minecraft:golden_apple","minecraft:bread","minecraft:shield","minecraft:iron_ingot"],"candidate_set_origin":"MIXED_EXPLICIT_GOLD_PLUS_SYNTHETIC_DISTRACTORS","gold_origin":"SIGNET_DRAFT_EXPLICIT"},
+    {"id":"doom.weapon.ranged","game":"doom","archetype":"weapon.ranged","gold":"doom:pistol","candidates":["doom:pistol","doom:fist","doom:shotgun"],"candidate_set_origin":"SIGNET1_WEAPON_SET_WITH_SIGNET2_EXPLICIT_GOLD","gold_origin":"SIGNET_DRAFT_EXPLICIT"},
+    {"id":"doom.health_pickup","game":"doom","archetype":"health_pickup","gold":"doom:medikit","candidates":["doom:medikit","doom:armor","doom:ammo"],"candidate_set_origin":"MIXED_EXPLICIT_GOLD_PLUS_SYNTHETIC_DISTRACTORS","gold_origin":"SIGNET_DRAFT_EXPLICIT"},
+    {"id":"oa.weapon.ranged","game":"openarena","archetype":"weapon.ranged","gold":"openarena:machinegun","candidates":["openarena:machinegun","openarena:shotgun","openarena:gauntlet"],"candidate_set_origin":"MIXED_EXPLICIT_GOLD_PLUS_SYNTHETIC_DISTRACTORS","gold_origin":"SIGNET_DRAFT_EXPLICIT"},
+    {"id":"oa.health_pickup","game":"openarena","archetype":"health_pickup","gold":"openarena:health_orb","candidates":["openarena:health_orb","openarena:armor","openarena:ammo"],"candidate_set_origin":"MIXED_EXPLICIT_GOLD_PLUS_SYNTHETIC_DISTRACTORS","gold_origin":"SIGNET_DRAFT_EXPLICIT"}
+  ]
+}

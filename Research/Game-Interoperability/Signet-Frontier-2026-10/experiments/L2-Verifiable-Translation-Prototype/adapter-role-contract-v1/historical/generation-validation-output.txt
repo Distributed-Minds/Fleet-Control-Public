@@ -1,0 +1,21 @@
+minecraft-deterministic-generation: PASS
+godot-deterministic-generation: PASS
+generated-c-header-syntax: PASS
+
+minecraft descriptor-sha256: 026c4d2dc9b3f4686c9e7ea67685535ead8c25e0791c6bd0e947618428b21312
+minecraft adapter.operations.json: sha256:f02f81280ee79e2c6faab6f9b63bcc00ec65682d9b00de032fbdcef3e461dda1
+minecraft signet_adapter_role_ops.h: sha256:9c486815fd714db1a37a25f9b41593e39b7230b7611f2babfd6861721b9bd77e
+minecraft signet_adapter_role_ops.rs: sha256:010cf6b7a716cf27bff5c3a186cdb780cbbf18578071312fbb764aebef9c489c
+
+godot descriptor-sha256: 2c3b3d9f374172435ec505358e9fc084b844e0914fd2bd77b12f6aacaebd12e2
+godot adapter.operations.json: sha256:a66c04c3dc27829f8a0518d3d80368b0cb12d68890c9971c17de8df997e08fc7
+godot signet_adapter_role_ops.h: sha256:e503e866e8ada29a4ba3d43b3194cb05781eb23d74b27f5becd9df3c22c92bf6
+godot signet_adapter_role_ops.rs: sha256:1a79fc5a30e8c6be6860dceba79cadabe68d311143db68a41abb6b362951002b
+
+negative duplicate-operation-id: PASS(rejected)
+negative role-authority-mismatch: PASS(rejected)
+negative invalid-operation-id: PASS(rejected)
+
+rustc: UNAVAILABLE_IN_TEST_ENVIRONMENT
+dotnet: UNAVAILABLE_IN_TEST_ENVIRONMENT
+godot-4.7.2-runtime: BLOCKED_BINARY_NOT_MATERIALIZABLE_IN_TEST_ENVIRONMENT

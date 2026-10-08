@@ -1,0 +1,103 @@
+{
+  "schema": "typed-translation-profile@0",
+  "profile_id": "minecraft-gateway-research-fixture@0",
+  "game": {"id": "minecraft-java", "version": "illustrative"},
+  "translator": {
+    "id": "signet-minecraft-gateway",
+    "version": "research-fixture",
+    "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "semantic_profile_refs": [
+    {"id": "signet2:intents-draft@0", "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+    {"id": "signet2:archetypes-draft@0", "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}
+  ],
+  "entries": [
+    {
+      "id": "input-fire-primary",
+      "authority_class": "INPUT_BINDING",
+      "key": "control:primary-use",
+      "pinned": true,
+      "source": "player",
+      "owner_scope": "player",
+      "authoritative_effect": "indirect_permitted_intent",
+      "control": "right-click-with-marked-item",
+      "choice": "intent.fire@0",
+      "device_fingerprint": "local-config:v1"
+    },
+    {
+      "id": "motion-walk-speed",
+      "authority_class": "MOTION_OBSERVATION",
+      "key": "motion:walk-speed",
+      "pinned": true,
+      "source": "calibration",
+      "owner_scope": "adapter_evidence",
+      "authoritative_effect": "observation_only",
+      "measurement": {
+        "value": 4.3,
+        "unit": "m/s",
+        "method": "illustrative-steady-state-observation",
+        "sample_count": 5,
+        "dispersion": 0.05
+      },
+      "conditions_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "integration_surface_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "notes": "Illustrative value; not asserted as a measured Minecraft fact."
+    },
+    {
+      "id": "fire-primary",
+      "authority_class": "SEMANTIC_MAPPING",
+      "key": "local:right-click-marked-item",
+      "pinned": true,
+      "source": "translator_release",
+      "owner_scope": "translator_release",
+      "authoritative_effect": "shared_state_possible",
+      "choice": "intent.fire@0",
+      "status": "VALID",
+      "integration_surface_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "semantic_profile_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "transform_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "candidate_set_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "proposal": {"method": "human"},
+      "acceptance": {
+        "method": "replay_plus_conformance",
+        "replay_set_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "conformance_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "accepted_by": "research-fixture"
+      },
+      "invalidates_on": [
+        "integration_surface_digest",
+        "semantic_profile_digest",
+        "transform_digest",
+        "candidate_set_digest",
+        "game_version"
+      ]
+    },
+    {
+      "id": "appearance-ranged-weapon",
+      "authority_class": "APPEARANCE_MAPPING",
+      "key": "archetype:weapon.ranged",
+      "pinned": true,
+      "source": "player",
+      "owner_scope": "player_or_translator",
+      "authoritative_effect": "local_only",
+      "choice": "minecraft:bow",
+      "palette_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "candidate_scores": [
+        {"candidate": "minecraft:bow", "score": 0.81},
+        {"candidate": "minecraft:crossbow", "score": 0.74}
+      ],
+      "notes": "Candidate scores reproduce the Signet 2 illustrative example; they are not measurements."
+    },
+    {
+      "id": "session-unpinned-intent-policy",
+      "authority_class": "SESSION_POLICY",
+      "key": "policy:unmapped-simulation-intent",
+      "pinned": true,
+      "source": "server_session",
+      "owner_scope": "server_session",
+      "authoritative_effect": "authoritative_policy",
+      "choice": "REJECT_UNPINNED",
+      "ruleset_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+source-rcon-framing: PASS
+commands-roundtripped: 5
+v0-shim-coverage: NO=5, PARTIAL=2
+v0-shim-sufficiency: FAIL_EXPECTED
