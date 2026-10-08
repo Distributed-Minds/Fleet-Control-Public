@@ -187,6 +187,11 @@ fn is_relative_path(value: &str) -> bool {
 /// IP literals, ports, userinfo and non-ASCII DNS names are intentionally out
 /// of scope until their admission/normalization semantics are specified.
 fn is_public_https_url(url: &str) -> bool {
+    // The checked-in Draft 2020-12 schema bounds URL string length to 2048.
+    // Apply the same bound before any deeper admission checks.
+    if url.chars().count() > 2048 {
+        return false;
+    }
     if !url.starts_with("https://")
         || url
             .chars()
@@ -375,6 +380,17 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
         serde_json::from_str(json).map_err(|e| vec![format!("JSON/typed manifest: {e}")])?;
     let mut problems = Vec::new();
     validate_vocabulary(&record, &mut problems);
+    // These three top-level arrays have minItems: 1 in project-v0.schema.json.
+    // Their empty variants must not bypass all downstream per-entry checks.
+    for (field, count) in [
+        ("rights_claims", record.rights_claims.len()),
+        ("permission_decisions", record.permission_decisions.len()),
+        ("evidence", record.evidence.len()),
+    ] {
+        if count == 0 {
+            problems.push(format!("{field} must contain at least one item"));
+        }
+    }
     // Subset of checked-in Draft 2020-12 string/array shape constraints.
     // This is not a replacement for the full pinned offline schema engine.
     if record.display_name.trim().is_empty() || record.display_name.chars().count() > 140 {
