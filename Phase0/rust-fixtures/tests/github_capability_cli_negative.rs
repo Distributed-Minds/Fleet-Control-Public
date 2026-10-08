@@ -16,7 +16,7 @@ fn baseline() -> Value {
 }
 
 fn run_bytes(bytes: &[u8]) -> Output {
-    let path = std::env::temp_dir().join(format(
+    let path = std::env::temp_dir().join(format!(
         "free-energy-ghcap-negative-{}-{}.json",
         process::id(),
         NEXT_FILE.fetch_add(1, Ordering::Relaxed)
