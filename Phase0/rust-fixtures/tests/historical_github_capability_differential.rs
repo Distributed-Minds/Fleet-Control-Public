@@ -65,8 +65,18 @@ fn check(label: &str, fixture: &Value, expected: Expected) {
         Expected::LegacyAcceptRustReject => (true, false),
     };
     for (name, actual, should_pass, success_marker) in [
-        ("historical Python", &python_output, python_pass, "28 GitHub capability acceptance fixtures"),
-        ("compiled Rust", &rust_output, rust_pass, "GitHub capability invariant fixtures (Rust): 28 checked"),
+        (
+            "historical Python",
+            &python_output,
+            python_pass,
+            "28 GitHub capability acceptance fixtures",
+        ),
+        (
+            "compiled Rust",
+            &rust_output,
+            rust_pass,
+            "GitHub capability invariant fixtures (Rust): 28 checked",
+        ),
     ] {
         assert_eq!(
             actual.status.success(),
