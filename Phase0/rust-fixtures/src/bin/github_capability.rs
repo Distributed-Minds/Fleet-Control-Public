@@ -103,6 +103,70 @@ struct Case {
     expected: Verdict,
 }
 
+// Preserve the original Python fixture's 28 immutable historical labels.
+// These are integrity baselines, not a computed semantic verdict oracle.
+const CANONICAL_NAMES: [&str; 28] = [
+    "interactive-write-scheduled-read-only",
+    "interactive-action-scheduled-missing",
+    "scheduled-stricter-approval",
+    "repository-scope-differs",
+    "capability-evidence-drift",
+    "connector-without-mutation-action",
+    "repository-policy-rejects-action",
+    "probe-would-touch-default-branch",
+    "cutoff-after-create",
+    "cutoff-before-cleanup",
+    "duplicate-retry",
+    "cleanup-permission-lost",
+    "locator-reused",
+    "cleanup-ack-lost",
+    "repeated-cutoff-bounded",
+    "concurrent-generations-one-namespace",
+    "old-probe-after-successor",
+    "stale-probe-cleanup-without-transfer",
+    "authority-lost-before-cleanup",
+    "forged-authority-metadata",
+    "bounded-recovery-transfer",
+    "authority-adapter-incompatible",
+    "capability-current-authority-expired",
+    "context-recreated-successor",
+    "context-id-reused-different-installation",
+    "product-migration-access-only",
+    "successor-orphan-cleanup-needs-transfer",
+    "lineage-map-version-skew",
+];
+
+const CANONICAL_VERDICTS: [Verdict; 28] = [
+    Verdict::CapabilityAbsent,
+    Verdict::CapabilityAbsent,
+    Verdict::ActionPaused,
+    Verdict::ActionBlocked,
+    Verdict::Revalidate,
+    Verdict::CapabilityAbsent,
+    Verdict::ActionBlocked,
+    Verdict::ActionBlocked,
+    Verdict::CleanupRequired,
+    Verdict::CleanupRequired,
+    Verdict::ReuseAttempt,
+    Verdict::RecoveryRequired,
+    Verdict::Ambiguous,
+    Verdict::PassedClean,
+    Verdict::CleanupRequired,
+    Verdict::AllowFenced,
+    Verdict::AuthorityStale,
+    Verdict::RecoveryRequired,
+    Verdict::RecoveryRequired,
+    Verdict::AuthorityUnavailable,
+    Verdict::AllowRecovery,
+    Verdict::AuthorityUnavailable,
+    Verdict::AuthorityStale,
+    Verdict::ReuseLineage,
+    Verdict::LineageUnknown,
+    Verdict::LineageUnknown,
+    Verdict::RecoveryRequired,
+    Verdict::LineageUnknown,
+];
+
 fn check_case(c: &Case) -> Vec<String> {
     use Action::*;
     use Verdict::*;
@@ -216,6 +280,15 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
             errors.push(format!("duplicate or empty case name: {}", c.name));
         }
         errors.extend(check_case(c));
+        if (1..=28).contains(&c.id) {
+            let index = usize::from(c.id - 1);
+            if c.name != CANONICAL_NAMES[index] {
+                errors.push(format!("case {}: canonical scenario name mismatch", c.id));
+            }
+            if c.expected != CANONICAL_VERDICTS[index] {
+                errors.push(format!("case {}: canonical expected outcome mismatch", c.id));
+            }
+        }
     }
     for id in 1..=28 {
         if !ids.contains(&id) {
@@ -352,4 +425,15 @@ mod tests {
     fn approval_required_cannot_be_treated_as_success() {
         assert!(checked(mutate(3, "expected", json!("REVALIDATE"))).is_err());
     }
+
+    #[test]
+    fn historical_names_and_outcomes_cannot_be_forged() {
+        let renamed = mutate(1, "name", json!("forged-scenario"));
+        assert!(checked(renamed).is_err());
+
+        // Case 1 previously had no input rule pinning this false outcome.
+        let changed_outcome = mutate(1, "expected", json!("ACTION_BLOCKED"));
+        assert!(checked(changed_outcome).is_err());
+    }
+
 }
