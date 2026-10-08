@@ -477,7 +477,35 @@
         "path": {
           "$ref": "#/$defs/maybe_string"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "evidence_kind": {
+                "const": "PINNED_REPOSITORY_FILE"
+              }
+            },
+            "required": [
+              "evidence_kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "repository": {
+                "$ref": "#/$defs/url"
+              },
+              "commit": {
+                "$ref": "#/$defs/pin"
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ]
     },
     "history": {
       "type": "object",
