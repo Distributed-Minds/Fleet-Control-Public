@@ -71,9 +71,30 @@ struct Observed {
     mutation_authority: bool,
 }
 
+// History-view, best-base and virtual-computation identities are compared
+// byte-for-byte. Invisible formatting must not make distinct witnesses appear
+// identical in human-reviewed fixture receipts. Preserve readable Unicode.
+fn deceptive_identity_scalar(ch: char) -> bool {
+    ch.is_control()
+        || matches!(
+            ch,
+            '\u{00ad}'
+                | '\u{034f}'
+                | '\u{180e}'
+                | '\u{200b}'..='\u{200f}'
+                | '\u{202a}'..='\u{202e}'
+                | '\u{2060}'..='\u{206f}'
+                | '\u{fe00}'..='\u{fe0f}'
+                | '\u{feff}'
+                | '\u{e0100}'..='\u{e01ef}'
+        )
+}
+
 fn nonblank(value: &str, field: &str) -> Result<(), String> {
-    if value.trim().is_empty() || value.chars().any(char::is_control) {
-        return Err(format!("{field} must be nonblank without control bytes"));
+    if value.trim().is_empty() || value.chars().any(deceptive_identity_scalar) {
+        return Err(format!(
+            "{field} must be nonblank without control or invisible formatting"
+        ));
     }
     Ok(())
 }
@@ -322,6 +343,72 @@ mod tests {
             .iter_mut()
             .find(|c| c.name == name)
             .expect("fixture present")
+    }
+
+    #[test]
+    fn invisible_identity_scalars_cannot_spoof_merge_base_or_virtual_witnesses() {
+        let cases = baseline();
+        for marker in [
+            '\u{00ad}',
+            '\u{034f}',
+            '\u{180e}',
+            '\u{200b}',
+            '\u{202e}',
+            '\u{2060}',
+            '\u{fe0f}',
+            '\u{feff}',
+            '\u{e0100}',
+            '\u{e01ef}',
+        ] {
+            let mut unique = cases
+                .iter()
+                .find(|case| case.name == "unique-complete")
+                .expect("historical unique case")
+                .clone();
+            unique.history_view.push(marker);
+            assert!(
+                compute(&unique).is_err(),
+                "invisible history-view marker passed: {marker:?}"
+            );
+
+            let mut unique = cases
+                .iter()
+                .find(|case| case.name == "unique-complete")
+                .expect("historical unique case")
+                .clone();
+            unique.bases[0].push(marker);
+            assert!(
+                compute(&unique).is_err(),
+                "invisible best-base marker passed: {marker:?}"
+            );
+
+            let mut multiple = cases
+                .iter()
+                .find(|case| case.name == "multi-virtual-a")
+                .expect("historical virtual case")
+                .clone();
+            multiple
+                .virtual_basis
+                .as_mut()
+                .expect("virtual basis")
+                .algorithm
+                .as_mut()
+                .expect("virtual algorithm")
+                .push(marker);
+            assert!(
+                compute(&multiple).is_err(),
+                "invisible virtual algorithm marker passed: {marker:?}"
+            );
+        }
+
+        // Reject spoofing without imposing ASCII-only identities.
+        let mut readable = cases
+            .iter()
+            .find(|case| case.name == "unique-complete")
+            .expect("historical unique case")
+            .clone();
+        readable.history_view = "café-λ".to_owned();
+        assert!(compute(&readable).is_ok());
     }
 
     #[test]
