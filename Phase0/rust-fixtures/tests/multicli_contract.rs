@@ -146,8 +146,7 @@ fn every_external_file_cli_rejects_a_mutated_historical_semantic_input() {
     for (family, binary, filename) in CLIS {
         let original =
             fs::read_to_string(historical_fixture(filename)).expect("read historical fixture");
-        let mut fixture: Value =
-            serde_json::from_str(&original).expect("parse historical fixture");
+        let mut fixture: Value = serde_json::from_str(&original).expect("parse historical fixture");
         match family {
             "containment" => fixture["decision_cases"][0]["authority_current"] = json!(false),
             "adaptive_stress" => fixture["cases"][0]["expected"] = json!("FORGED_SUCCESS"),
