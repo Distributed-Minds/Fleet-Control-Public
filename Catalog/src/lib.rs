@@ -160,6 +160,80 @@ fn is_relative_path(value: &str) -> bool {
         && !value.as_bytes().get(1).is_some_and(|b| *b == b':')
 }
 
+/// Conservative, offline admission for externally displayed links. This does
+/// not resolve DNS, follow redirects, authenticate a host or prove its rights.
+/// IP literals, ports, userinfo and non-ASCII DNS names are intentionally out
+/// of scope until their admission/normalization semantics are specified.
+fn is_public_https_url(url: &str) -> bool {
+    if !url.starts_with("https://")
+        || url.chars().any(|c| c.is_control() || c.is_whitespace() || c == '\\')
+    {
+        return false;
+    }
+
+    let rest = &url["https://".len()..];
+    let authority = rest.split(&['/', '?', '#'][..]).next().unwrap_or_default();
+    if authority.len() > 253
+        || authority.bytes().any(|c| matches!(c, b'@' | b':' | b'%'))
+    {
+        return false;
+    }
+    let labels: Vec<_> = authority.split('.').collect();
+    if labels.len() < 2
+        || labels.iter().any(|label| {
+            label.is_empty()
+                || label.len() > 63
+                || label.starts_with('-')
+                || label.ends_with('-')
+                || !label.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+        })
+    {
+        return false;
+    }
+    let tld = labels.last().copied().unwrap_or_default().to_ascii_lowercase();
+    if tld.len() < 2
+        || !tld.bytes().all(|b| b.is_ascii_alphabetic())
+        || matches!(
+            tld.as_str(),
+            "localhost"
+                | "local"
+                | "internal"
+                | "test"
+                | "invalid"
+                | "example"
+                | "onion"
+                | "lan"
+                | "home"
+                | "arpa"
+        )
+    {
+        return false;
+    }
+
+    let bytes = url.as_bytes();
+    let decode_hex = |b: u8| match b {
+        b'0'..=b'9' => Some(b - b'0'),
+        b'a'..=b'f' => Some(b - b'a' + 10),
+        b'A'..=b'F' => Some(b - b'A' + 10),
+        _ => None,
+    };
+    for (i, b) in bytes.iter().enumerate() {
+        if *b == b'%' {
+            let Some((hi, lo)) = bytes.get(i + 1).zip(bytes.get(i + 2)) else {
+                return false;
+            };
+            let (Some(hi), Some(lo)) = (decode_hex(*hi), decode_hex(*lo)) else {
+                return false;
+            };
+            let decoded = hi * 16 + lo;
+            if decoded < 0x20 || decoded == 0x7f || decoded == b'\\' {
+                return false;
+            }
+        }
+    }
+    true
+}
+
 /// Parse the closed object layout and reject a bounded set of dangerous
 /// cross-record claims. Success is NOT full JSON Schema or rights approval.
 pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
@@ -180,8 +254,34 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
         _ => {}
     }
 
+    for (field, url) in [
+        ("upstream.discovery_url", &record.upstream.discovery_url),
+        ("upstream.canonical_source_url", &record.upstream.canonical_source_url),
+        ("upstream.contribution_url", &record.upstream.contribution_url),
+        ("upstream.issue_url", &record.upstream.issue_url),
+    ] {
+        if !is_public_https_url(url) {
+            problems.push(format!("inadmissible external URL: {field}"));
+        }
+    }
+    for (index, url) in record.upstream.read_only_mirror_urls.iter().enumerate() {
+        if !is_public_https_url(url) {
+            problems.push(format!(
+                "inadmissible external URL: upstream.read_only_mirror_urls[{index}]"
+            ));
+        }
+    }
+    if let Some(url) = &record.play.upstream_download_url {
+        if !is_public_https_url(url) {
+            problems.push("inadmissible external URL: play.upstream_download_url".to_string());
+        }
+    }
+
     let mut evidence = HashMap::new();
     for item in &record.evidence {
+        if !is_public_https_url(&item.url) {
+            problems.push(format!("inadmissible external URL: evidence {}", item.evidence_id));
+        }
         if evidence.insert(item.evidence_id.as_str(), item).is_some() {
             problems.push(format!("duplicate evidence ID: {}", item.evidence_id));
         }
@@ -350,4 +450,53 @@ mod tests {
         });
         assert!(validate_manifest(&attack).is_err());
     }
+    fn assert_url_fixture(source: &str, expected_key: &str) {
+        let fixture: Value = serde_json::from_str(source).expect("valid fixture JSON");
+        for case in fixture["cases"].as_array().expect("cases array") {
+            let url = case["url"].as_str().expect("url string");
+            let expected = case[expected_key].as_bool().expect("expected boolean");
+            assert_eq!(
+                is_public_https_url(url),
+                expected,
+                "URL admission mismatch: {} ({url})",
+                case["id"].as_str().expect("case id")
+            );
+        }
+    }
+
+    #[test]
+    fn existing_url_admission_vectors_match_semantic_policy() {
+        assert_url_fixture(
+            include_str!("../fixtures/url-admission-v0.json"),
+            "expected_admitted",
+        );
+        assert_url_fixture(
+            include_str!("../fixtures/url-policy-semantic-v0.json"),
+            "expected_allowed",
+        );
+    }
+
+    #[test]
+    fn every_external_link_surface_is_checked() {
+        let upstream = changed(LUANTI, |v| {
+            v["upstream"]["contribution_url"] = json!("javascript:alert(1)");
+        });
+        assert!(validate_manifest(&upstream).is_err());
+
+        let download = changed(OPENRA, |v| {
+            v["play"]["upstream_download_url"] = json!("https://127.0.0.1/secret");
+        });
+        assert!(validate_manifest(&download).is_err());
+
+        let evidence = changed(VELOREN, |v| {
+            v["evidence"][0]["url"] = json!("https://user@example.org/");
+        });
+        assert!(validate_manifest(&evidence).is_err());
+
+        let mirror = changed(VELOREN, |v| {
+            v["upstream"]["read_only_mirror_urls"][0] = json!("http://github.com/veloren");
+        });
+        assert!(validate_manifest(&mirror).is_err());
+    }
+
 }
