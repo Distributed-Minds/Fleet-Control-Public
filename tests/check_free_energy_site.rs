@@ -171,6 +171,45 @@ fn disallowed_site_elements(elements: &[&str]) -> Vec<&'static str> {
         .collect()
 }
 
+/// Disallow markup that can fetch resources in addition to ordinary outbound
+/// hyperlinks. The one accepted local stylesheet is separately checked for
+/// exactly one instance. This is a fail-closed source guard, not an HTML parser
+/// or proof of browser/network isolation.
+fn has_unapproved_resource_markup(elements: &[&str]) -> bool {
+    elements.iter().any(|tag| {
+        let approved_css = is_open_element(tag, "link")
+            && attribute(tag, "rel")
+                .map(|rel| rel.eq_ignore_ascii_case("stylesheet"))
+                .unwrap_or(false)
+            && attribute(tag, "href") == Some("./styles.css");
+        (is_open_element(tag, "link") && !approved_css)
+            || [
+                "img", "picture", "source", "audio", "video", "track", "svg",
+                "style", "frame", "frameset",
+            ]
+            .iter()
+            .any(|name| is_open_element(tag, name))
+            || ["src", "srcset", "poster", "background", "style", "xlink:href"]
+                .iter()
+                .any(|name| attribute(tag, name).is_some())
+    })
+}
+
+/// Catch ordinary CSS network-resource syntax and reject CSS escapes rather
+/// than attempt to interpret escaped fetch-token names. Not a CSS engine:
+/// browser QA is still required before publication.
+fn has_css_resource_syntax(css: &str) -> bool {
+    let compact = css
+        .chars()
+        .filter(|c| !c.is_ascii_whitespace())
+        .collect::<String>()
+        .to_ascii_lowercase();
+    ["@import", "url(", "image-set(", "@font-face"]
+        .iter()
+        .any(|token| compact.contains(token))
+        || compact.contains('\\')
+}
+
 fn route_card_count(html: &str) -> usize {
     tags(html)
         .iter()
@@ -341,6 +380,16 @@ fn validate(root: &Path) -> Vec<String> {
     for forbidden in disallowed_site_elements(&elements) {
         errors.push(format!("Unexpected active, embedded, or inert element: {forbidden}"));
     }
+    expect(
+        &mut errors,
+        !has_unapproved_resource_markup(&elements),
+        "Unexpected browser resource-loading markup",
+    );
+    expect(
+        &mut errors,
+        !has_css_resource_syntax(css),
+        "Unexpected CSS resource import, image URL, or escape syntax",
+    );
     expect(
         &mut errors,
         primary_contact_link(html),
@@ -734,6 +783,45 @@ data="x"></OBject><EMBED/>"#;
 <meta data-http-equiv="refresh" content="0">"##,
         );
         assert!(!has_browser_navigation_override(&decoys));
+    }
+
+    #[test]
+    fn browser_resource_markup_is_rejected_but_normal_links_remain_usable() {
+        for bad in [
+            r#"<img src="https://example.invalid/tracker.png">"#,
+            r#"<LINK rel="preload" as="image" href="https://example.invalid/pixel">"#,
+            r#"<video poster="https://example.invalid/poster.png"></video>"#,
+            r#"<main style="background: url(https://example.invalid/bg.png)"></main>"#,
+            r#"<svg><image href="https://example.invalid/pixel"></image></svg>"#,
+            r#"<audio><source src="https://example.invalid/sound"></audio>"#,
+        ] {
+            assert!(
+                has_unapproved_resource_markup(&tags(bad)),
+                "Resource markup was not rejected: {bad}"
+            );
+        }
+        let allowed = r#"<link rel="stylesheet" href="./styles.css">
+<a href="https://github.com/Distributed-Minds/Fleet-Control-Public">Project</a>"#;
+        assert!(!has_unapproved_resource_markup(&tags(allowed)));
+        let quoted_and_commented = r#"<!-- <img src="https://example.invalid/"> -->
+<p title='<img src="https://example.invalid/">' >Ordinary text</p>"#;
+        assert!(!has_unapproved_resource_markup(&tags(quoted_and_commented)));
+    }
+
+    #[test]
+    fn css_resource_syntax_rejects_imports_urls_images_fonts_and_escapes() {
+        for bad in [
+            r#"@IMPORT url("https://example.invalid/ext.css");"#,
+            r#"background: URL (https://example.invalid/pixel.png);"#,
+            r#"background: image-set ("https://example.invalid/pixel.png" 1x);"#,
+            r#"@FONT-FACE {font-family: x; src: local(x);}"#,
+            r"@\69mport 'https://example.invalid/hidden.css';",
+        ] {
+            assert!(has_css_resource_syntax(bad), "Missed CSS resource syntax: {bad}");
+        }
+        assert!(!has_css_resource_syntax(
+            "body{font-family:system-ui,sans-serif;background:#0b1015}"
+        ));
     }
 
     #[test]
