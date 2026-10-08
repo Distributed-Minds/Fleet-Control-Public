@@ -9,8 +9,7 @@ use std::process::{Command, Output};
 const EXECUTABLE: &str = env!("CARGO_BIN_EXE_integration_candidate");
 
 fn fixture() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../fixtures/integration-candidate-v1.json")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../fixtures/integration-candidate-v1.json")
 }
 
 fn emit(case_name: &str) -> Output {
@@ -80,7 +79,11 @@ fn unsupported_or_unknown_cases_cannot_masquerade_as_successful_output() {
 #[test]
 fn malformed_or_inaccessible_input_fails_before_emitting_any_identity_bytes() {
     let missing = Command::new(EXECUTABLE)
-        .args(["--emit-canonical", "normal-two-parent", "/nonexistent/fixture.json"])
+        .args([
+            "--emit-canonical",
+            "normal-two-parent",
+            "/nonexistent/fixture.json",
+        ])
         .output()
         .unwrap();
     assert!(!missing.status.success());

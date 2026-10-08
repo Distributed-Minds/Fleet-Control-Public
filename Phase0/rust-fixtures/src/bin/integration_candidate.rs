@@ -253,9 +253,7 @@ fn validate(fixture: &Fixture) -> Result<usize, String> {
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
     let emit_canonical = args.first().is_some_and(|arg| arg == "--emit-canonical");
-    if (emit_canonical && !(2..=3).contains(&args.len()))
-        || (!emit_canonical && args.len() > 1)
-    {
+    if (emit_canonical && !(2..=3).contains(&args.len())) || (!emit_canonical && args.len() > 1) {
         eprintln!("usage: integration_candidate [fixture-path]");
         eprintln!("       integration_candidate --emit-canonical <case-name> [fixture-path]");
         process::exit(2);
