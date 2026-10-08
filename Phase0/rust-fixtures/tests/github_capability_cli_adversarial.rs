@@ -60,7 +60,10 @@ fn reject(value: &Value, diagnostic: &str) {
         "invalid fixture accepted: {}",
         String::from_utf8_lossy(&output.stdout)
     );
-    assert!(output.stdout.is_empty(), "failure must not emit a PASS line");
+    assert!(
+        output.stdout.is_empty(),
+        "failure must not emit a PASS line"
+    );
     assert!(
         String::from_utf8_lossy(&output.stderr).contains(diagnostic),
         "missing diagnostic {diagnostic:?}: {}",
@@ -85,7 +88,10 @@ fn compiled_cli_accepts_original_complete_fixture() {
 #[test]
 fn compiled_cli_rejects_forged_fencing_recovery_and_lineage() {
     reject(&mutate(16, "fenced", json!(false)), "ALLOW_FENCED");
-    reject(&mutate(24, "successor_evidence", json!(false)), "REUSE_LINEAGE");
+    reject(
+        &mutate(24, "successor_evidence", json!(false)),
+        "REUSE_LINEAGE",
+    );
     reject(&mutate(21, "recovery", json!(false)), "stale cleanup");
     reject(&mutate(14, "resource", json!("none")), "PASSED_CLEAN");
 }
@@ -93,7 +99,10 @@ fn compiled_cli_rejects_forged_fencing_recovery_and_lineage() {
 #[test]
 fn compiled_cli_rejects_invalid_shape_and_incomplete_inventory() {
     reject(&mutate(16, "fenced", json!("true")), "invalid fixture");
-    reject(&mutate(16, "unknown_privilege", json!(true)), "invalid fixture");
+    reject(
+        &mutate(16, "unknown_privilege", json!(true)),
+        "invalid fixture",
+    );
     let mut duplicate = fixture();
     duplicate["cases"][1]["id"] = json!(1);
     reject(&duplicate, "duplicate or invalid case id");
@@ -114,7 +123,10 @@ fn compiled_cli_rejects_missing_file_and_extra_arguments() {
         NEXT_FILE.fetch_add(1, Ordering::Relaxed)
     ));
     assert!(!absent.exists());
-    let output = Command::new(binary()).arg(&absent).output().expect("run CLI");
+    let output = Command::new(binary())
+        .arg(&absent)
+        .output()
+        .expect("run CLI");
     assert!(!output.status.success());
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("cannot read"));
