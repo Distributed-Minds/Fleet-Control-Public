@@ -44,9 +44,8 @@ fn leap_dates_fractional_seconds_and_explicit_offsets_are_admitted() {
         manifest["evidence"][0]["observed_at"] = json!(date);
         manifest["review"]["reviewed_at"] = json!(date);
         manifest["permission_decisions"][0]["decided_at"] = json!(date);
-        validate_manifest(&manifest.to_string()).unwrap_or_else(|errors| {
-            panic!("valid date {date} incorrectly rejected: {errors:?}")
-        });
+        validate_manifest(&manifest.to_string())
+            .unwrap_or_else(|errors| panic!("valid date {date} incorrectly rejected: {errors:?}"));
     }
 }
 
@@ -93,7 +92,9 @@ fn the_same_admission_guard_covers_all_review_and_decision_date_sinks() {
     decision["permission_decisions"][0]["decided_at"] = json!("yesterday");
     let errors = validate_manifest(&decision.to_string()).expect_err("invalid decision date");
     assert!(
-        errors.iter().any(|e| e.contains("permission_decisions[0].decided_at must be an RFC3339 timestamp")),
+        errors
+            .iter()
+            .any(|e| e.contains("permission_decisions[0].decided_at must be an RFC3339 timestamp")),
         "{errors:?}"
     );
     let mut history = baseline();
@@ -106,7 +107,9 @@ fn the_same_admission_guard_covers_all_review_and_decision_date_sinks() {
     }]);
     let errors = validate_manifest(&history.to_string()).expect_err("invalid claim history date");
     assert!(
-        errors.iter().any(|e| e.contains("review.claim_history[0].at must be an RFC3339 timestamp")),
+        errors
+            .iter()
+            .any(|e| e.contains("review.claim_history[0].at must be an RFC3339 timestamp")),
         "{errors:?}"
     );
 }

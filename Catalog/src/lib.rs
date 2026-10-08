@@ -516,7 +516,9 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
             }
         }
         if !is_rfc3339_timestamp(&item.observed_at) {
-            problems.push(format!("evidence[{index}].observed_at must be an RFC3339 timestamp"));
+            problems.push(format!(
+                "evidence[{index}].observed_at must be an RFC3339 timestamp"
+            ));
         }
     }
     for (field, value) in [
@@ -539,7 +541,9 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
             }
         }
         if !is_rfc3339_timestamp(&event.at) {
-            problems.push(format!("review.claim_history[{index}].at must be an RFC3339 timestamp"));
+            problems.push(format!(
+                "review.claim_history[{index}].at must be an RFC3339 timestamp"
+            ));
         }
     }
     for (index, permission) in record.permission_decisions.iter().enumerate() {
