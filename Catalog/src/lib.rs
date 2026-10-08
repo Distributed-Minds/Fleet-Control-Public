@@ -748,11 +748,13 @@ mod tests {
         // An external link can cross parse/redirect boundaries after decoding
         // even if its original HTTPS authority looks syntactically benign.
         for encoded in [
-            "%2f", "%2F", "%3f", "%3F", "%23", "%40", "%3a", "%3A",
-            "%5c", "%5C", "%25", "%252f",
+            "%2f", "%2F", "%3f", "%3F", "%23", "%40", "%3a", "%3A", "%5c", "%5C", "%25", "%252f",
         ] {
             let url = format!("https://example.org/a{encoded}b");
-            assert!(!is_public_https_url(&url), "accepted encoded delimiter: {url}");
+            assert!(
+                !is_public_https_url(&url),
+                "accepted encoded delimiter: {url}"
+            );
         }
 
         // Encoded ordinary text still works in existing public links.
