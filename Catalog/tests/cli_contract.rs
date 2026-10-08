@@ -169,7 +169,7 @@ fn accepted_control_character_filename_cannot_forge_another_success_record() {
         "embedded filename newline manufactured another success-looking line"
     );
     let line = stdout.lines().next().expect("one success record");
-    assert!(line.starts_with("TYPED-BOUNDARY-ONLY free-energy/luanti: "));
+    assert!(line.starts_with("TYPED-BOUNDARY-ONLY engine/luanti: "));
     let encoded = line.split_once(": ").expect("admitted path").1;
     let decoded: String = serde_json::from_str(encoded).expect("reversible JSON path");
     assert_eq!(decoded, file.to_str().expect("UTF-8 test filename"));
