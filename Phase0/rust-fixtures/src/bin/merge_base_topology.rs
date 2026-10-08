@@ -89,7 +89,11 @@ fn canonical_bases(values: &[String]) -> Result<Vec<String>, String> {
     Ok(seen.into_iter().map(str::to_owned).collect())
 }
 
-fn topology(history_view: &str, complete: bool, bases: &[String]) -> Result<TopologyIdentity, String> {
+fn topology(
+    history_view: &str,
+    complete: bool,
+    bases: &[String],
+) -> Result<TopologyIdentity, String> {
     nonblank(history_view, "history_view")?;
     Ok(TopologyIdentity {
         history_view: history_view.to_owned(),
@@ -130,13 +134,19 @@ fn compute(case: &Case) -> Result<Observed, String> {
         Some(v) => {
             let algorithm = v.algorithm.as_deref().ok_or("missing virtual algorithm")?;
             nonblank(algorithm, "virtual algorithm")?;
-            let version = v.version.filter(|version| *version > 0).ok_or("invalid virtual version")?;
+            let version = v
+                .version
+                .filter(|version| *version > 0)
+                .ok_or("invalid virtual version")?;
             let options = v.options.clone().ok_or("missing virtual options")?;
             for (key, value) in &options {
                 nonblank(key, "virtual option key")?;
                 nonblank(value, "virtual option value")?;
             }
-            let intermediates = v.intermediates.as_ref().ok_or("missing virtual intermediates")?;
+            let intermediates = v
+                .intermediates
+                .as_ref()
+                .ok_or("missing virtual intermediates")?;
             if intermediates.is_empty() {
                 return Err("empty virtual intermediate list".into());
             }
@@ -205,7 +215,10 @@ fn check(cases: &[Case]) -> Result<usize, Vec<String>> {
                     }
                 }
                 if actual.mutation_authority {
-                    errors.push(format!("{}: topology granted mutation authority", case.name));
+                    errors.push(format!(
+                        "{}: topology granted mutation authority",
+                        case.name
+                    ));
                 }
                 observed.insert(case.name.clone(), actual);
             }
@@ -219,7 +232,10 @@ fn check(cases: &[Case]) -> Result<usize, Vec<String>> {
         if let Some(other) = case.same_set_as.as_deref() {
             match observed.get(other) {
                 Some(basis) if actual.topology == basis.topology => {}
-                _ => errors.push(format!("{}: same_set_as {other} identity mismatch", case.name)),
+                _ => errors.push(format!(
+                    "{}: same_set_as {other} identity mismatch",
+                    case.name
+                )),
             }
         }
         if let Some(other) = case.same_computation_as.as_deref() {
@@ -288,7 +304,10 @@ mod tests {
     }
 
     fn case_mut<'a>(cases: &'a mut [Case], name: &str) -> &'a mut Case {
-        cases.iter_mut().find(|c| c.name == name).expect("fixture present")
+        cases
+            .iter_mut()
+            .find(|c| c.name == name)
+            .expect("fixture present")
     }
 
     #[test]
@@ -372,7 +391,14 @@ mod tests {
     fn reversing_equivalent_intermediates_preserves_identity() {
         let cases = baseline();
         let mut reordered = cases[6].clone();
-        reordered.virtual_basis.as_mut().unwrap().intermediates.as_mut().unwrap().reverse();
+        reordered
+            .virtual_basis
+            .as_mut()
+            .unwrap()
+            .intermediates
+            .as_mut()
+            .unwrap()
+            .reverse();
         assert_eq!(
             compute(&cases[6]).unwrap().virtual_identity,
             compute(&reordered).unwrap().virtual_identity
