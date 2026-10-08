@@ -104,7 +104,10 @@ fn process_rejects_identity_collisions_and_invalid_schema_or_capacity() {
 
     let mut wrong_spec = baseline();
     wrong_spec["spec_version"] = json!(3);
-    rejected(run_mutated(&wrong_spec), "unsupported containment-capacity schema/spec");
+    rejected(
+        run_mutated(&wrong_spec),
+        "unsupported containment-capacity schema/spec",
+    );
 
     let mut negative_capacity = baseline();
     negative_capacity["workload_cases"][0]["service_capacity"][0] = json!(-1);
