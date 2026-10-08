@@ -684,3 +684,5 @@ mod tests {
         );
     }
 }
+
+pub mod compaction;
