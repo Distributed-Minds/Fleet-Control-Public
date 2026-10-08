@@ -13,8 +13,7 @@ use std::fs;
 use std::process;
 
 #[cfg(test)]
-const HISTORICAL_FIXTURE: &str =
-    include_str!("../../../fixtures/integration-candidate-v1.json");
+const HISTORICAL_FIXTURE: &str = include_str!("../../../fixtures/integration-candidate-v1.json");
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -74,7 +73,9 @@ struct Fixture {
 
 fn git_id(value: &str) -> bool {
     value.len() == 40
-        && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
 fn validate_candidate(candidate: &Candidate, supported: &[usize]) -> Result<(), String> {
@@ -175,15 +176,19 @@ fn validate(fixture: &Fixture) -> Result<usize, String> {
     let mut seen = HashSet::new();
     for case in &fixture.cases {
         if !required.contains(&case.name.as_str()) || !seen.insert(case.name.as_str()) {
-            return Err(format!("unknown or duplicate candidate case: {}", case.name));
+            return Err(format!(
+                "unknown or duplicate candidate case: {}",
+                case.name
+            ));
         }
     }
     let mut stale_seen = HashSet::new();
     for case in &fixture.stale_head_cases {
-        if !required_stale.contains(&case.name.as_str())
-            || !stale_seen.insert(case.name.as_str())
-        {
-            return Err(format!("unknown or duplicate stale-head case: {}", case.name));
+        if !required_stale.contains(&case.name.as_str()) || !stale_seen.insert(case.name.as_str()) {
+            return Err(format!(
+                "unknown or duplicate stale-head case: {}",
+                case.name
+            ));
         }
     }
 
