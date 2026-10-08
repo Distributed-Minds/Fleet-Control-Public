@@ -54,8 +54,14 @@ fn evidence_identity_is_checked_even_when_all_references_are_repaired() {
                 .expect("original evidence id")
                 .to_owned();
             project["evidence"][0]["evidence_id"] = json!(invalid);
-            for claim in project["rights_claims"].as_array_mut().expect("rights claims") {
-                for id in claim["evidence_ids"].as_array_mut().expect("claim evidence refs") {
+            for claim in project["rights_claims"]
+                .as_array_mut()
+                .expect("rights claims")
+            {
+                for id in claim["evidence_ids"]
+                    .as_array_mut()
+                    .expect("claim evidence refs")
+                {
                     if id.as_str() == Some(old.as_str()) {
                         *id = json!(invalid);
                     }
