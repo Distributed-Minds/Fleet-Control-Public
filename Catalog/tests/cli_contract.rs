@@ -160,7 +160,10 @@ fn accepted_control_character_filename_cannot_forge_another_success_record() {
     let output = invoke(&["validate", file.to_str().expect("UTF-8 test filename")]);
     std::fs::remove_file(&file).expect("remove temporary test manifest");
 
-    assert!(output.status.success(), "admitted record failed: {output:?}");
+    assert!(
+        output.status.success(),
+        "admitted record failed: {output:?}"
+    );
     assert!(output.stderr.is_empty(), "unexpected failure: {output:?}");
     let stdout = String::from_utf8(output.stdout).expect("UTF-8 success record");
     assert_eq!(
