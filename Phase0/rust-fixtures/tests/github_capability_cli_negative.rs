@@ -5,7 +5,6 @@
 use serde_json::{json, Value};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::path::PathBuf;
 use std::process::{self, Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -17,7 +16,7 @@ fn baseline() -> Value {
 }
 
 fn run_bytes(bytes: &[u8]) -> Output {
-    let path = PathBuf::from(std::env::temp_dir()).join(format!(
+    let path = std::env::temp_dir().join(format(
         "free-energy-ghcap-negative-{}-{}.json",
         process::id(),
         NEXT_FILE.fetch_add(1, Ordering::Relaxed)
