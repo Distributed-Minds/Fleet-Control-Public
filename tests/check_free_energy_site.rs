@@ -215,6 +215,40 @@ fn without_html_comments(html: &str) -> String {
     }
 }
 
+/// Extract text-node source content, excluding tags, quoted attributes,
+/// and HTML comments. This does not prove browser visibility or accessibility:
+/// CSS-hidden text and inert template content need browser-level checks.
+fn source_text_outside_markup(html: &str) -> String {
+    let clean = without_html_comments(html);
+    let bytes = clean.as_bytes();
+    let mut text = String::with_capacity(clean.len());
+    let mut pos = 0;
+
+    while let Some(offset) = clean[pos..].find('<') {
+        let start = pos + offset;
+        text.push_str(&clean[pos..start]);
+        let mut cursor = start + 1;
+        let mut quote: Option<u8> = None;
+        while cursor < bytes.len() {
+            let current = bytes[cursor];
+            match quote {
+                Some(delimiter) if current == delimiter => quote = None,
+                None if current == b'"' || current == b'\\'' => quote = Some(current),
+                None if current == b'>' => break,
+                _ => {}
+            }
+            cursor += 1;
+        }
+        if cursor == bytes.len() {
+            return text; // Unterminated markup cannot supply user-facing copy.
+        }
+        text.push(' '); // Prevent words on different sides of a tag from joining.
+        pos = cursor + 1;
+    }
+    text.push_str(&clean[pos..]);
+    text
+}
+
 fn expect(errors: &mut Vec<String>, condition: bool, message: impl Into<String>) {
     if !condition {
         errors.push(message.into());
@@ -236,6 +270,7 @@ fn validate(root: &Path) -> Vec<String> {
     }
     let html = &content[0];
     let uncommented_html = without_html_comments(html);
+    let source_copy = source_text_outside_markup(html);
     let css = &content[1];
     let readme = &content[2];
     let elements = tags(html);
@@ -350,7 +385,7 @@ fn validate(root: &Path) -> Vec<String> {
         ("Not yet available", "Missing future-feature disclaimer"),
         ("Fleet-Control Phase0", "Current orchestration preview not identified"),
     ] {
-        expect(&mut errors, uncommented_html.contains(required), explanation);
+        expect(&mut errors, source_copy.contains(required), explanation);
     }
     expect(
         &mut errors,
@@ -408,6 +443,43 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn required_copy_in_attributes_is_not_treated_as_page_copy() {
+        let spoof = r#"<main>
+<meta content="Do not post secrets">
+<section title='Posting does not enroll a contributor' aria-label="A verified playable catalog is still planned">No disclosure here</section>
+</main>"#;
+        let source = source_text_outside_markup(spoof);
+        for required in [
+            "Do not post secrets",
+            "Posting does not enroll a contributor",
+            "A verified playable catalog is still planned",
+        ] {
+            assert!(!source.contains(required), "Attribute spoof passed: {required}");
+        }
+    }
+
+    #[test]
+    fn required_copy_in_real_text_nodes_is_found() {
+        let live = r#"<main><p>Do not post secrets</p>
+<p>Posting does not enroll a contributor</p>
+<p>A verified playable catalog is still planned</p></main>"#;
+        let source = source_text_outside_markup(live);
+        assert!(source.contains("Do not post secrets"));
+        assert!(source.contains("Posting does not enroll a contributor"));
+        assert!(source.contains("A verified playable catalog is still planned"));
+    }
+
+    #[test]
+    fn comments_and_quoted_angle_brackets_cannot_supply_page_copy() {
+        let spoof = r#"<!-- Do not post secrets -->
+<aside title='<p>Posting does not enroll a contributor</p>'>Ordinary text</aside>"#;
+        let source = source_text_outside_markup(spoof);
+        assert!(!source.contains("Do not post secrets"));
+        assert!(!source.contains("Posting does not enroll a contributor"));
+        assert!(source.contains("Ordinary text"));
+    }
 
     #[test]
     fn comments_cannot_forge_required_public_safety_copy() {
