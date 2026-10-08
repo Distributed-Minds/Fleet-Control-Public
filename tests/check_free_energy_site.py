@@ -87,6 +87,20 @@ def validate(root):
     require(GUIDE in page.links, "Corrected online beginner guide not linked")
     require("older setup guide" in html and "before installing or forking" in html,
             "Archive's outdated setup instructions must be disclosed")
+    require(f"{REPO}/blob/phase0/public-v0/HELP-A-PROJECT.md" in page.links,
+            "Existing-project contributor route must link to published preview guide")
+    require(f"{REPO}/blob/phase0/public-v0/WORKFLOW-GUIDES.md" in page.links,
+            "PLAY / MAKE routes must link to published workflow map")
+    require(all(tag in html for tag in ("PLAY / DISCOVER", "HELP AN EXISTING PROJECT", "MAKE / REMIX")),
+            "Distinct PLAY, HELP and MAKE journeys missing")
+    require(html.count('class="route-card"') == 3, "Expected exactly three participation routes")
+    require("A verified playable catalog is still planned" in html,
+            "PLAY route must not imply the catalog ships today")
+    require("Want to run your own agent fleet?" in html and "You do not need it to help" in html,
+            "Installing personal Phase0 must stay separate from helping a project")
+    require(".route-grid{" in css and ".route-card{" in css and
+            "@media(max-width:980px){.route-grid{grid-template-columns:1fr}}" in css,
+            "Route layout must have a responsive single-column fallback")
     require(f"{REPO}/discussions" in page.links, "Public Discussions contact link missing")
     require("Posting does not enroll a contributor" in html and "Do not post secrets" in html,
             "Contact must clarify enrollment and confidential-data boundaries")
