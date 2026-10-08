@@ -4,7 +4,7 @@ This guide assumes you are starting from zero. You do **not** need to understand
 
 **FREE ENERGY** is the public project. **Fleet-Control Phase0** is the current repository-local orchestration layer you are installing.
 
-> **Important while FREE ENERGY is a preview (8 October 2026):** The upstream repository's default `main` branch currently has only a `HelloWorld` placeholder. The installable Phase0 files are on [`phase0/public-v0`](https://github.com/Distributed-Minds/Fleet-Control-Public/tree/phase0/public-v0). **A fork that copies only the default branch does not install FREE ENERGY.** Follow step 2 below before creating tasks. This warning can be removed when the upstream default branch actually contains the starter.
+> **Important while FREE ENERGY is a preview (8 October 2026):** The upstream repository's default `main` branch currently has a FREE ENERGY landing README but does not contain the installable Phase0 files. The installable Phase0 files are on [`phase0/public-v0`](https://github.com/Distributed-Minds/Fleet-Control-Public/tree/phase0/public-v0). **A fork that copies only the default branch does not install FREE ENERGY.** Follow step 2 below before creating tasks. This warning can be removed when the upstream default branch actually contains the starter.
 
 ## What you are setting up
 
@@ -32,7 +32,7 @@ Create an account at https://github.com/ and sign in.
 
 ### 2. Install the actual Phase0 preview in a repository you control
 
-The upstream repository is still named `Distributed-Minds/Fleet-Control-Public` during the **FREE ENERGY** migration. Its default `main` branch is a placeholder; use one of these two paths.
+The upstream repository is still named `Distributed-Minds/Fleet-Control-Public` during the **FREE ENERGY** migration. Its default `main` branch currently contains a landing README but not the Phase0 distribution; use one of these two paths.
 
 **Option A — GitHub website: fork all branches, then select the preview as your fork's default**
 
@@ -41,7 +41,7 @@ The upstream repository is still named `Distributed-Minds/Fleet-Control-Public` 
 3. **Leave `Copy the DEFAULT branch only` unchecked.** GitHub otherwise copies `main`, which does not contain Phase0. [GitHub's fork instructions](https://docs.github.com/en/pull-requests/how-tos/work-with-forks/fork-a-repo?tool=webui) confirm that leaving it unchecked copies all branches.
 4. Create the fork in your own account or organization.
 5. **In your fork**, open **Settings → Default branch**; change it to `phase0/public-v0` and confirm. [GitHub's default-branch instructions](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-branches-in-your-repository/changing-the-default-branch) require repository admin access.
-6. Return to your fork's home page. Confirm the default view shows the **FREE ENERGY** README and `Phase0/05-FLEET-CONFIG.md`. **Stop** if either is missing; otherwise your scheduled agents may read the empty placeholder branch.
+6. Return to your fork's home page. Confirm the default view shows the **FREE ENERGY** README and `Phase0/05-FLEET-CONFIG.md`. **Stop** if either is missing; otherwise your scheduled agents may read a landing-only branch without Phase0.
 
 This fork method copies **all** upstream branches, including historical/research branches. Those extra branches are not an indication that their contents are active or part of the starter; only your selected default branch is the installation baseline. Do **not** change the upstream repository's default branch.
 
