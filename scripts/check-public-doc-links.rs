@@ -478,7 +478,9 @@ mod tests {
     fn unclosed_angle_destination_still_fails_without_hiding_next_line() {
         let mut report = Report::default();
         let paths = collect_links(
-            "[bad](<unclosed)\\n[real](present.md)\\n",
+            r#"[bad](<unclosed)
+[real](present.md)
+"#,
             "README.md",
             &mut report,
         );
