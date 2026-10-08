@@ -135,3 +135,18 @@ Hand off to:
 ## Success condition
 
 L1 is useful when two teams can read its candidate contract and independently implement adapters without needing private verbal clarification about what the shared state means.
+---
+
+## Corrected source preservation — 2026-10-08 research checkpoint
+
+This shared L1 charter predates the later continuation passes. The corrected L1 source and regression vectors have been **preserved as historical research artifacts** on this non-default Signet research integration branch through [PR #77](https://github.com/Distributed-Minds/Fleet-Control-Public/pull/77). They must not be mistaken for a published Signet standard, a FREE ENERGY runtime adapter, or the installed Fleet-Control Phase0 toolchain. The original continuation narrative on `correction/l1-cross-language-determinism` was not blindly copied over the shared charter.
+
+Current in-tree entry points for inspecting the corrected evidence:
+
+- [Machine-readable semantic-core candidate](L1/06-Machine-Readable-Core-Candidate.md) and its [Draft 2020-12 schema](L1/schema/signet-semantic-core-0.schema.json): structural acceptance is **not** semantic conformance.
+- [Canonical hashing/composition research](L1/07-Canonical-Hashing-and-Profile-Composition.md) and [cross-language reference evidence](L1/08-Cross-Language-Reference-Evidence.md): normative set-array canonicalization is separate from RFC 8785 JSON canonicalization, which does not reorder arrays.
+- [Unicode ordering correction vectors](L1/schema/test-vectors/composition-unicode-vectors.json): compare semantic identifiers by UTF-16 code units where the candidate contract requires it, rather than assuming Unicode code-point ordering agrees across implementations.
+- [Set-array hashing vectors](L1/schema/test-vectors/hash-set-array-vectors.json) and [selection-order/rejection vectors](L1/schema/test-vectors/composition-set-order-vectors.json): preserve positive and negative fixtures, including ordering-independent failure precedence.
+- [Historical reference inventory](L1/reference/README.md) and [JavaScript reference](L1/reference/javascript/reference.mjs): these and the historical Python/shell counterparts are **archival evidence**, not supported maintained FREE ENERGY executable dependencies.
+
+The original historical execution claims in the correction branch have **not** been rerun or promoted into current CI evidence by the archival merge. Maintained tooling and any future conformance runner remain subject to [the Rust-only/no-npm policy in issue #70](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/70), fresh executable tests, independent rights/provenance review, and actual integration authority. See [issue #73](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/73) for still-open shared-ledger, publication-conflict, and verification obligations; preserving bytes or restoring navigation does not close them.
