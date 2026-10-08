@@ -576,6 +576,15 @@ mod tests {
     }
 
     #[test]
+    fn code_formatted_link_label_still_checks_local_target() {
+        let sandbox = Sandbox::new();
+        sandbox.write("LICENSE", "MIT license fixture");
+        sandbox.write("README.md", "See [`LICENSE`](LICENSE) and `[hidden](missing.md)` inside code.\n");
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 1);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+    #[test]
     fn escaped_backticks_leave_real_links_visible() {
         let mut report = Report::default();
         let paths = collect_links(
