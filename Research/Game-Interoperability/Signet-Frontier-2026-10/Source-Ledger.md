@@ -4,6 +4,20 @@
 
 This ledger separates project self-description from independent standards/research.
 
+
+## Corrected L1/L2 archival-source import record — 2026-10-08
+
+The links below remain the **2026-10-05 historical research snapshot**. The original `kian-cx/signetprotocol` URL records the repository locator used then; it is not proof of the current upstream default branch. The later corrected L2 source audit pins [`signetprotocol/signet@2ddb136` and its Apache-2.0/NOTICE evidence](experiments/L2-THIRD-PARTY-PROVENANCE.md). Preserve both source contexts rather than silently rewriting historical observations.
+
+| Corrected archival input | Evidence at this **non-default** research integration ref | Qualification |
+| --- | --- | --- |
+| [L1 corrections `f109e15`](https://github.com/Distributed-Minds/Fleet-Control-Public/commit/f109e15ed1c73b0c76876524ec3c126e34bd63ae) | [PR #77](https://github.com/Distributed-Minds/Fleet-Control-Public/pull/77) merged as [`9a1af620`](https://github.com/Distributed-Minds/Fleet-Control-Public/commit/9a1af620210338c2ae91ee07fef92b2f86ba4de7); **29/29 original corrected L1 file blobs preserved**. [Semantic-core schema](lanes/L1/schema/signet-semantic-core-0.schema.json) Git blob `b1fa9832219aeb043c6cbdacccff6b313e29a454`; [historical cross-language reference](lanes/L1/reference/javascript/reference.mjs) and vectors under `lanes/L1/`. | Archival bytes, **not** a new cross-language/Rust conformance run or installed product. |
+| [L2 corrections `ba65b13`](https://github.com/Distributed-Minds/Fleet-Control-Public/commit/ba65b131559a28cf0cb7d3416d492dbd1d91b316) | [PR #78](https://github.com/Distributed-Minds/Fleet-Control-Public/pull/78) merged as [`480fdf31`](https://github.com/Distributed-Minds/Fleet-Control-Public/commit/480fdf31cd44e7211c880c6b829a5fdc22df339c); **55/55 corrected L2 file blobs preserved**, plus [separate rights/source provenance](experiments/L2-THIRD-PARTY-PROVENANCE.md). [Role-contract correction notes](experiments/L2-Verifiable-Translation-Prototype/adapter-role-contract-v1/CORRECTION-NOTES.md) Git blob `45a02e45923976e5189f9b7d61c6ac76f07449a5`. | `RIGHTS_PENDING`; no independently cleared redistribution, maintained Rust adapter, or real Godot/game interoperability. |
+
+**Shared-file disposition:** Both PRs preserve corrected sources *without overwriting* existing shared lane narratives, this root ledger, or public response papers. Any semantic disagreements still require explicit review; exact byte preservation does not prove conformance. Retained Python/JavaScript/TypeScript/C scripts are inert **historical research evidence**, not supported FREE ENERGY executables. Maintained validation must satisfy [#70's Rust/no-npm policy](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/70) and fresh test/rights gates. [#73](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/73) remains open for those decisions. This does not install Phase0 on public `main`, ship a playable catalog, or authorize publication.
+
+---
+
 ## Primary project sources
 
 ### Signet Protocol
