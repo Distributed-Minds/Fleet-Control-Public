@@ -173,6 +173,16 @@ fn route_card_count(html: &str) -> usize {
         .count()
 }
 
+/// The skip target must belong to the single real main landmark. A global
+/// id=\"main\" on an unrelated element must not satisfy this check.
+fn has_unique_main_landmark(elements: &[&str]) -> bool {
+    let mut mains = elements.iter().filter(|tag| is_open_element(tag, "main"));
+    match (mains.next(), mains.next()) {
+        (Some(main), None) => attribute(main, "id") == Some("main"),
+        _ => false,
+    }
+}
+
 fn expect(errors: &mut Vec<String>, condition: bool, message: impl Into<String>) {
     if !condition {
         errors.push(message.into());
@@ -221,8 +231,7 @@ fn validate(root: &Path) -> Vec<String> {
     );
     expect(
         &mut errors,
-        elements.iter().filter(|tag| is_open_element(tag, "main")).count() == 1
-            && ids.contains(&"main"),
+        has_unique_main_landmark(&elements),
         "Expected one main landmark with id=main",
     );
     expect(
@@ -460,6 +469,31 @@ mod tests {
             r#"<nav aria-label="Main navigation">{link}</nav>"#
         );
         assert!(primary_contact_link(&real_link));
+    }
+
+    #[test]
+    fn main_landmark_must_own_skip_target_id() {
+        let valid = tags(r##"<a href="#main">Skip</a><main id="main">Content</main>"##);
+        assert!(has_unique_main_landmark(&valid));
+
+        // Previously this passed: the ID existed, but only on another element.
+        let unrelated = tags(r##"<main>Content</main><div id="main"></div>"##);
+        assert!(!has_unique_main_landmark(&unrelated));
+
+        let spoofed = tags(r##"<main data-id="main"></main><section id="main"></section>"##);
+        assert!(!has_unique_main_landmark(&spoofed));
+    }
+
+    #[test]
+    fn main_landmark_rejects_missing_or_duplicate_main_elements() {
+        assert!(!has_unique_main_landmark(&tags(r##"<div id="main"></div>"##)));
+        assert!(!has_unique_main_landmark(&tags(r##"<main id="main"></main><main></main>"##)));
+    }
+
+    #[test]
+    fn main_landmark_accepts_html_case_and_attribute_spacing() {
+        let elements = tags("<MAIN\nID = 'main'></MAIN>");
+        assert!(has_unique_main_landmark(&elements));
     }
 
     #[test]
