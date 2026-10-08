@@ -113,6 +113,27 @@ struct Computed<'a> {
 // Distinct scenario fields select a semantic rule. The asserted expected
 // fields and the case name NEVER select the computed outcome.
 fn compute(c: &Case) -> Result<Computed<'_>, &'static str> {
+    // Every historical case represents exactly one semantic operation. Without
+    // this admission guard, a case can append a second, contradictory operation
+    // and obtain PASS because the first matching else-if branch ignores it.
+    // Group paired alternative fields together (budget, independence, scoring).
+    let selector_groups = [
+        c.fixture.is_some(),
+        c.same_semantics.is_some() || c.retry.is_some(),
+        c.ack_lost.is_some() || c.durable_result_exists.is_some(),
+        c.claim_delta.is_some(),
+        c.equivalence.is_some(),
+        c.telemetry_present.is_some(),
+        c.evaluation_budget_remaining.is_some() || c.family_budget_remaining.is_some(),
+        c.duplicate_evidence.is_some() || c.shared_lineage.is_some(),
+        c.disposition.is_some(),
+        c.original_case_passes.is_some() || c.score_improved.is_some(),
+        c.post_promotion_recurrence.is_some(),
+    ];
+    if selector_groups.into_iter().filter(|selected| *selected).count() != 1 {
+        return Err("scenario must select exactly one semantic operation");
+    }
+
     let mut result = Computed::default();
     if c.fixture.is_some() {
         result.disposition = Some(if c.authority_change == Some(false) {
@@ -431,6 +452,74 @@ mod tests {
                 .iter()
                 .any(|error| error.contains("missing telemetry cannot acquire a numeric default")),
             "{errors:?}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod selector_exclusivity_regressions {
+    use super::*;
+    use serde_json::{json, Value};
+
+    const ORIGINAL: &str = include_str!("../../../fixtures/adaptive-stress-spec2.json");
+
+    fn checked_mutation(name: &str, extra_field: &str, additional_input: Value) {
+        let mut document: Value = serde_json::from_str(ORIGINAL).expect("original fixture");
+        let original = document["cases"]
+            .as_array_mut()
+            .expect("historical cases")
+            .iter_mut()
+            .find(|case| case["name"] == name)
+            .expect("historical case identity");
+        // Preserve all expected verdicts; only add a meaning-bearing input
+        // that would otherwise be ignored by compute's first matching branch.
+        original[extra_field] = additional_input;
+        let typed: Fixture = serde_json::from_value(document).expect("well-typed adversarial case");
+        let failures = validate(&typed).expect_err("ambiguous operation must fail closed");
+        assert!(
+            failures
+                .iter()
+                .any(|message| message.contains("exactly one semantic operation")),
+            "missing selector diagnosis for {name}: {failures:?}"
+        );
+    }
+
+    #[test]
+    fn original_complete_case_inventory_remains_valid() {
+        let original: Fixture = serde_json::from_str(ORIGINAL).expect("historical fixture");
+        assert_eq!(validate(&original), Ok(23));
+    }
+
+    #[test]
+    fn fixture_authority_cannot_smuggle_telemetry_admission() {
+        checked_mutation("fixture-authority-is-inert", "telemetry_present", json!(false));
+    }
+
+    #[test]
+    fn retry_evidence_cannot_smuggle_remediation_closure() {
+        checked_mutation("ack-loss-reconciles-first", "disposition", json!("PATCH-ACCEPTED"));
+    }
+
+    #[test]
+    fn telemetry_unknown_cannot_smuggle_positive_budget() {
+        checked_mutation(
+            "missing-telemetry-is-unknown",
+            "evaluation_budget_remaining",
+            json!(100),
+        );
+    }
+
+    #[test]
+    fn budget_exhaustion_cannot_smuggle_independence_evidence() {
+        checked_mutation("evaluation-budget-exhaustion", "shared_lineage", json!(false));
+    }
+
+    #[test]
+    fn recurrence_evaluation_cannot_smuggle_independent_scoring() {
+        checked_mutation(
+            "recurrence-links-remediation-lineage",
+            "score_improved",
+            json!(true),
         );
     }
 }
