@@ -132,7 +132,9 @@ fn decide(c: &DecisionCase) -> Result<DecisionOutcome, String> {
         // by declaring zero or one lineage sufficient for high-impact action.
         let required = c.required_independent_lineages.unwrap_or(2);
         if required < 2 {
-            return Err("high-impact restriction requires at least two independent lineages".to_owned());
+            return Err(
+                "high-impact restriction requires at least two independent lineages".to_owned(),
+            );
         }
         if c.independent_lineages < required {
             return Ok(outcome("INDEPENDENCE_INSUFFICIENT", None));
@@ -142,7 +144,9 @@ fn decide(c: &DecisionCase) -> Result<DecisionOutcome, String> {
         let maximum = c.max_level_with_contradiction.unwrap_or(Level::BlockAction);
         // Exculpatory evidence may narrow a restriction, never escalate it.
         if maximum >= requested {
-            return Err("contradictory evidence cannot raise or preserve high-impact severity".to_owned());
+            return Err(
+                "contradictory evidence cannot raise or preserve high-impact severity".to_owned(),
+            );
         }
         requested = maximum;
     }
@@ -662,7 +666,10 @@ mod tests {
             let typed = fixture(changed);
             let decision = &typed.decision_cases[15];
             assert!(decide(decision).is_err(), "threshold {threshold} admitted");
-            assert!(validate(&typed).is_err(), "threshold {threshold} passed fixtures");
+            assert!(
+                validate(&typed).is_err(),
+                "threshold {threshold} passed fixtures"
+            );
         }
 
         let mut changed = original();
@@ -680,17 +687,20 @@ mod tests {
             let mut changed = original();
             changed["decision_cases"][12]["max_level_with_contradiction"] = json!(maximum);
             let typed = fixture(changed);
-            assert!(decide(&typed.decision_cases[12]).is_err(), "cap {maximum} admitted");
+            assert!(
+                decide(&typed.decision_cases[12]).is_err(),
+                "cap {maximum} admitted"
+            );
             assert!(validate(&typed).is_err(), "cap {maximum} passed fixtures");
         }
 
         let mut changed = original();
-        changed["decision_cases"][12]["max_level_with_contradiction"] = json!("FREEZE_NEW_AUTHORITY");
+        changed["decision_cases"][12]["max_level_with_contradiction"] =
+            json!("FREEZE_NEW_AUTHORITY");
         let typed = fixture(changed);
         assert_eq!(
             decide(&typed.decision_cases[12]),
             Ok(outcome("AUTHORIZED", Some(Level::FreezeNewAuthority)))
         );
     }
-
 }
