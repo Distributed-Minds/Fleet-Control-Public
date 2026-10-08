@@ -600,13 +600,16 @@ mod cli_semantic_tests {
         for (family, _) in GROUPS {
             let mut changed = baseline.clone();
             let cases = changed[family].as_array_mut().expect("historical family");
-            let replaced = cases[0]["id"].as_str().expect("historical case id").to_owned();
+            let replaced = cases[0]["id"]
+                .as_str()
+                .expect("historical case id")
+                .to_owned();
             cases[0]["id"] = json!(format!("invented-positive-{family}"));
             let errors = validate(&changed).expect_err("same count must not hide dropped case");
             assert!(
-                errors
-                    .iter()
-                    .any(|error| error == &format!("{family}: missing original scenario {replaced}")),
+                errors.iter().any(
+                    |error| error == &format!("{family}: missing original scenario {replaced}")
+                ),
                 "{family}: {errors:?}"
             );
         }
