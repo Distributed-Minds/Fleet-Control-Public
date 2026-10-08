@@ -182,9 +182,7 @@ impl<'de> Deserialize<'de> for StrictJson {
                 A: MapAccess<'de>,
             {
                 let mut values = serde_json::Map::new();
-                while let Some((key, StrictJson(value))) =
-                    map.next_entry::<String, StrictJson>()?
-                {
+                while let Some((key, StrictJson(value))) = map.next_entry::<String, StrictJson>()? {
                     if values.contains_key(&key) {
                         return Err(de::Error::custom(format!(
                             "duplicate JSON object key: {key}"
@@ -367,26 +365,14 @@ mod tests {
         // serde_json::Value by itself accepts these and silently overwrites
         // earlier values. In an identity envelope that is not safe.
         let cases = [
-            HISTORICAL.replacen(
-                "\"digest\":",
-                "\"digest\": \"sha1\", \"digest\":",
-                1,
-            ),
-            HISTORICAL.replacen(
-                "\"name\":",
-                "\"name\": \"forged\", \"name\":",
-                1,
-            ),
+            HISTORICAL.replacen("\"digest\":", "\"digest\": \"sha1\", \"digest\":", 1),
+            HISTORICAL.replacen("\"name\":", "\"name\": \"forged\", \"name\":", 1),
             HISTORICAL.replacen(
                 "\"operation_kind\":",
                 "\"operation_kind\": \"fast-forward\", \"operation_kind\":",
                 1,
             ),
-            HISTORICAL.replacen(
-                "\"author\":",
-                "\"author\": \"forged\", \"author\":",
-                1,
-            ),
+            HISTORICAL.replacen("\"author\":", "\"author\": \"forged\", \"author\":", 1),
         ];
         for input in cases {
             assert_ne!(input, HISTORICAL, "test must inject a duplicate key");
@@ -404,11 +390,7 @@ mod tests {
 
     #[test]
     fn escaped_key_aliases_are_rejected_after_json_unescaping() {
-        let input = HISTORICAL.replacen(
-            "\"digest\":",
-            r#""di\u0067est": "sha1", "digest":"#,
-            1,
-        );
+        let input = HISTORICAL.replacen("\"digest\":", r#""di\u0067est": "sha1", "digest":"#, 1);
         assert_ne!(input, HISTORICAL);
         assert!(serde_json::from_str::<Value>(&input).is_ok());
         assert!(candidate_ids(&input).is_err());
