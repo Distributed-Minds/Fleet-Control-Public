@@ -115,10 +115,60 @@ fn parse_args(args: &[String]) -> Result<(Selection, PathBuf), String> {
     Ok((selection, root))
 }
 
-// A zero exit code without an actual verification result is not evidence of
-// passing a fixture. Preserve stderr: some valid oracles print warnings there.
-fn has_verification_output(stdout: &[u8]) -> bool {
-    stdout.iter().any(|byte| !byte.is_ascii_whitespace())
+// A zero exit code is not a fixture PASS unless the child emitted its
+// documented, family-specific successful result. Arbitrary stdout such as an
+// error banner or an empty digest set must not be upgraded to verification.
+// Preserve stderr separately: valid digest fixtures print a scope caveat there.
+fn has_verification_output(oracle: &Oracle, stdout: &[u8]) -> bool {
+    let Ok(text) = std::str::from_utf8(stdout) else {
+        return false;
+    };
+    let text = text.trim_end_matches(|c| c == '\n' || c == '\r');
+
+    if oracle.name == "integration_candidate_digest" {
+        let mut observed = 0usize;
+        for line in text.lines() {
+            let Some((name, hex)) = line.rsplit_once(": ") else {
+                return false;
+            };
+            if name.trim().is_empty()
+                || hex.len() != 64
+                || !hex.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            {
+                return false;
+            }
+            observed += 1;
+        }
+        return observed > 0;
+    }
+
+    let (prefix, suffix) = match oracle.name {
+        "ad_hoc_research" => ("ad-hoc research fixtures (Rust): ", " passed"),
+        "adaptive_stress" => ("adaptive-stress semantic fixtures (Rust): ", " passed"),
+        "authority_closure" => ("authority closure Rust semantic fixtures: ", " cases passed"),
+        "containment" => ("containment fixtures (Rust): ", " passed"),
+        "containment_capacity" => ("containment-capacity fixtures (Rust): ", " passed"),
+        "coordination_history" => (
+            "PASS: ",
+            " independently evaluated coordination-history cases",
+        ),
+        "github_capability" => ("GitHub capability invariant fixtures (Rust): ", " checked"),
+        "integration_candidate" => (
+            "integration candidate fixture envelope: ",
+            " passed; SHA-256 identity parity NOT checked",
+        ),
+        "merge_base_topology" => ("merge-base-topology: ", " read-only model fixtures PASS"),
+        _ => return false,
+    };
+    let Some(count) = text
+        .strip_prefix(prefix)
+        .and_then(|value| value.strip_suffix(suffix))
+    else {
+        return false;
+    };
+    !count.is_empty()
+        && count.bytes().all(|byte| byte.is_ascii_digit())
+        && count.parse::<usize>().is_ok_and(|number| number > 0)
 }
 
 fn run_oracles(selection: Selection, root: &Path) -> Result<(), String> {
@@ -160,11 +210,11 @@ fn run_oracles(selection: Selection, root: &Path) -> Result<(), String> {
             command.arg(root.join(fixture));
         }
         match command.output() {
-            Ok(output) if output.status.success() && has_verification_output(&output.stdout) => {
+            Ok(output) if output.status.success() && has_verification_output(&oracle, &output.stdout) => {
                 println!("PASS {}", oracle.name);
             }
             Ok(output) if output.status.success() => failed.push(format!(
-                "{}: child exited successfully without verification output",
+                "{}: child exited successfully without a recognizable verification result",
                 oracle.name
             )),
             Ok(output) => {
@@ -211,14 +261,50 @@ mod tests {
     }
 
     #[test]
-    fn silent_or_whitespace_only_child_output_never_qualifies_as_verification() {
-        for output in [b"".as_slice(), b" ", b"\n\t\r "] {
-            assert!(!has_verification_output(output));
+    fn only_recognizable_nonzero_family_results_qualify_as_verification() {
+        let valid = [
+            ("ad_hoc_research", "ad-hoc research fixtures (Rust): 1 passed"),
+            ("adaptive_stress", "adaptive-stress semantic fixtures (Rust): 2 passed"),
+            ("authority_closure", "authority closure Rust semantic fixtures: 3 cases passed"),
+            ("containment", "containment fixtures (Rust): 35 passed"),
+            ("containment_capacity", "containment-capacity fixtures (Rust): 4 passed"),
+            ("coordination_history", "PASS: 5 independently evaluated coordination-history cases"),
+            ("github_capability", "GitHub capability invariant fixtures (Rust): 6 checked"),
+            ("integration_candidate", "integration candidate fixture envelope: 7 passed; SHA-256 identity parity NOT checked"),
+            ("merge_base_topology", "merge-base-topology: 12 read-only model fixtures PASS"),
+        ];
+        for (name, output) in valid {
+            let oracle = ORACLES.iter().find(|oracle| oracle.name == name).unwrap();
+            assert!(has_verification_output(oracle, output.as_bytes()), "{name}");
+            for bogus in [
+                "".as_bytes(),
+                b" \n\t",
+                b"PASS",
+                b"FAIL: child skipped verification",
+                b"error: no fixture evaluated",
+                b"\xff",
+                b"containment fixtures (Rust): 0 passed",
+                b"containment fixtures (Rust): 35 passed\nFAIL: later error",
+            ] {
+                assert!(!has_verification_output(oracle, bogus), "{name}: {bogus:?}");
+            }
         }
-        assert!(has_verification_output(
-            b"containment fixtures (Rust): 35 passed\n"
-        ));
-        assert!(has_verification_output(b"PASS integration_candidate\n"));
+
+        let digest = ORACLES
+            .iter()
+            .find(|oracle| oracle.name == "integration_candidate_digest")
+            .unwrap();
+        let valid_digest = format!("original-case: {}\n", "a".repeat(64));
+        assert!(has_verification_output(digest, valid_digest.as_bytes()));
+        for bogus in [
+            "".to_owned(),
+            "PASS digest".to_owned(),
+            "digest: abc".to_owned(),
+            format!("digest: {}\nFAIL: bad input", "a".repeat(64)),
+            format!("digest: {}\n", "0".repeat(63)),
+        ] {
+            assert!(!has_verification_output(digest, bogus.as_bytes()), "{bogus}");
+        }
     }
 
     #[test]
