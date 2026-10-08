@@ -4,6 +4,7 @@ Check each item before asking the fleet to do important work.
 
 - [ ] I have a GitHub account.
 - [ ] I have a repository that I own or am authorized to modify.
+- [ ] **If installing from the published `v0.1.2-phase0-preview` ZIP:** Before extracting or copying its files, I compared the ZIP's SHA-256 with the matching [published checksum sidecar](https://github.com/Distributed-Minds/Fleet-Control-Public/releases/download/v0.1.2-phase0-preview/FREE-ENERGY-Phase0-Starter-v0.1.2-preview.zip.sha256). On Linux, run `sha256sum FREE-ENERGY-Phase0-Starter-v0.1.2-preview.zip` and compare the printed digest with the sidecar. This detects a mismatch relative to that same release; it is **not** an independent authenticity signature, rights clearance, safety check, or proof the archived setup guide is current. This ZIP-specific check does not apply to the fork/current-source install path.
 - [ ] The complete `Phase0/` folder is committed in that repository.
 - [ ] My repository's **default branch** contains `Phase0/05-FLEET-CONFIG.md` (a default-branch-only fork of the current upstream `main` does not).
 - [ ] The copied `Phase0/` folder retains its MIT copyright and permission notice in `Phase0/LICENSE`. For the historical v0.1.2 ZIP, add this file from the [public Phase0 MIT notice](https://github.com/Distributed-Minds/Fleet-Control-Public/blob/phase0/public-v0/LICENSE) before committing; do not overwrite my project's existing root `LICENSE` or assume Phase0's MIT license also covers unrelated project files.
