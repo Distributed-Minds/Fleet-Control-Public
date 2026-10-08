@@ -1,10 +1,10 @@
 # README FIRST — FREE ENERGY starter pack
 
-**FREE ENERGY** is the public project. This release ZIP contains the current **Fleet-Control Phase0** bootstrap used to create a persistent repository-backed agent fleet.
+**FREE ENERGY** is the public project. This starter pack is for the **Fleet-Control Phase0** repository-backed agent fleet. The published `v0.1.2-phase0-preview` ZIP is a historical snapshot, **not** the latest `phase0/public-v0` branch.
 
-If GitHub or ChatGPT Projects are new to you, begin with `GETTING-STARTED.md` before copying anything.
+If GitHub or ChatGPT Projects are new to you, begin with the [current online Getting Started guide](https://github.com/Distributed-Minds/Fleet-Control-Public/blob/phase0/public-v0/GETTING-STARTED.md) before copying anything. **The v0.1.2 ZIP contains older setup instructions**; use the online guide for corrected fork/default-branch steps.
 
-**Preview fork warning:** The upstream repository's default `main` has a landing README but no Phase0 files. Forking only the default branch does **not** install Phase0. Either use the starter ZIP to populate a repository you own, or follow `GETTING-STARTED.md` to copy all branches and set `phase0/public-v0` as **your fork's** default branch. Before creating automations, verify that your repository's default view contains `Phase0/05-FLEET-CONFIG.md`.
+**Preview fork warning:** The upstream repository's default `main` has a landing README but no Phase0 files. Forking only the default branch does **not** install Phase0. Either use the starter ZIP to populate a repository you own, or follow the current online guide to fork **all** branches and set `phase0/public-v0` as **your fork's** default branch. Before creating automations, verify that your repository's default view contains `Phase0/05-FLEET-CONFIG.md`.
 
 ## What goes where
 
