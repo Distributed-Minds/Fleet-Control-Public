@@ -437,4 +437,5 @@ mod tests {
         // Case 1 previously had no input rule pinning this false outcome.
         let changed_outcome = mutate(1, "expected", json!("ACTION_BLOCKED"));
         assert!(checked(changed_outcome).is_err());
-    }}
+    }
+}
