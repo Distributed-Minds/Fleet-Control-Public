@@ -159,6 +159,20 @@ fn attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
     None
 }
 
+/// Count actual participation-card articles rather than matching text that
+/// might appear in comments, quoted attributes, or unrelated elements.
+fn route_card_count(html: &str) -> usize {
+    tags(html)
+        .iter()
+        .filter(|tag| is_open_element(tag, "article"))
+        .filter(|tag| {
+            attribute(tag, "class")
+                .map(|classes| classes.split_ascii_whitespace().any(|class| class == "route-card"))
+                .unwrap_or(false)
+        })
+        .count()
+}
+
 fn expect(errors: &mut Vec<String>, condition: bool, message: impl Into<String>) {
     if !condition {
         errors.push(message.into());
@@ -293,7 +307,7 @@ fn validate(root: &Path) -> Vec<String> {
     }
     expect(
         &mut errors,
-        html.matches("class=\"route-card\"").count() == 3,
+        route_card_count(html) == 3,
         "Expected exactly three participation routes",
     );
     for (required, explanation) in [
@@ -347,6 +361,30 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn route_card_count_ignores_comments_attribute_spoofing_and_non_articles() {
+        let html = r#"
+<!-- <article class="route-card"></article> -->
+<section title='<article class="route-card">not a real card</article>'></section>
+<article data-class="route-card"></article>
+<article class="route-card-disabled"></article>
+<div class="route-card"></div>
+<article class="route-card"></article>
+"#;
+        assert_eq!(route_card_count(html), 1);
+    }
+
+    #[test]
+    fn route_card_count_accepts_real_articles_with_multiple_classes() {
+        let html = r#"
+<ARTICLE class="card route-card featured"></ARTICLE>
+<article class="route-card"></article>
+<article class="card
+    route-card"></article>
+"#;
+        assert_eq!(route_card_count(html), 3);
+    }
 
     #[test]
     fn commented_markup_cannot_forge_a_required_link_or_active_element() {
