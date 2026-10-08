@@ -4,6 +4,8 @@
 
 If GitHub or ChatGPT Projects are new to you, begin with the [current online Getting Started guide](https://github.com/Distributed-Minds/Fleet-Control-Public/blob/phase0/public-v0/GETTING-STARTED.md) before copying anything. **The v0.1.2 ZIP contains older setup instructions**; use the online guide for corrected fork/default-branch steps.
 
+**Published ZIP integrity check (v0.1.2 only):** Before installing files from the downloaded ZIP, retrieve its [`.sha256` sidecar](https://github.com/Distributed-Minds/Fleet-Control-Public/releases/download/v0.1.2-phase0-preview/FREE-ENERGY-Phase0-Starter-v0.1.2-preview.zip.sha256), run `sha256sum FREE-ENERGY-Phase0-Starter-v0.1.2-preview.zip` on Linux, and compare the digests. **Do not install if the sidecar is missing or the digests differ.** A match establishes consistency with the checksum published alongside that ZIP, **not** independent authenticity, content safety, rights clearance, or currency of the bundled guide. The [current installation checklist](https://github.com/Distributed-Minds/Fleet-Control-Public/blob/phase0/public-v0/release-kit/INSTALL-CHECKLIST.md) has the ZIP-specific check; it does not apply to the all-branches fork path.
+
 **Preview fork warning:** The upstream repository's default `main` has a landing README but no Phase0 files. Forking only the default branch does **not** install Phase0. Either use the starter ZIP to populate a repository you own, or follow the current online guide to fork **all** branches and set `phase0/public-v0` as **your fork's** default branch. Before creating automations, verify that your repository's default view contains `Phase0/05-FLEET-CONFIG.md`.
 
 ## What goes where
