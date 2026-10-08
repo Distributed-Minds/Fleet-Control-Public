@@ -73,7 +73,6 @@ fn every_validated_external_url_obeys_schema_maximum_length() {
     }
 }
 
-
 #[test]
 fn valid_schema_slugs_remain_accepted_at_typed_admission() {
     for slug in ["legal_1", "source-code", "x", "z9"] {
@@ -95,8 +94,14 @@ fn spoofed_evidence_identity_is_rejected_after_all_references_are_repaired() {
         .to_owned();
     let forged = "Bad/ID";
     fixture["evidence"][0]["evidence_id"] = json!(forged);
-    for claim in fixture["rights_claims"].as_array_mut().expect("rights claims") {
-        for id in claim["evidence_ids"].as_array_mut().expect("claim evidence references") {
+    for claim in fixture["rights_claims"]
+        .as_array_mut()
+        .expect("rights claims")
+    {
+        for id in claim["evidence_ids"]
+            .as_array_mut()
+            .expect("claim evidence references")
+        {
             if id.as_str() == Some(original.as_str()) {
                 *id = json!(forged);
             }
@@ -116,5 +121,8 @@ fn spoofed_evidence_identity_is_rejected_after_all_references_are_repaired() {
         }
     }
     rejected(&fixture, "evidence.evidence_id: invalid slug identifier");
-    rejected(&fixture, "rights_claims.evidence_ids: invalid slug identifier");
+    rejected(
+        &fixture,
+        "rights_claims.evidence_ids: invalid slug identifier",
+    );
 }
