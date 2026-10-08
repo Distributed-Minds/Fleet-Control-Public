@@ -4,7 +4,6 @@
 //! fixture integration test, without runtime Python or network access.
 //! NOTE: canonical SHA-256 identity parity is not established by this CLI.
 
-
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
 
