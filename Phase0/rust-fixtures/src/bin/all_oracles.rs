@@ -115,6 +115,12 @@ fn parse_args(args: &[String]) -> Result<(Selection, PathBuf), String> {
     Ok((selection, root))
 }
 
+// A zero exit code without an actual verification result is not evidence of
+// passing a fixture. Preserve stderr: some valid oracles print warnings there.
+fn has_verification_output(stdout: &[u8]) -> bool {
+    stdout.iter().any(|byte| !byte.is_ascii_whitespace())
+}
+
 fn run_oracles(selection: Selection, root: &Path) -> Result<(), String> {
     if selection == Selection::List {
         for oracle in ORACLES {
@@ -154,7 +160,13 @@ fn run_oracles(selection: Selection, root: &Path) -> Result<(), String> {
             command.arg(root.join(fixture));
         }
         match command.output() {
-            Ok(output) if output.status.success() => println!("PASS {}", oracle.name),
+            Ok(output) if output.status.success() && has_verification_output(&output.stdout) => {
+                println!("PASS {}", oracle.name);
+            }
+            Ok(output) if output.status.success() => failed.push(format!(
+                "{}: child exited successfully without verification output",
+                oracle.name
+            )),
             Ok(output) => {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 let detail = stderr.trim().chars().take(256).collect::<String>();
@@ -196,6 +208,15 @@ mod tests {
                 .map(|value| (*value).to_owned())
                 .collect::<Vec<_>>(),
         )
+    }
+
+    #[test]
+    fn silent_or_whitespace_only_child_output_never_qualifies_as_verification() {
+        for output in [b"".as_slice(), b" ", b"\n\t\r "] {
+            assert!(!has_verification_output(output));
+        }
+        assert!(has_verification_output(b"containment fixtures (Rust): 35 passed\n"));
+        assert!(has_verification_output(b"PASS integration_candidate\n"));
     }
 
     #[test]
