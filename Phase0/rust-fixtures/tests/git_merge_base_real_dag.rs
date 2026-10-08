@@ -133,3 +133,39 @@ fn real_git_criss_cross_has_two_best_bases_and_overlays_change_the_answer() {
     assert_eq!(git.merge_bases(&x, &y, true), [a].into());
     assert_eq!(git.merge_bases(&x, &y, false), expected);
 }
+
+#[test]
+fn real_git_shallow_boundary_cannot_reuse_a_full_history_merge_base() {
+    let git = ScratchGit::new();
+    let tree = git.checked(&["hash-object", "-w", "-t", "tree", "--stdin"], "", false);
+    let root = git.commit(&tree, &[], "root");
+    let left = git.commit(&tree, &[&root], "left");
+    let right = git.commit(&tree, &[&root], "right");
+    let descendant = git.commit(&tree, &[&left], "left-descendant");
+
+    // The complete graph has one best base. A shallow boundary at the left
+    // ancestor removes its parent edge from Git's effective history view.
+    assert_eq!(
+        git.merge_bases(&descendant, &right, false),
+        [root.clone()].into()
+    );
+    let git_dir = git.checked(&["rev-parse", "--absolute-git-dir"], "", false);
+    let shallow_file = PathBuf::from(git_dir).join("shallow");
+    fs::write(&shallow_file, format!("{left}\n")).expect("mark left ancestor shallow");
+
+    // Do not interpret a missing base in an incomplete history as proof that
+    // the underlying commits have no common ancestor.
+    let truncated = git.execute(
+        &["merge-base", "--all", &descendant, &right],
+        "",
+        false,
+    );
+    assert_eq!(truncated.status.code(), Some(1));
+    assert!(truncated.stdout.is_empty());
+
+    fs::remove_file(shallow_file).expect("restore full history view");
+    assert_eq!(
+        git.merge_bases(&descendant, &right, false),
+        [root].into()
+    );
+}
