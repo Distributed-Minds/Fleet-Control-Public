@@ -27,7 +27,7 @@ fn tags(html: &str) -> Vec<&str> {
 
 fn attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
     let needle = format!("{name}=\"");
-    let rest = tag.split_once(&needle)?.1;
+    let rest = tag.split_once(needle.as_str())?.1;
     Some(rest.split_once('"')?.0)
 }
 
@@ -218,7 +218,7 @@ mod tests {
 
     #[test]
     fn extracts_attributes_without_external_parser_dependencies() {
-        let doc = r#"<main id="main"><a href="#main">Skip</a></main>"#;
+        let doc = r##"<main id="main"><a href="#main">Skip</a></main>"##;
         let elements = tags(doc);
         assert_eq!(attribute(elements[0], "id"), Some("main"));
         assert_eq!(attribute(elements[1], "href"), Some("#main"));
