@@ -1,0 +1,74 @@
+{
+  "fixture_schema": "free-energy.catalog-upstream-fragment-tests/v0",
+  "target_schema": "Catalog/schema/project-v0.schema.json",
+  "target_pointer": "#/$defs/upstream",
+  "description": "Upstream source revision shape only: no source pin requires a nonempty explanation. These JSON fragments are inputs for the future Rust Draft 2020-12 suite; they do not verify URLs, historical pins, contributor rights, or any remote repository.",
+  "base_upstream": {
+    "discovery_url": "https://example.org/game",
+    "canonical_source_url": "https://github.com/example/game",
+    "source_revision": null,
+    "source_revision_reason": "Canonical source head could not be independently verified.",
+    "contribution_url": "https://github.com/example/game/pulls",
+    "issue_url": "https://github.com/example/game/issues",
+    "read_only_mirror_urls": []
+  },
+  "cases": [
+    {
+      "id": "null-pin-explained",
+      "overrides": {},
+      "expected_valid": true
+    },
+    {
+      "id": "null-pin-null-reason",
+      "overrides": {
+        "source_revision_reason": null
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "null-pin-empty-reason",
+      "overrides": {
+        "source_revision_reason": ""
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "null-pin-whitespace-reason",
+      "overrides": {
+        "source_revision_reason": "  "
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "null-pin-nonstring-reason",
+      "overrides": {
+        "source_revision_reason": 42
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "valid-pin-null-reason",
+      "overrides": {
+        "source_revision": "0123456789abcdef0123456789abcdef01234567",
+        "source_revision_reason": null
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "valid-pin-empty-reason",
+      "overrides": {
+        "source_revision": "0123456789abcdef0123456789abcdef01234567",
+        "source_revision_reason": ""
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "short-pin-explained",
+      "overrides": {
+        "source_revision": "deadbeef",
+        "source_revision_reason": "not pinned"
+      },
+      "expected_valid": false
+    }
+  ]
+}

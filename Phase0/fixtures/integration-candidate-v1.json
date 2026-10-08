@@ -1,0 +1,137 @@
+{
+  "schema_version": "integration-candidate-fixture-v1",
+  "digest": "sha256",
+  "cases": [
+    {
+      "name": "normal-two-parent",
+      "constructor_support": [1, 2],
+      "candidate": {
+        "schema_version": "integration-candidate-v1",
+        "operation_kind": "explicit-merge",
+        "target_commit": "1111111111111111111111111111111111111111",
+        "source_commit": "2222222222222222222222222222222222222222",
+        "parents": [
+          "1111111111111111111111111111111111111111",
+          "2222222222222222222222222222222222222222"
+        ],
+        "parent_count": 2,
+        "tree": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "metadata": {
+          "author": "Example Author <author@example.invalid>",
+          "author_time": "1700000000 +0000",
+          "committer": "Example Committer <committer@example.invalid>",
+          "committer_time": "1700000000 +0000",
+          "message": "Integrate source\n",
+          "encoding": "UTF-8",
+          "signature_policy": "none"
+        },
+        "constructor_version": "constructor-v1",
+        "compatibility_basis": "constructor-v1-exact"
+      },
+      "expect": "SUPPORTED"
+    },
+    {
+      "name": "reversed-parents-same-tree",
+      "constructor_support": [1, 2],
+      "candidate": {
+        "schema_version": "integration-candidate-v1",
+        "operation_kind": "explicit-merge",
+        "target_commit": "1111111111111111111111111111111111111111",
+        "source_commit": "2222222222222222222222222222222222222222",
+        "parents": [
+          "2222222222222222222222222222222222222222",
+          "1111111111111111111111111111111111111111"
+        ],
+        "parent_count": 2,
+        "tree": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "metadata": {
+          "author": "Example Author <author@example.invalid>",
+          "author_time": "1700000000 +0000",
+          "committer": "Example Committer <committer@example.invalid>",
+          "committer_time": "1700000000 +0000",
+          "message": "Integrate source\n",
+          "encoding": "UTF-8",
+          "signature_policy": "none"
+        },
+        "constructor_version": "constructor-v1",
+        "compatibility_basis": "constructor-v1-exact"
+      },
+      "expect": "SUPPORTED_DISTINCT_FROM:normal-two-parent"
+    },
+    {
+      "name": "unsupported-three-parent",
+      "constructor_support": [1, 2],
+      "candidate": {
+        "schema_version": "integration-candidate-v1",
+        "operation_kind": "explicit-merge",
+        "target_commit": "1111111111111111111111111111111111111111",
+        "source_commit": "2222222222222222222222222222222222222222",
+        "parents": [
+          "1111111111111111111111111111111111111111",
+          "2222222222222222222222222222222222222222",
+          "3333333333333333333333333333333333333333"
+        ],
+        "parent_count": 3,
+        "tree": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "metadata": {
+          "author": "Example Author <author@example.invalid>",
+          "author_time": "1700000000 +0000",
+          "committer": "Example Committer <committer@example.invalid>",
+          "committer_time": "1700000000 +0000",
+          "message": "Integrate source\n",
+          "encoding": "UTF-8",
+          "signature_policy": "none"
+        },
+        "constructor_version": "constructor-v1",
+        "compatibility_basis": "constructor-v1-exact"
+      },
+      "expect": "UNSUPPORTED_PARENT_CARDINALITY"
+    },
+    {
+      "name": "compatible-constructor-migration",
+      "constructor_support": [1, 2],
+      "candidate": {
+        "schema_version": "integration-candidate-v1",
+        "operation_kind": "explicit-merge",
+        "target_commit": "1111111111111111111111111111111111111111",
+        "source_commit": "2222222222222222222222222222222222222222",
+        "parents": [
+          "1111111111111111111111111111111111111111",
+          "2222222222222222222222222222222222222222"
+        ],
+        "parent_count": 2,
+        "tree": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "metadata": {
+          "author": "Example Author <author@example.invalid>",
+          "author_time": "1700000000 +0000",
+          "committer": "Example Committer <committer@example.invalid>",
+          "committer_time": "1700000000 +0000",
+          "message": "Integrate source\n",
+          "encoding": "UTF-8",
+          "signature_policy": "none"
+        },
+        "constructor_version": "constructor-v2",
+        "compatibility_basis": "v2-preserves-v1-two-parent-envelope"
+      },
+      "expect": "SUPPORTED_COMPATIBLE_WITH:normal-two-parent"
+    }
+  ],
+  "stale_head_cases": [
+    {
+      "name": "target-moved",
+      "predicted_target": "1111111111111111111111111111111111111111",
+      "live_target": "4444444444444444444444444444444444444444",
+      "predicted_source": "2222222222222222222222222222222222222222",
+      "live_source": "2222222222222222222222222222222222222222",
+      "expect": "STALE_OR_INCOMPATIBLE"
+    },
+    {
+      "name": "source-moved",
+      "predicted_target": "1111111111111111111111111111111111111111",
+      "live_target": "1111111111111111111111111111111111111111",
+      "predicted_source": "2222222222222222222222222222222222222222",
+      "live_source": "5555555555555555555555555555555555555555",
+      "expect": "STALE_OR_INCOMPATIBLE"
+    }
+  ]
+}

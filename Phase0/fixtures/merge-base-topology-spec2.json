@@ -1,0 +1,14 @@
+[
+  {"name":"unique-complete","history_view":"hv:full:a","complete":true,"bases":["b1"],"virtual":null,"expect":"UNIQUE"},
+  {"name":"multiple-complete","history_view":"hv:full:a","complete":true,"bases":["b2","b1"],"virtual":null,"expect":"MULTIPLE"},
+  {"name":"multiple-reordered","history_view":"hv:full:a","complete":true,"bases":["b1","b2"],"virtual":null,"expect":"MULTIPLE","same_set_as":"multiple-complete"},
+  {"name":"none-complete","history_view":"hv:full:a","complete":true,"bases":[],"virtual":null,"expect":"NONE"},
+  {"name":"incomplete-view","history_view":"hv:shallow:a","complete":false,"bases":["b1"],"virtual":null,"expect":"UNPROVABLE"},
+  {"name":"multi-no-virtual","history_view":"hv:full:a","complete":true,"bases":["b1","b2"],"virtual":{"supported":false},"expect_virtual":"UNSUPPORTED"},
+  {"name":"multi-virtual-a","history_view":"hv:full:a","complete":true,"bases":["b2","b1"],"virtual":{"supported":true,"algorithm":"recursive-virtual-base","version":1,"options":{"renames":"off"},"intermediates":["tree:i1","commit:i2"],"result":"tree:v"},"expect_virtual":"SUPPORTED"},
+  {"name":"multi-virtual-a-reordered","history_view":"hv:full:a","complete":true,"bases":["b1","b2"],"virtual":{"supported":true,"algorithm":"recursive-virtual-base","version":1,"options":{"renames":"off"},"intermediates":["tree:i1","commit:i2"],"result":"tree:v"},"expect_virtual":"SUPPORTED","same_computation_as":"multi-virtual-a"},
+  {"name":"multi-virtual-version-drift","history_view":"hv:full:a","complete":true,"bases":["b1","b2"],"virtual":{"supported":true,"algorithm":"recursive-virtual-base","version":2,"options":{"renames":"off"},"intermediates":["tree:i1","commit:i2"],"result":"tree:v"},"expect_virtual":"SUPPORTED","different_computation_from":"multi-virtual-a"},
+  {"name":"multi-virtual-intermediate-drift","history_view":"hv:full:a","complete":true,"bases":["b1","b2"],"virtual":{"supported":true,"algorithm":"recursive-virtual-base","version":1,"options":{"renames":"off"},"intermediates":["tree:DIFFERENT","commit:i2"],"result":"tree:v"},"expect_virtual":"SUPPORTED","different_computation_from":"multi-virtual-a"},
+  {"name":"same-heads-replaced-history","history_view":"hv:replace:b","complete":true,"bases":["b1"],"virtual":null,"expect":"UNIQUE","stale_against":{"history_view":"hv:full:a","bases":["b1"]}},
+  {"name":"best-base-moved","history_view":"hv:full:a","complete":true,"bases":["b3"],"virtual":null,"expect":"UNIQUE","stale_against":{"history_view":"hv:full:a","bases":["b1"]}}
+]

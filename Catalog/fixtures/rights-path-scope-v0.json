@@ -1,0 +1,193 @@
+{
+  "fixture_schema": "free-energy.catalog-rights-scope-fragment-tests/v0",
+  "target_schema": "Catalog/schema/project-v0.schema.json",
+  "target_pointer": "#/$defs/rights",
+  "description": "Schema fragment cases: PATH/PREFIX rights claims require normalized relative repository paths. PROJECT_DEFAULT and CONTENT_PACK retain descriptive scope text. This is structural shape evidence only; no schema-runner/Rust execution, actual license authority or reuse permission is established. Whitespace at the beginning/end of a repository-path segment is rejected, while interior spaces and descriptive non-path scopes are allowed.",
+  "base_rights": {
+    "claim_id": "fixture-scope",
+    "claim_kind": "INTERPRETATION",
+    "component": "MEDIA",
+    "scope_kind": "PREFIX",
+    "scope": "assets/audio",
+    "statement": "Synthetic fixture only; not a rights grant",
+    "license_id": null,
+    "exceptions_or_restrictions": [],
+    "evidence_ids": [
+      "synthetic-source"
+    ],
+    "status": "UNKNOWN"
+  },
+  "cases": [
+    {
+      "id": "prefix-nested",
+      "overrides": {},
+      "expected_valid": true
+    },
+    {
+      "id": "path-file",
+      "overrides": {
+        "scope_kind": "PATH",
+        "scope": "LICENSE"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "prefix-unicode",
+      "overrides": {
+        "scope": "références/文件"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "project-default-descriptive",
+      "overrides": {
+        "scope_kind": "PROJECT_DEFAULT",
+        "scope": "project assets (descriptive)"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "content-pack-descriptive",
+      "overrides": {
+        "scope_kind": "CONTENT_PACK",
+        "scope": "Synthetic content pack #1"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "prefix-parent-traversal",
+      "overrides": {
+        "scope": "../license"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "path-interior-parent",
+      "overrides": {
+        "scope_kind": "PATH",
+        "scope": "assets/../LICENSE"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "path-current-segment",
+      "overrides": {
+        "scope_kind": "PATH",
+        "scope": "./LICENSE"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "prefix-current-segment",
+      "overrides": {
+        "scope": "assets/./audio"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "prefix-absolute",
+      "overrides": {
+        "scope": "/etc/passwd"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "prefix-windows-drive",
+      "overrides": {
+        "scope": "C:/Windows/system.ini"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "prefix-backslash",
+      "overrides": {
+        "scope": "assets\\audio"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "path-double-slash",
+      "overrides": {
+        "scope_kind": "PATH",
+        "scope": "assets//file"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "prefix-trailing-slash",
+      "overrides": {
+        "scope": "assets/"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "path-newline",
+      "overrides": {
+        "scope_kind": "PATH",
+        "scope": "assets/\nfile"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "path-empty",
+      "overrides": {
+        "scope_kind": "PATH",
+        "scope": ""
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "prefix-valid-internal-spaces",
+      "overrides": {
+        "scope": "assets/audio files/music theme.ogg"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "path-leading-space",
+      "overrides": {
+        "scope_kind": "PATH",
+        "scope": " LICENSE"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "path-trailing-space",
+      "overrides": {
+        "scope_kind": "PATH",
+        "scope": "LICENSE "
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "prefix-inner-leading-space",
+      "overrides": {
+        "scope": "assets/ audio"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "prefix-inner-trailing-space",
+      "overrides": {
+        "scope": "assets /audio"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "path-nonbreaking-leading-space",
+      "overrides": {
+        "scope_kind": "PATH",
+        "scope": "assets/ LICENSE"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "project-default-descriptive-surrounding-spaces",
+      "overrides": {
+        "scope_kind": "PROJECT_DEFAULT",
+        "scope": " all game assets "
+      },
+      "expected_valid": true
+    }
+  ]
+}

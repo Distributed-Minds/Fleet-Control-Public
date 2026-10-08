@@ -1,0 +1,225 @@
+{
+  "fixture_schema": "free-energy.catalog-url-admission/v0",
+  "target_schema": "Catalog/schema/project-v0.schema.json",
+  "target_pointer": "#/$defs/url",
+  "scope": "Semantic HTTPS URL admission for ALL external links in Catalog/projects manifests: upstream discovery/source/contribution/issue/mirrors, play upstream_download_url when non-null, and evidence.url/repository when non-null.",
+  "description": "Deterministic URL parser and normalization cases for the pending compiled Rust validator (issue #60 spec v5). This is NOT a JSON Schema fragment acceptance oracle: the structural URL regex is intentionally insufficient. These expected results are semantic input-admission outcomes only, not proofs of DNS resolution, redirect safety, website liveness, download authenticity, code/asset rights or playability. Run offline: no DNS, HTTP, redirects or external fetching.",
+  "cases": [
+    {
+      "id": "https-github",
+      "url": "https://github.com/luanti-org/luanti",
+      "expected_admitted": true,
+      "reason": "Public DNS hostname and HTTPS, no credentials or explicit port"
+    },
+    {
+      "id": "https-gitlab",
+      "url": "https://gitlab.com/veloren/veloren",
+      "expected_admitted": true,
+      "reason": "Distinct public canonical development host"
+    },
+    {
+      "id": "https-download-page",
+      "url": "https://www.openra.net/download/",
+      "expected_admitted": true,
+      "reason": "Publisher download page link is syntactically admissible, not a verified playable artifact"
+    },
+    {
+      "id": "https-pinned-file",
+      "url": "https://github.com/luanti-org/luanti/blob/9a1b92d0d4d2c47fced18e6077722c6301eb04f5/LICENSE.txt",
+      "expected_admitted": true,
+      "reason": "Immutable revision path does not itself authenticate license or permission"
+    },
+    {
+      "id": "https-host-case",
+      "url": "https://GitHub.COM/luanti-org/luanti",
+      "expected_admitted": true,
+      "reason": "Host case normalizes without changing the HTTPS scheme or origin"
+    },
+    {
+      "id": "https-fragment",
+      "url": "https://github.com/luanti-org/luanti#readme",
+      "expected_admitted": true,
+      "reason": "Ordinary fragment is not an authority delimiter"
+    },
+    {
+      "id": "https-query-encoding",
+      "url": "https://github.com/search?q=game%20engine",
+      "expected_admitted": true,
+      "reason": "Encoded space in a path-independent query is not an authority credential"
+    },
+    {
+      "id": "http-plaintext",
+      "url": "http://github.com/luanti-org/luanti",
+      "expected_admitted": false,
+      "reason": "HTTP is not HTTPS"
+    },
+    {
+      "id": "javascript-scheme",
+      "url": "javascript:alert(1)",
+      "expected_admitted": false,
+      "reason": "Script scheme"
+    },
+    {
+      "id": "file-scheme",
+      "url": "file:///etc/passwd",
+      "expected_admitted": false,
+      "reason": "Local file access"
+    },
+    {
+      "id": "userinfo-simple",
+      "url": "https://user@github.com/repo",
+      "expected_admitted": false,
+      "reason": "Userinfo must be rejected before accepting a host"
+    },
+    {
+      "id": "userinfo-password",
+      "url": "https://user:password@github.com/repo",
+      "expected_admitted": false,
+      "reason": "Embedded userinfo secret"
+    },
+    {
+      "id": "userinfo-percent-at",
+      "url": "https://user%40example.com@github.com/repo",
+      "expected_admitted": false,
+      "reason": "Alternate-encoded userinfo before authority delimiter"
+    },
+    {
+      "id": "authority-encoded-at",
+      "url": "https://github.com%40internal.example/repo",
+      "expected_admitted": false,
+      "reason": "Percent-encoded at-sign in authority"
+    },
+    {
+      "id": "authority-encoded-slash",
+      "url": "https://github.com%2finternal.example/repo",
+      "expected_admitted": false,
+      "reason": "Percent-encoded separator in host"
+    },
+    {
+      "id": "authority-encoded-backslash",
+      "url": "https://github.com%5cinternal.example/repo",
+      "expected_admitted": false,
+      "reason": "Percent-encoded backslash in authority"
+    },
+    {
+      "id": "nonstandard-port",
+      "url": "https://github.com:8443/repo",
+      "expected_admitted": false,
+      "reason": "Unexpected explicit HTTPS port"
+    },
+    {
+      "id": "loopback-ipv4",
+      "url": "https://127.0.0.1/private",
+      "expected_admitted": false,
+      "reason": "Loopback IP literal"
+    },
+    {
+      "id": "private-ipv4",
+      "url": "https://192.168.1.2/private",
+      "expected_admitted": false,
+      "reason": "RFC1918 IP literal"
+    },
+    {
+      "id": "linklocal-metadata-ip",
+      "url": "https://169.254.169.254/latest/meta-data",
+      "expected_admitted": false,
+      "reason": "Link-local metadata-service IP literal"
+    },
+    {
+      "id": "public-ip-literal",
+      "url": "https://8.8.8.8/",
+      "expected_admitted": false,
+      "reason": "Even public IP literals are excluded by v5"
+    },
+    {
+      "id": "ipv6-loopback",
+      "url": "https://[::1]/",
+      "expected_admitted": false,
+      "reason": "IPv6 IP literal"
+    },
+    {
+      "id": "abbreviated-ipv4",
+      "url": "https://127.1/private",
+      "expected_admitted": false,
+      "reason": "Ambiguous abbreviated numeric IPv4 host"
+    },
+    {
+      "id": "decimal-ipv4",
+      "url": "https://2130706433/private",
+      "expected_admitted": false,
+      "reason": "Integer-form loopback host"
+    },
+    {
+      "id": "hex-ipv4",
+      "url": "https://0x7f000001/private",
+      "expected_admitted": false,
+      "reason": "Hexadecimal-form numeric host"
+    },
+    {
+      "id": "localhost",
+      "url": "https://localhost/private",
+      "expected_admitted": false,
+      "reason": "Loopback hostname"
+    },
+    {
+      "id": "single-label-host",
+      "url": "https://intranet/private",
+      "expected_admitted": false,
+      "reason": "Unqualified internal hostname"
+    },
+    {
+      "id": "dot-local",
+      "url": "https://printer.local/",
+      "expected_admitted": false,
+      "reason": "Internal local hostname"
+    },
+    {
+      "id": "dot-internal",
+      "url": "https://registry.internal/",
+      "expected_admitted": false,
+      "reason": "Reserved internal-use hostname"
+    },
+    {
+      "id": "dot-test",
+      "url": "https://example.test/",
+      "expected_admitted": false,
+      "reason": "Reserved test-domain hostname"
+    },
+    {
+      "id": "backslash-authority",
+      "url": "https://github.com\\@internal.example/",
+      "expected_admitted": false,
+      "reason": "Parser-dependent backslash authority confusion"
+    },
+    {
+      "id": "control-newline",
+      "url": "https://github.com/\ninternal",
+      "expected_admitted": false,
+      "reason": "Literal control character"
+    },
+    {
+      "id": "control-percent-encoded",
+      "url": "https://github.com/path%0aheader",
+      "expected_admitted": false,
+      "reason": "Percent-decoded control character"
+    },
+    {
+      "id": "empty-dns-label",
+      "url": "https://foo..example.com/",
+      "expected_admitted": false,
+      "reason": "Malformed host label"
+    },
+    {
+      "id": "leading-hyphen-label",
+      "url": "https://-example.com/path",
+      "expected_admitted": false,
+      "reason": "Invalid DNS label"
+    },
+    {
+      "id": "trailing-dot-host",
+      "url": "https://github.com./repo",
+      "expected_admitted": false,
+      "reason": "Non-canonical trailing-dot hostname"
+    }
+  ]
+}
