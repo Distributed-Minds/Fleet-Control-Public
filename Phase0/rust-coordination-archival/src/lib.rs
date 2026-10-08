@@ -146,7 +146,7 @@ pub enum Verdict {
 fn named(id: &str) -> bool {
     // Provider IDs are opaque, but they appear in operator receipts and logs.
     // C0/C1 controls, Unicode whitespace, bidi and default-ignorable
-    // formatting may spoof identity in receipts or operator logs.
+    // formatting/variation selectors may spoof identity in operator logs.
     // Reject such characters without normalizing opaque provider IDs.
     !id.trim().is_empty()
         && !id.chars().any(|ch| {
@@ -161,7 +161,9 @@ fn named(id: &str) -> bool {
                         | '\u{200b}'..='\u{200f}'
                         | '\u{202a}'..='\u{202e}'
                         | '\u{2060}'..='\u{206f}'
+                        | '\u{fe00}'..='\u{fe0f}'
                         | '\u{feff}'
+                        | '\u{e0100}'..='\u{e01ef}'
                 )
         })
 }
@@ -470,6 +472,68 @@ mod tests {
                 "unsafe ordering ID admitted: {bad:?}"
             );
         }
+    }
+
+    #[test]
+    fn variation_selectors_cannot_alias_receipt_or_replay_identity() {
+        // Unicode variation selectors can leave glyphs unchanged while
+        // preserving different bytes. This applies to both BMP and
+        // supplementary-plane selectors, not just bidi/whitespace controls.
+        for marker in ['\u{fe00}', '\u{fe0e}', '\u{fe0f}', '\u{e0100}', '\u{e01ef}'] {
+            let disguised = format!("R{marker}42");
+            let mut witness = fixture();
+            witness.observed_source.record_id = disguised.clone();
+            witness.archive.source.record_id = disguised.clone();
+            witness.authority.source.record_id = disguised.clone();
+            assert_eq!(
+                evaluate(&witness),
+                Verdict::Ineligible(Denial::SourceMoved),
+                "variation selector disguised a source ID: {marker:?}"
+            );
+
+            let mut witness = fixture();
+            witness.operation_id = disguised.clone();
+            witness.authority.operation_id = disguised.clone();
+            assert_eq!(
+                evaluate(&witness),
+                Verdict::Ineligible(Denial::AuthorityNotCurrent),
+                "variation selector disguised an operation ID: {marker:?}"
+            );
+
+            let mut witness = fixture();
+            witness.archive.manifest.identity = disguised.clone();
+            witness.manifest.basis.identity = disguised.clone();
+            witness.snapshot.manifest.identity = disguised.clone();
+            witness.durability.manifest.identity = disguised.clone();
+            assert_eq!(
+                evaluate(&witness),
+                Verdict::Ineligible(Denial::ArchiveNotExact),
+                "variation selector disguised a manifest ID: {marker:?}"
+            );
+
+            let mut invalid = item("a", 10);
+            invalid.stable_id = disguised.clone();
+            assert_eq!(
+                replay(&[invalid, item("b", 11)], &[item("c", 12)], &cut()),
+                Err(ReplayFailure::UntrustedCut),
+                "variation selector disguised a replay stable ID: {marker:?}"
+            );
+
+            let mut invalid_cut = cut();
+            invalid_cut.ordering.identity = disguised;
+            assert_eq!(
+                replay(&[item("a", 10), item("b", 11)], &[item("c", 12)], &invalid_cut),
+                Err(ReplayFailure::UntrustedCut),
+                "variation selector disguised the certified order basis: {marker:?}"
+            );
+        }
+
+        // Visible international IDs remain opaque and admissible.
+        let mut witness = fixture();
+        witness.observed_source.record_id = "café-λ".into();
+        witness.archive.source.record_id = "café-λ".into();
+        witness.authority.source.record_id = "café-λ".into();
+        assert_eq!(evaluate(&witness), Verdict::EligibleModelOnly);
     }
 
     #[test]
