@@ -121,7 +121,10 @@ fn shuffle<T>(values: &mut [T], mut seed: usize) {
 }
 
 fn histories() -> (Vec<ReplayRecord>, Vec<ReplayRecord>) {
-    ((0..=1599).map(record).collect(), (1400..=1999).map(record).collect())
+    (
+        (0..=1599).map(record).collect(),
+        (1400..=1999).map(record).collect(),
+    )
 }
 
 fn candidates() -> Vec<DeleteWitness> {
@@ -151,10 +154,16 @@ fn two_thousand_positions_have_the_same_safe_compaction_plan_under_page_reorderi
             .iter()
             .map(|candidate| candidate.sequence)
             .collect();
-        assert_eq!(removed, selected, "untrusted provider page order seed {seed}");
+        assert_eq!(
+            removed, selected,
+            "untrusted provider page order seed {seed}"
+        );
         assert_eq!(plan.reconstructed, expected);
         assert_eq!(plan.retained_live.len(), 500);
-        assert_eq!(replay(&archived, &plan.retained_live, &cut()), Ok(expected.clone()));
+        assert_eq!(
+            replay(&archived, &plan.retained_live, &cut()),
+            Ok(expected.clone())
+        );
         for survivor in &plan.retained_live {
             assert!(
                 survivor.sequence >= 1600 || survivor.sequence % 2 == 1,
