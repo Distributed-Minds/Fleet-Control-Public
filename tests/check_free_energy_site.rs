@@ -233,7 +233,7 @@ fn source_text_outside_markup(html: &str) -> String {
             let current = bytes[cursor];
             match quote {
                 Some(delimiter) if current == delimiter => quote = None,
-                None if current == b'"' || current == b'\\'' => quote = Some(current),
+                None if current == b'"' || current == 0x27 => quote = Some(current),
                 None if current == b'>' => break,
                 _ => {}
             }
