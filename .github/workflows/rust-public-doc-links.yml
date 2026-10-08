@@ -9,6 +9,7 @@ on:
       - .github/workflows/rust-public-doc-links.yml
       - scripts/check-public-doc-links.rs
       - README.md
+      - CONTRIBUTING.md
       - GETTING-STARTED.md
       - HELP-A-PROJECT.md
       - WORKFLOW-GUIDES.md
@@ -23,6 +24,7 @@ on:
       - .github/workflows/rust-public-doc-links.yml
       - scripts/check-public-doc-links.rs
       - README.md
+      - CONTRIBUTING.md
       - GETTING-STARTED.md
       - HELP-A-PROJECT.md
       - WORKFLOW-GUIDES.md
@@ -69,18 +71,18 @@ jobs:
           trap 'rm -rf -- "$fixture"; rm -f -- "$outside"' EXIT
           mkdir -p "$fixture/release-kit"
           for doc in \
-            README.md GETTING-STARTED.md HELP-A-PROJECT.md WORKFLOW-GUIDES.md \
+            README.md CONTRIBUTING.md GETTING-STARTED.md HELP-A-PROJECT.md WORKFLOW-GUIDES.md \
             TROUBLESHOOTING.md BRANDING.md \
             release-kit/README-FIRST.md release-kit/INSTALL-CHECKLIST.md; do
             : > "$fixture/$doc"
           done
 
           # Positive control: a real local file, an ignored external URI, and all
-          # eight required inputs. This calls the compiled product CLI, not a mock.
+          # nine required inputs. This calls the compiled product CLI, not a mock.
           printf '%s\n' 'present' > "$fixture/target.md"
           printf '%s\n' '[valid](target.md)' '[external](https://example.org)' > "$fixture/README.md"
           "$binary" --root "$fixture" > "$fixture/cli-output.txt" 2>&1
-          grep -Fq 'Checked 1 local links across 8 documents; 0 errors' "$fixture/cli-output.txt"
+          grep -Fq 'Checked 1 local links across 9 documents; 0 errors' "$fixture/cli-output.txt"
 
           expect_rejected() {
             local label="$1" expected="$2" exit_code=0
@@ -92,7 +94,12 @@ jobs:
             fi
           }
 
-          printf '%s\n' '[missing](missing.md)' > "$fixture/README.md"
+          # Missing links in the first-party contributor guide are real failures.
+          printf '%s\\n' '[broken-contributing](missing-contributing.md)' > "$fixture/CONTRIBUTING.md"
+          expect_rejected missing-contributor-guide-target 'target missing'
+          : > "$fixture/CONTRIBUTING.md"
+
+          printf '%s\\n' '[missing](missing.md)' > "$fixture/README.md"
           expect_rejected missing-target 'target missing'
 
           # Repeat the same failing input: errors must be sorted and deterministic.
@@ -124,4 +131,4 @@ jobs:
           rm "$fixture/BRANDING.md"
           expect_rejected missing-mandatory-document 'document unreadable or missing'
 
-          echo 'PASS: compiled CLI positive control, eight failing-input cases, and deterministic diagnostics'
+          echo 'PASS: compiled CLI positive control, contributor-link negative control and deterministic diagnostics'
