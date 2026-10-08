@@ -17,6 +17,18 @@ use std::path::Path;
 
 const REPO: &str = "https://github.com/Distributed-Minds/Fleet-Control-Public";
 const RELEASE: &str = "v0.1.2-phase0-preview";
+const CONTACT: &str = "https://github.com/Distributed-Minds/Fleet-Control-Public/discussions";
+
+fn primary_contact_link(html: &str) -> bool {
+    let Some((_, tail)) = html.split_once(r#"<nav aria-label="Main navigation">"#) else {
+        return false;
+    };
+    let Some((nav, _)) = tail.split_once("</nav>") else {
+        return false;
+    };
+    let expected_link = format!(r#"<a href="{CONTACT}">Contact</a>"#);
+    nav.contains(&expected_link)
+}
 
 fn tags(html: &str) -> Vec<&str> {
     html.split('<')
@@ -177,6 +189,11 @@ fn validate(root: &Path) -> Vec<String> {
             format!("Unexpected active/embedded element: {forbidden}"),
         );
     }
+    expect(
+        &mut errors,
+        primary_contact_link(html),
+        "Primary navigation is missing a direct public Contact link",
+    );
     for href in &links {
         if let Some(fragment) = href.strip_prefix('#') {
             expect(
@@ -207,7 +224,7 @@ fn validate(root: &Path) -> Vec<String> {
         (guide.as_str(), "Corrected beginner setup guide missing"),
         (help.as_str(), "Existing-project contributor guide missing"),
         (workflows.as_str(), "Project workflow guide map missing"),
-        ("https://github.com/Distributed-Minds/Fleet-Control-Public/discussions", "Public Discussions link missing"),
+        (CONTACT, "Public Discussions link missing"),
     ] {
         expect(&mut errors, links.contains(&url), explanation);
     }
@@ -293,6 +310,17 @@ mod tests {
         let elements = tags(doc);
         assert_eq!(attribute(elements[0], "id"), Some("main"));
         assert_eq!(attribute(elements[1], "href"), Some("#main"));
+    }
+
+    #[test]
+    fn public_contact_must_be_in_primary_navigation() {
+        let link = format!(r#"<a href="{CONTACT}">Contact</a>"#);
+        assert!(primary_contact_link(&format!(
+            r#"<nav aria-label="Main navigation">{link}</nav>"#
+        )));
+        assert!(!primary_contact_link(&format!(
+            r#"<nav aria-label="Main navigation"></nav><footer>{link}</footer>"#
+        )));
     }
 
     #[test]
