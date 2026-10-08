@@ -23,20 +23,29 @@ Compile and run from the repository root with an installed Rust compiler and `mk
 ```
 
 
-On **Windows PowerShell**, `/tmp/...` is not a native output path. From the repository root, compile and run the same Rust checker and unit tests as Windows executables:
+On **Windows PowerShell**, `/tmp/...` is not a native output path. From the repository root, compile and run the same Rust checker and unit tests in a **unique temporary directory**. The `finally` block removes generated executables even when compilation or a test fails, so concurrent runs do not overwrite each other or leave artifacts in the checkout:
 
 ```powershell
-rustc --edition=2021 -D warnings tests/check_free_energy_site.rs -o .\free-energy-site-check.exe
-if ($LASTEXITCODE -ne 0) { throw "Site checker compilation failed" }
-.\free-energy-site-check.exe
-if ($LASTEXITCODE -ne 0) { throw "Site checker failed" }
-rustc --edition=2021 -D warnings --test tests/check_free_energy_site.rs -o .\free-energy-site-tests.exe
-if ($LASTEXITCODE -ne 0) { throw "Unit-test compilation failed" }
-.\free-energy-site-tests.exe
-if ($LASTEXITCODE -ne 0) { throw "Unit tests failed" }
+$buildDir = Join-Path ([System.IO.Path]::GetTempPath()) ("free-energy-site-" + [guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Path $buildDir -ErrorAction Stop | Out-Null
+try {
+    $checker = Join-Path $buildDir "site-check.exe"
+    $tests = Join-Path $buildDir "site-tests.exe"
+    rustc --edition=2021 -D warnings tests/check_free_energy_site.rs -o $checker
+    if ($LASTEXITCODE -ne 0) { throw "Site checker compilation failed" }
+    & $checker
+    if ($LASTEXITCODE -ne 0) { throw "Site checker failed" }
+    rustc --edition=2021 -D warnings --test tests/check_free_energy_site.rs -o $tests
+    if ($LASTEXITCODE -ne 0) { throw "Unit-test compilation failed" }
+    & $tests
+    if ($LASTEXITCODE -ne 0) { throw "Unit tests failed" }
+}
+finally {
+    Remove-Item -LiteralPath $buildDir -Recurse -Force
+}
 ```
 
-These Windows commands produce two local `.exe` files in the repository root; remove the generated executables when finished and do not commit them. A successful source smoke check remains narrower than actual browser, network, or installation validation.
+The PowerShell commands keep both generated binaries outside the repository and clean them up after success or failure. A successful source smoke check remains narrower than actual browser, network, or installation validation.
 
 No Cargo crates, dependency download, npm installation, scripting interpreter or external network requests are needed for this test. The checker validates local fragment links, the relative stylesheet, the direct starter ZIP and corrected-guide URLs, public Discussions/contact notices, PLAY/HELP/MAKE routes, implemented-versus-future disclosures, and basic keyboard-focus, responsive and reduced-motion CSS hooks. It is **not** a browser accessibility audit, live HTTP check, release installation test or deployment verification.
 
