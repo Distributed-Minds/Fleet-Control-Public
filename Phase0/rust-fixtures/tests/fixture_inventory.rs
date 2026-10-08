@@ -124,11 +124,7 @@ fn check_group(
     Ok(cases.len())
 }
 
-fn validate_family(
-    label: &str,
-    source: &str,
-    groups: &[Group],
-) -> Result<usize, String> {
+fn validate_family(label: &str, source: &str, groups: &[Group]) -> Result<usize, String> {
     let document: Value =
         serde_json::from_str(source).map_err(|e| format!("{label}: invalid JSON: {e}"))?;
     let mut total = 0;
@@ -151,11 +147,27 @@ fn all_eight_historical_fixture_families_retain_194_cases() {
 fn historical_schema_and_spec_markers_remain_explicit() {
     let required = [
         ("authority-closure-spec2", "spec", serde_json::json!(2)),
-        ("ad-hoc-research-spec1", "schema_version", serde_json::json!(3)),
-        ("ad-hoc-research-spec1", "spec_version", serde_json::json!(1)),
+        (
+            "ad-hoc-research-spec1",
+            "schema_version",
+            serde_json::json!(3),
+        ),
+        (
+            "ad-hoc-research-spec1",
+            "spec_version",
+            serde_json::json!(1),
+        ),
         ("adaptive-stress-spec2", "spec", serde_json::json!(2)),
-        ("containment-capacity-spec2", "schema_version", serde_json::json!(2)),
-        ("containment-capacity-spec2", "spec_version", serde_json::json!(2)),
+        (
+            "containment-capacity-spec2",
+            "schema_version",
+            serde_json::json!(2),
+        ),
+        (
+            "containment-capacity-spec2",
+            "spec_version",
+            serde_json::json!(2),
+        ),
         ("containment-spec3", "schema_version", serde_json::json!(1)),
         ("containment-spec3", "spec_version", serde_json::json!(3)),
         ("github-capability-spec5", "spec", serde_json::json!(5)),
@@ -187,9 +199,10 @@ fn historical_schema_and_spec_markers_remain_explicit() {
 
 #[test]
 fn deleting_a_historical_case_is_a_test_failure() {
-    let mut doc: Value =
-        serde_json::from_str(include_str!("../../fixtures/containment-capacity-spec2.json"))
-            .expect("historical valid JSON");
+    let mut doc: Value = serde_json::from_str(include_str!(
+        "../../fixtures/containment-capacity-spec2.json"
+    ))
+    .expect("historical valid JSON");
     doc["workload_cases"].as_array_mut().unwrap().remove(0);
     let error = check_group(
         "containment-capacity-spec2",
@@ -204,9 +217,10 @@ fn deleting_a_historical_case_is_a_test_failure() {
 
 #[test]
 fn duplicate_identity_is_a_test_failure_even_at_unchanged_case_count() {
-    let mut doc: Value =
-        serde_json::from_str(include_str!("../../fixtures/containment-capacity-spec2.json"))
-            .expect("historical valid JSON");
+    let mut doc: Value = serde_json::from_str(include_str!(
+        "../../fixtures/containment-capacity-spec2.json"
+    ))
+    .expect("historical valid JSON");
     let first_id = doc["decision_cases"][0]["id"].clone();
     doc["decision_cases"][1]["id"] = first_id;
     let error = check_group(
@@ -222,20 +236,19 @@ fn duplicate_identity_is_a_test_failure_even_at_unchanged_case_count() {
 
 #[test]
 fn missing_family_and_malformed_json_cannot_pass() {
-    let mut doc: Value =
-        serde_json::from_str(include_str!("../../fixtures/containment-capacity-spec2.json"))
-            .expect("historical valid JSON");
+    let mut doc: Value = serde_json::from_str(include_str!(
+        "../../fixtures/containment-capacity-spec2.json"
+    ))
+    .expect("historical valid JSON");
     doc.as_object_mut().unwrap().remove("planning_cases");
-    assert!(
-        check_group(
-            "containment-capacity-spec2",
-            &doc,
-            "planning_cases",
-            4,
-            "rare-event-false-positive-heavy"
-        )
-        .is_err()
-    );
+    assert!(check_group(
+        "containment-capacity-spec2",
+        &doc,
+        "planning_cases",
+        4,
+        "rare-event-false-positive-heavy"
+    )
+    .is_err());
     assert!(validate_family("broken", "{invalid", &[("cases", 1, "x")]).is_err());
 }
 
