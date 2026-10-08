@@ -145,7 +145,9 @@ fn simulate(c: &Workload) -> Result<Value, String> {
     let mut restoration = c.initial_restoration_work;
     let mut effect_active = c.effect_active;
     if restoration > 0 && (c.authority_current || !effect_active || !c.restoration_debt) {
-        return Err("restoration work requires expired authority, active effect and debt".to_owned());
+        return Err(
+            "restoration work requires expired authority, active effect and debt".to_owned(),
+        );
     }
     if !c.authority_current && effect_active && !c.restoration_debt {
         return Ok(json!({"disposition": "INVALID_MISSING_DEBT"}));
@@ -216,10 +218,7 @@ fn simulate(c: &Workload) -> Result<Value, String> {
                 backlog -= served;
                 remaining -= served;
             }
-            if restoration > 0
-                && remaining > 0
-                && c.scheduler == Scheduler::RestorationFirst
-            {
+            if restoration > 0 && remaining > 0 && c.scheduler == Scheduler::RestorationFirst {
                 let extra = restoration.min(remaining);
                 restoration -= extra;
                 restored_units += extra;
@@ -341,7 +340,10 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
     for c in &f.decision_cases {
         let actual = decide(c);
         if actual != c.expected {
-            failures.push(format!("{}: expected {}, computed {actual}", c.id, c.expected));
+            failures.push(format!(
+                "{}: expected {}, computed {actual}",
+                c.id, c.expected
+            ));
         }
     }
     for c in &f.workload_cases {
@@ -381,22 +383,26 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
         }
     }
 
-    let low = f.planning_cases.iter().find(|c| c.id == "low-action-volume");
-    let high = f.planning_cases.iter().find(|c| c.id == "high-action-volume");
+    let low = f
+        .planning_cases
+        .iter()
+        .find(|c| c.id == "low-action-volume");
+    let high = f
+        .planning_cases
+        .iter()
+        .find(|c| c.id == "high-action-volume");
     match (low, high) {
-        (Some(low), Some(high)) => {
-            match (alert_volume(low), alert_volume(high)) {
-                (Ok((low_alerts, _)), Ok((high_alerts, _))) => {
-                    if low.worker_count != high.worker_count
-                        || high.event_volume <= low.event_volume
-                        || high_alerts <= low_alerts
-                    {
-                        failures.push("action-volume monotonicity violated".to_owned());
-                    }
+        (Some(low), Some(high)) => match (alert_volume(low), alert_volume(high)) {
+            (Ok((low_alerts, _)), Ok((high_alerts, _))) => {
+                if low.worker_count != high.worker_count
+                    || high.event_volume <= low.event_volume
+                    || high_alerts <= low_alerts
+                {
+                    failures.push("action-volume monotonicity violated".to_owned());
                 }
-                _ => failures.push("cannot verify action-volume property".to_owned()),
             }
-        }
+            _ => failures.push("cannot verify action-volume property".to_owned()),
+        },
         _ => failures.push("missing action-volume property cases".to_owned()),
     }
     match f
@@ -509,7 +515,10 @@ mod tests {
     #[test]
     fn missing_workload_input_or_zero_bound_is_rejected() {
         let mut missing = original();
-        missing["workload_cases"][0].as_object_mut().unwrap().remove("arrivals");
+        missing["workload_cases"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("arrivals");
         assert!(serde_json::from_value::<Fixture>(missing).is_err());
         let mut zero = original();
         zero["workload_cases"][0]["progress_bound"] = json!(0);
