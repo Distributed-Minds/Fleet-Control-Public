@@ -56,11 +56,21 @@ fn mask_inline_code(line: &str) -> String {
             i += 1;
             continue;
         }
+        // A backslash-escaped backtick is literal text, not a code delimiter.
+        if preceded_by_escape(original, i) {
+            i += 1;
+            continue;
+        }
         let n = original[i..].iter().take_while(|&&x| x == b'\x60').count();
         let mut j = i + n;
         let mut ending = None;
         while j < original.len() {
             if original[j] == b'\x60' {
+                // An escaped backtick cannot terminate an active code span.
+                if preceded_by_escape(original, j) {
+                    j += 1;
+                    continue;
+                }
                 let m = original[j..].iter().take_while(|&&x| x == b'\x60').count();
                 if m == n {
                     ending = Some(j + m);
@@ -398,6 +408,30 @@ mod tests {
         }
     }
 
+
+    #[test]
+    fn escaped_backticks_leave_real_links_visible() {
+        let mut report = Report::default();
+        let paths = collect_links(
+            r#"\`[visible](missing.md)\` `[hidden](skip.md)` [also-visible](real.md)"#,
+            "README.md",
+            &mut report,
+        );
+        assert_eq!(paths, vec!["missing.md", "real.md"]);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn escaped_backtick_cannot_close_a_real_code_span() {
+        let mut report = Report::default();
+        let paths = collect_links(
+            r#"`literal \`[not-real](ignore.md) remains code` [real](exists.md)"#,
+            "README.md",
+            &mut report,
+        );
+        assert_eq!(paths, vec!["exists.md"]);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
 
     #[test]
     fn info_string_does_not_close_fenced_code() {
