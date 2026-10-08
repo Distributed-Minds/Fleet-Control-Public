@@ -56,7 +56,9 @@ impl ScratchGit {
         } else {
             command.env("GIT_NO_REPLACE_OBJECTS", "1");
         }
-        let mut child = command.spawn().expect("Git executable required for topology test");
+        let mut child = command
+            .spawn()
+            .expect("Git executable required for topology test");
         child
             .stdin
             .take()
@@ -89,14 +91,10 @@ impl ScratchGit {
     }
 
     fn merge_bases(&self, left: &str, right: &str, use_replacements: bool) -> BTreeSet<String> {
-        self.checked(
-            &["merge-base", "--all", left, right],
-            "",
-            use_replacements,
-        )
-        .lines()
-        .map(str::to_owned)
-        .collect()
+        self.checked(&["merge-base", "--all", left, right], "", use_replacements)
+            .lines()
+            .map(str::to_owned)
+            .collect()
     }
 }
 
