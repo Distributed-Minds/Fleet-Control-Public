@@ -76,7 +76,9 @@ fn all_authored_rights_path_scope_vectors_execute_through_real_admission() {
             rejected += 1;
             let errors = verdict.expect_err("negative case must reject");
             assert!(
-                errors.iter().any(|error| error.contains("unsafe rights path scope: fixture-scope")),
+                errors
+                    .iter()
+                    .any(|error| error.contains("unsafe rights path scope: fixture-scope")),
                 "expected a path-specific negative decision for {id}, got {errors:?}"
             );
         }
@@ -114,11 +116,18 @@ fn pinned_evidence_paths_do_not_bypass_rights_path_safety_rules() {
         let errors = validate_manifest(&changed.to_string())
             .expect_err("unsafe pinned repository path was accepted");
         assert!(
-            errors.iter().any(|e| e.contains("invalid pinned repository evidence")),
+            errors
+                .iter()
+                .any(|e| e.contains("invalid pinned repository evidence")),
             "path {path:?} did not fail on pin provenance: {errors:?}"
         );
     }
-    for path in ["LICENSE", "assets/Cargo.toml", "références/文件", "assets/audio files/track.ogg"] {
+    for path in [
+        "LICENSE",
+        "assets/Cargo.toml",
+        "références/文件",
+        "assets/audio files/track.ogg",
+    ] {
         let mut changed = baseline.clone();
         changed["evidence"][0]["path"] = Value::String(path.to_owned());
         let outcome = validate_manifest(&changed.to_string());
