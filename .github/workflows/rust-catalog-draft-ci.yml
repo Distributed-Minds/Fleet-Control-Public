@@ -1,6 +1,11 @@
 # Draft-only verification for issue #60 / PR #76. No release or deployment.
 name: Verify FREE ENERGY catalog Rust draft
 on:
+  push:
+    branches: [phase0/public-v0]
+    paths:
+      - 'Catalog/**'
+      - '.github/workflows/rust-catalog-draft-ci.yml'
   pull_request:
     branches: [phase0/public-v0]
     paths:
@@ -39,11 +44,20 @@ jobs:
           rustup run 1.85.1 cargo test --manifest-path Catalog/Cargo.toml --locked --offline
           rustup run 1.85.1 cargo clippy --manifest-path Catalog/Cargo.toml --all-targets --locked --offline -- -D warnings
           rustup run 1.85.1 cargo run --manifest-path Catalog/Cargo.toml --locked --offline -- validate Catalog/projects/luanti.json Catalog/projects/openra.json Catalog/projects/veloren.json
+          rustup run 1.85.1 cargo run --manifest-path Catalog/Cargo.toml --locked --offline -- render --check
       - name: Reject forged approval fixture
         shell: bash
         run: |
           set -euo pipefail
           if rustup run 1.85.1 cargo run --manifest-path Catalog/Cargo.toml --locked --offline -- validate Catalog/fixtures/forged-approval-v0.json; then
             echo 'ERROR: forbidden rights approval was admitted' >&2
+            exit 1
+          fi
+      - name: Reject forged local-play verification fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          if rustup run 1.85.1 cargo run --manifest-path Catalog/Cargo.toml --locked --offline -- validate Catalog/fixtures/forged-local-play-verification-v0.json; then
+            echo 'ERROR: unverified local game test was admitted' >&2
             exit 1
           fi
