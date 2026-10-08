@@ -234,7 +234,10 @@ fn check(cases: &[Case]) -> Result<usize, Vec<String>> {
         for (kind, reference) in [
             ("same_set_as", case.same_set_as.as_deref()),
             ("same_computation_as", case.same_computation_as.as_deref()),
-            ("different_computation_from", case.different_computation_from.as_deref()),
+            (
+                "different_computation_from",
+                case.different_computation_from.as_deref(),
+            ),
         ] {
             if reference == Some(case.name.as_str()) {
                 errors.push(format!(
@@ -471,7 +474,9 @@ mod tests {
             }
             let errors = check(&cases).expect_err("self-reference must fail closed");
             assert!(
-                errors.iter().any(|error| error.contains("requires a distinct witness case")),
+                errors
+                    .iter()
+                    .any(|error| error.contains("requires a distinct witness case")),
                 "{name}/{kind}: {errors:?}"
             );
         }
