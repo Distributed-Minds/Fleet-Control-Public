@@ -2,7 +2,7 @@
   "fixture_schema": "free-energy.catalog-evidence-fragment-tests/v0",
   "target_schema": "Catalog/schema/project-v0.schema.json",
   "target_pointer": "#/$defs/evidence",
-  "description": "Expected JSON Schema fragment acceptance after applying overrides to base_evidence. This checks shape only, not reviewer authority, source authenticity, URL safety or actual pin existence. The Rust Draft 2020-12 validation suite must execute these cases.",
+  "description": "Expected JSON Schema fragment acceptance after applying overrides to base_evidence. This checks shape only, not reviewer authority, source authenticity, URL safety or actual pin existence. The Rust Draft 2020-12 validation suite must execute these cases. Repository-path segments may contain interior spaces but cannot start or end in whitespace.",
   "base_evidence": {
     "evidence_id": "test-source-snapshot",
     "evidence_kind": "PINNED_REPOSITORY_FILE",
@@ -164,6 +164,48 @@
         "path": null
       },
       "expected_valid": true
+    },
+    {
+      "id": "pinned-valid-interior-spaces",
+      "overrides": {
+        "path": "assets/license documents/LICENSE notice.txt"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "pinned-leading-space",
+      "overrides": {
+        "path": " LICENSE"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "pinned-trailing-space",
+      "overrides": {
+        "path": "LICENSE "
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "pinned-inner-leading-space",
+      "overrides": {
+        "path": "assets/ LICENSE"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "pinned-inner-trailing-space",
+      "overrides": {
+        "path": "assets /LICENSE"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "pinned-nonbreaking-leading-space",
+      "overrides": {
+        "path": "assets/ LICENSE"
+      },
+      "expected_valid": false
     }
   ]
 }

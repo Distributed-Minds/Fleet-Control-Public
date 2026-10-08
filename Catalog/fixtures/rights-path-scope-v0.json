@@ -2,7 +2,7 @@
   "fixture_schema": "free-energy.catalog-rights-scope-fragment-tests/v0",
   "target_schema": "Catalog/schema/project-v0.schema.json",
   "target_pointer": "#/$defs/rights",
-  "description": "Schema fragment cases: PATH/PREFIX rights claims require normalized relative repository paths. PROJECT_DEFAULT and CONTENT_PACK retain descriptive scope text. This is structural shape evidence only; no schema-runner/Rust execution, actual license authority or reuse permission is established.",
+  "description": "Schema fragment cases: PATH/PREFIX rights claims require normalized relative repository paths. PROJECT_DEFAULT and CONTENT_PACK retain descriptive scope text. This is structural shape evidence only; no schema-runner/Rust execution, actual license authority or reuse permission is established. Whitespace at the beginning/end of a repository-path segment is rejected, while interior spaces and descriptive non-path scopes are allowed.",
   "base_rights": {
     "claim_id": "fixture-scope",
     "claim_kind": "INTERPRETATION",
@@ -135,6 +135,59 @@
         "scope": ""
       },
       "expected_valid": false
+    },
+    {
+      "id": "prefix-valid-internal-spaces",
+      "overrides": {
+        "scope": "assets/audio files/music theme.ogg"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "path-leading-space",
+      "overrides": {
+        "scope_kind": "PATH",
+        "scope": " LICENSE"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "path-trailing-space",
+      "overrides": {
+        "scope_kind": "PATH",
+        "scope": "LICENSE "
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "prefix-inner-leading-space",
+      "overrides": {
+        "scope": "assets/ audio"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "prefix-inner-trailing-space",
+      "overrides": {
+        "scope": "assets /audio"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "path-nonbreaking-leading-space",
+      "overrides": {
+        "scope_kind": "PATH",
+        "scope": "assets/ LICENSE"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "project-default-descriptive-surrounding-spaces",
+      "overrides": {
+        "scope_kind": "PROJECT_DEFAULT",
+        "scope": " all game assets "
+      },
+      "expected_valid": true
     }
   ]
 }
