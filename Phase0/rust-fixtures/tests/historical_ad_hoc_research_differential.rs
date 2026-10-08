@@ -48,7 +48,7 @@ fn output(command: &mut Command, path: &Path) -> Output {
 
 fn check_both(fixture: &Value, expected_pass: bool, label: &str) {
     let file = fixture_file(fixture);
-    let python = output(&mut Command::new("python3").arg(historical_script()), &file);
+    let python = output(Command::new("python3").arg(historical_script()), &file);
     let rust = output(
         &mut Command::new(env!("CARGO_BIN_EXE_ad_hoc_research")),
         &file,
