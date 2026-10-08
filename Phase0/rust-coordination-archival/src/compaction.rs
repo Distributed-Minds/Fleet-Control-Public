@@ -64,15 +64,32 @@ pub fn plan_compaction(
             .push(record);
     }
 
+    // Reject duplicated source and operation identities before individual
+    // eligibility checks: provider page order must not select an arbitrary
+    // error when a collision and another invalid witness coexist.
+    let mut seen_sources = HashSet::new();
+    let mut seen_operations = HashSet::new();
+    for witness in witnesses {
+        if !seen_sources.insert(witness.observed_source.record_id.as_str())
+            || !seen_operations.insert(witness.operation_id.as_str())
+        {
+            return Err(PlanFailure::DuplicateCandidate);
+        }
+    }
+    // An unordered provider response has no authority over diagnostics.
+    // Source IDs are now unique, so this ordering is deterministic. Successful
+    // removals are still ordered by certified sequence below.
+    let mut ordered_witnesses: Vec<_> = witnesses.iter().collect();
+    ordered_witnesses
+        .sort_unstable_by(|a, b| a.observed_source.record_id.cmp(&b.observed_source.record_id));
     let mut selected = BTreeSet::new();
-    let mut operations = HashSet::new();
     let mut model_removals = Vec::with_capacity(witnesses.len());
     // A batch is admitted against one coherent archive manifest generation.
     // Individually valid witness snapshots from different generations cannot
     // be composed into one plan without a trusted cross-generation cut.
     let mut manifest_basis = None;
     let mut shared_batch_basis = None;
-    for witness in witnesses {
+    for witness in ordered_witnesses {
         match &manifest_basis {
             Some(expected) if expected != &witness.manifest.basis => {
                 return Err(PlanFailure::InconsistentWitness);
@@ -81,9 +98,6 @@ pub fn plan_compaction(
             _ => {}
         }
         let source = &witness.observed_source;
-        if !operations.insert(witness.operation_id.as_str()) {
-            return Err(PlanFailure::DuplicateCandidate);
-        }
         let positions = live_by_id
             .get(source.record_id.as_str())
             .ok_or(PlanFailure::MissingOrAmbiguousLiveRecord)?;
@@ -488,5 +502,57 @@ mod tests {
         let plan = plan_compaction(&archived, &live, &cut(), &[first, second])
             .expect("one current manifest/horizon may contain distinct segments");
         assert_eq!(plan.model_removals.len(), 2);
+    }
+
+    #[test]
+    fn independent_failures_are_diagnosed_independently_of_page_order() {
+        let (archived, live) = histories();
+        let mut lower_id = witness(&live[0]);
+        lower_id.effect_state = EffectState::AckUnknown;
+        let mut higher_id = witness(&live[1]);
+        higher_id.protections.active_ownership_chain = true;
+        for candidates in [
+            [lower_id.clone(), higher_id.clone()],
+            [higher_id.clone(), lower_id.clone()],
+        ] {
+            assert_eq!(
+                plan_compaction(&archived, &live, &cut(), &candidates),
+                Err(PlanFailure::ReconcilePriorEffect),
+                "provider page order must not select another denial"
+            );
+        }
+    }
+
+    #[test]
+    fn duplicate_identity_is_stable_even_with_other_ineligible_witnesses() {
+        let (archived, live) = histories();
+        let first = witness(&live[0]);
+        let mut same_operation = witness(&live[1]);
+        same_operation.operation_id = first.operation_id.clone();
+        same_operation.authority.operation_id = first.operation_id.clone();
+        same_operation.effect_state = EffectState::AckUnknown;
+        for candidates in [
+            [first.clone(), same_operation.clone()],
+            [same_operation.clone(), first.clone()],
+        ] {
+            assert_eq!(
+                plan_compaction(&archived, &live, &cut(), &candidates),
+                Err(PlanFailure::DuplicateCandidate)
+            );
+        }
+        let mut same_source = witness(&live[1]);
+        same_source.observed_source.record_id = first.observed_source.record_id.clone();
+        same_source.archive.source.record_id = first.observed_source.record_id.clone();
+        same_source.authority.source.record_id = first.observed_source.record_id.clone();
+        same_source.effect_state = EffectState::AckUnknown;
+        for candidates in [
+            [first.clone(), same_source.clone()],
+            [same_source, first],
+        ] {
+            assert_eq!(
+                plan_compaction(&archived, &live, &cut(), &candidates),
+                Err(PlanFailure::DuplicateCandidate)
+            );
+        }
     }
 }
