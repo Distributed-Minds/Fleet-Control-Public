@@ -187,10 +187,9 @@ mod tests {
         // Fixture expectations are checked against real HTML output, not copied
         // back as a fixture verdict. This is lexical escaping conformance; it
         // does not replace browser DOM, URL admission or rights verification.
-        let suite: serde_json::Value = serde_json::from_str(include_str!(
-            "../fixtures/renderer-escaping-v0.json"
-        ))
-        .expect("valid renderer fixture JSON");
+        let suite: serde_json::Value =
+            serde_json::from_str(include_str!("../fixtures/renderer-escaping-v0.json"))
+                .expect("valid renderer fixture JSON");
         let cases = suite["cases"].as_array().expect("renderer fixture cases");
         assert_eq!(cases.len(), 14, "all authored escaping cases must run");
 
@@ -210,9 +209,7 @@ mod tests {
             match case["context"].as_str().expect("escaping context") {
                 "text" => {
                     let mut project = validate_manifest(LUANTI).expect("valid pilot");
-                    let surrounded = match case["source_field"]
-                        .as_str()
-                        .expect("text source field")
+                    let surrounded = match case["source_field"].as_str().expect("text source field")
                     {
                         "display_name" => {
                             project.display_name = input.to_owned();
@@ -269,5 +266,4 @@ mod tests {
             }
         }
     }
-
 }
