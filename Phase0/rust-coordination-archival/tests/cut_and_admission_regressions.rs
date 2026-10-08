@@ -92,49 +92,221 @@ type Mutation = (&'static str, fn(&mut DeleteWitness), Denial);
 fn loss_of_any_independent_admission_predicate_never_increases_eligibility() {
     use Denial::*;
     let mutations: &[Mutation] = &[
-        ("archive readback unavailable", |w| w.archive.exact_remote_readback = false, ArchiveNotExact),
-        ("archive hash drift", |w| w.archive.remotely_read_digest[0] ^= 1, ArchiveNotExact),
-        ("archived source version changed", |w| w.archive.source.version = "etag-older".into(), ArchiveNotExact),
-        ("archive segment missing", |w| w.archive.segment.clear(), ArchiveNotExact),
-        ("archive manifest identity missing", |w| w.archive.manifest.identity.clear(), ArchiveNotExact),
-        ("ordering untrusted", |w| w.ordering.authoritative = false, OrderNotProven),
-        ("ordering frontier unknown", |w| w.ordering.frontier_complete = false, OrderNotProven),
-        ("ordering expired", |w| w.ordering.current = false, OrderNotProven),
-        ("ordering lineage changed", |w| w.ordering.source_incarnation = "old-live".into(), OrderNotProven),
-        ("ordering identity missing", |w| w.ordering.basis.identity.clear(), OrderNotProven),
-        ("manifest forked", |w| w.manifest.unique_current_selection = false, ManifestNotCurrent),
-        ("manifest fence lost", |w| w.manifest.predecessor_transition_fenced = false, ManifestNotCurrent),
-        ("manifest generation changed", |w| w.manifest.basis.generation += 1, ManifestNotCurrent),
-        ("destination incarnation missing", |w| w.manifest.destination_incarnation.clear(), ManifestNotCurrent),
-        ("snapshot mixed cut", |w| w.snapshot.coherent_cut = false, SnapshotNotCoherent),
-        ("snapshot missing live frontier", |w| w.snapshot.frontier_complete = false, SnapshotNotCoherent),
-        ("snapshot closing fence stale", |w| w.snapshot.closing_fence_current = false, SnapshotNotCoherent),
-        ("snapshot dedup unproved", |w| w.snapshot.stable_identity_dedup = false, SnapshotNotCoherent),
-        ("snapshot order generation moved", |w| w.snapshot.ordering.generation += 1, SnapshotNotCoherent),
-        ("snapshot source changed", |w| w.snapshot.source_incarnation = "another-live".into(), SnapshotNotCoherent),
-        ("observed source ID missing", |w| w.observed_source.record_id.clear(), ArchiveNotExact),
-        ("operation ID missing", |w| w.operation_id.clear(), AuthorityNotCurrent),
-        ("mutation authority revoked", |w| w.authority.current = false, AuthorityNotCurrent),
-        ("mutation fence revoked", |w| w.authority.fence_current = false, AuthorityNotCurrent),
-        ("mutation operation mismatch", |w| w.authority.operation_id = "other".into(), AuthorityNotCurrent),
-        ("mutation action mismatch", |w| w.authority.action = "WRITE_MANIFEST".into(), AuthorityNotCurrent),
-        ("mutation source mismatch", |w| w.authority.source.content_digest[0] ^= 1, AuthorityNotCurrent),
-        ("horizon policy source missing", |w| w.horizon.policy_source_incarnation.clear(), HorizonNotAuthorized),
-        ("horizon selection fork", |w| w.horizon.uniquely_current = false, HorizonNotAuthorized),
-        ("horizon transition unauthorized", |w| w.horizon.transition_authorized = false, HorizonNotAuthorized),
-        ("predecessor still protected", |w| w.horizon.predecessor_protects_source = true, HorizonNotAuthorized),
-        ("horizon identity missing", |w| w.horizon.basis.identity.clear(), HorizonNotAuthorized),
-        ("durability expired", |w| w.durability.current = false, DurabilityInsufficient),
-        ("durability key missing", |w| w.durability.keys_recoverable = false, DurabilityInsufficient),
-        ("durability incomplete horizon", |w| w.durability.reconstructed_through_epoch = 1999, DurabilityInsufficient),
-        ("durability destination moved", |w| w.durability.destination_incarnation = "archive-restored".into(), DurabilityInsufficient),
-        ("durability manifest stale", |w| w.durability.manifest.generation += 1, DurabilityInsufficient),
-        ("durability horizon stale", |w| w.durability.horizon.generation += 1, DurabilityInsufficient),
-        ("durability segment changed", |w| w.durability.segment = "segment-6".into(), DurabilityInsufficient),
-        ("active owner protected", |w| w.protections.active_ownership_chain = true, ProtectedRecord),
-        ("latest state protected", |w| w.protections.latest_persistent_state = true, ProtectedRecord),
-        ("live tail protected", |w| w.protections.live_tail = true, ProtectedRecord),
-        ("referenced record protected", |w| w.protections.authoritative_reference = true, ProtectedRecord),
+        (
+            "archive readback unavailable",
+            |w| w.archive.exact_remote_readback = false,
+            ArchiveNotExact,
+        ),
+        (
+            "archive hash drift",
+            |w| w.archive.remotely_read_digest[0] ^= 1,
+            ArchiveNotExact,
+        ),
+        (
+            "archived source version changed",
+            |w| w.archive.source.version = "etag-older".into(),
+            ArchiveNotExact,
+        ),
+        (
+            "archive segment missing",
+            |w| w.archive.segment.clear(),
+            ArchiveNotExact,
+        ),
+        (
+            "archive manifest identity missing",
+            |w| w.archive.manifest.identity.clear(),
+            ArchiveNotExact,
+        ),
+        (
+            "ordering untrusted",
+            |w| w.ordering.authoritative = false,
+            OrderNotProven,
+        ),
+        (
+            "ordering frontier unknown",
+            |w| w.ordering.frontier_complete = false,
+            OrderNotProven,
+        ),
+        (
+            "ordering expired",
+            |w| w.ordering.current = false,
+            OrderNotProven,
+        ),
+        (
+            "ordering lineage changed",
+            |w| w.ordering.source_incarnation = "old-live".into(),
+            OrderNotProven,
+        ),
+        (
+            "ordering identity missing",
+            |w| w.ordering.basis.identity.clear(),
+            OrderNotProven,
+        ),
+        (
+            "manifest forked",
+            |w| w.manifest.unique_current_selection = false,
+            ManifestNotCurrent,
+        ),
+        (
+            "manifest fence lost",
+            |w| w.manifest.predecessor_transition_fenced = false,
+            ManifestNotCurrent,
+        ),
+        (
+            "manifest generation changed",
+            |w| w.manifest.basis.generation += 1,
+            ManifestNotCurrent,
+        ),
+        (
+            "destination incarnation missing",
+            |w| w.manifest.destination_incarnation.clear(),
+            ManifestNotCurrent,
+        ),
+        (
+            "snapshot mixed cut",
+            |w| w.snapshot.coherent_cut = false,
+            SnapshotNotCoherent,
+        ),
+        (
+            "snapshot missing live frontier",
+            |w| w.snapshot.frontier_complete = false,
+            SnapshotNotCoherent,
+        ),
+        (
+            "snapshot closing fence stale",
+            |w| w.snapshot.closing_fence_current = false,
+            SnapshotNotCoherent,
+        ),
+        (
+            "snapshot dedup unproved",
+            |w| w.snapshot.stable_identity_dedup = false,
+            SnapshotNotCoherent,
+        ),
+        (
+            "snapshot order generation moved",
+            |w| w.snapshot.ordering.generation += 1,
+            SnapshotNotCoherent,
+        ),
+        (
+            "snapshot source changed",
+            |w| w.snapshot.source_incarnation = "another-live".into(),
+            SnapshotNotCoherent,
+        ),
+        (
+            "observed source ID missing",
+            |w| w.observed_source.record_id.clear(),
+            ArchiveNotExact,
+        ),
+        (
+            "operation ID missing",
+            |w| w.operation_id.clear(),
+            AuthorityNotCurrent,
+        ),
+        (
+            "mutation authority revoked",
+            |w| w.authority.current = false,
+            AuthorityNotCurrent,
+        ),
+        (
+            "mutation fence revoked",
+            |w| w.authority.fence_current = false,
+            AuthorityNotCurrent,
+        ),
+        (
+            "mutation operation mismatch",
+            |w| w.authority.operation_id = "other".into(),
+            AuthorityNotCurrent,
+        ),
+        (
+            "mutation action mismatch",
+            |w| w.authority.action = "WRITE_MANIFEST".into(),
+            AuthorityNotCurrent,
+        ),
+        (
+            "mutation source mismatch",
+            |w| w.authority.source.content_digest[0] ^= 1,
+            AuthorityNotCurrent,
+        ),
+        (
+            "horizon policy source missing",
+            |w| w.horizon.policy_source_incarnation.clear(),
+            HorizonNotAuthorized,
+        ),
+        (
+            "horizon selection fork",
+            |w| w.horizon.uniquely_current = false,
+            HorizonNotAuthorized,
+        ),
+        (
+            "horizon transition unauthorized",
+            |w| w.horizon.transition_authorized = false,
+            HorizonNotAuthorized,
+        ),
+        (
+            "predecessor still protected",
+            |w| w.horizon.predecessor_protects_source = true,
+            HorizonNotAuthorized,
+        ),
+        (
+            "horizon identity missing",
+            |w| w.horizon.basis.identity.clear(),
+            HorizonNotAuthorized,
+        ),
+        (
+            "durability expired",
+            |w| w.durability.current = false,
+            DurabilityInsufficient,
+        ),
+        (
+            "durability key missing",
+            |w| w.durability.keys_recoverable = false,
+            DurabilityInsufficient,
+        ),
+        (
+            "durability incomplete horizon",
+            |w| w.durability.reconstructed_through_epoch = 1999,
+            DurabilityInsufficient,
+        ),
+        (
+            "durability destination moved",
+            |w| w.durability.destination_incarnation = "archive-restored".into(),
+            DurabilityInsufficient,
+        ),
+        (
+            "durability manifest stale",
+            |w| w.durability.manifest.generation += 1,
+            DurabilityInsufficient,
+        ),
+        (
+            "durability horizon stale",
+            |w| w.durability.horizon.generation += 1,
+            DurabilityInsufficient,
+        ),
+        (
+            "durability segment changed",
+            |w| w.durability.segment = "segment-6".into(),
+            DurabilityInsufficient,
+        ),
+        (
+            "active owner protected",
+            |w| w.protections.active_ownership_chain = true,
+            ProtectedRecord,
+        ),
+        (
+            "latest state protected",
+            |w| w.protections.latest_persistent_state = true,
+            ProtectedRecord,
+        ),
+        (
+            "live tail protected",
+            |w| w.protections.live_tail = true,
+            ProtectedRecord,
+        ),
+        (
+            "referenced record protected",
+            |w| w.protections.authoritative_reference = true,
+            ProtectedRecord,
+        ),
     ];
 
     assert_eq!(evaluate(&eligible_witness()), Verdict::EligibleModelOnly);
@@ -196,10 +368,22 @@ fn cut(first: u64, last: u64) -> ReplayCut {
 fn archive_live_reordering_and_exact_overlap_preserve_one_ordered_history() {
     let expected = vec![record("a", 10), record("b", 11), record("c", 12)];
     for (archived, live) in [
-        (vec![record("a", 10), record("b", 11)], vec![record("b", 11), record("c", 12)]),
-        (vec![record("b", 11), record("a", 10)], vec![record("c", 12), record("b", 11)]),
-        (vec![record("c", 12)], vec![record("b", 11), record("a", 10)]),
-        (vec![], vec![record("c", 12), record("a", 10), record("b", 11)]),
+        (
+            vec![record("a", 10), record("b", 11)],
+            vec![record("b", 11), record("c", 12)],
+        ),
+        (
+            vec![record("b", 11), record("a", 10)],
+            vec![record("c", 12), record("b", 11)],
+        ),
+        (
+            vec![record("c", 12)],
+            vec![record("b", 11), record("a", 10)],
+        ),
+        (
+            vec![],
+            vec![record("c", 12), record("a", 10), record("b", 11)],
+        ),
     ] {
         assert_eq!(replay(&archived, &live, &cut(10, 12)), Ok(expected.clone()));
     }
