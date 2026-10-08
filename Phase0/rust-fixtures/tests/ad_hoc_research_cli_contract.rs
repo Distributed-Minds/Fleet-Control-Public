@@ -129,7 +129,10 @@ fn incomplete_packet_templates_and_wrong_spec_are_rejected() {
 
 #[test]
 fn malformed_json_and_missing_file_are_not_success() {
-    assert_denied(invoke_contents(r#"{"publication_cases":"#), "invalid fixture");
+    assert_denied(
+        invoke_contents(r#"{"publication_cases":"#),
+        "invalid fixture",
+    );
     let missing = temporary_path();
     assert!(!missing.exists(), "unexpected preexisting fixture path");
     assert_denied(invoke(&missing), "cannot read");
