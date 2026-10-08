@@ -142,6 +142,22 @@ pub struct Review {
     pub claim_history: Vec<ClaimHistory>,
 }
 
+/// Mirror the public schema's namespace/slug project ID pattern without
+/// accepting uppercase, separators, or invalid first characters.
+fn is_project_id(value: &str) -> bool {
+    fn valid_part(part: &str) -> bool {
+        let mut bytes = part.bytes();
+        bytes
+            .next()
+            .is_some_and(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+            && bytes.all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+    }
+
+    value
+        .split_once('/')
+        .is_some_and(|(namespace, slug)| valid_part(namespace) && valid_part(slug))
+}
+
 fn is_full_git_sha(value: &str) -> bool {
     // The pinned v0 schema requires lowercase SHA-1 literals, not uppercase aliases.
     value.len() == 40
@@ -250,6 +266,9 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
 
     if record.schema != "free-energy.project/v0" {
         problems.push("unsupported catalog schema version".to_string());
+    }
+    if !is_project_id(&record.id) {
+        problems.push("invalid project ID: expected lowercase namespace/slug".to_string());
     }
     match record.upstream.source_revision.as_deref() {
         Some(rev) if !is_full_git_sha(rev) => {
@@ -489,6 +508,29 @@ mod tests {
         let mut value: Value = serde_json::from_str(base).expect("valid test source");
         f(&mut value);
         serde_json::to_string(&value).expect("serializable mutated fixture")
+    }
+
+    #[test]
+    fn project_id_admission_matches_published_schema_pattern() {
+        for id in ["free-energy/luanti", "a/b", "a0-b9/z-"] {
+            let mutated = changed(LUANTI, |value| value["id"] = json!(id));
+            assert!(
+                validate_manifest(&mutated).is_ok(),
+                "expected admissible project ID: {id}"
+            );
+        }
+
+        for id in [
+            "", "luanti", "/game", "a/", "-a/b", "a/-b", "a/B", "A/b",
+            "a/b/c", "a/b_c", "a/é", "a/b ",
+        ] {
+            let mutated = changed(LUANTI, |value| value["id"] = json!(id));
+            let errors = validate_manifest(&mutated).unwrap_err();
+            assert!(
+                errors.iter().any(|error| error.contains("invalid project ID")),
+                "unexpected outcome for invalid project ID {id:?}: {errors:?}"
+            );
+        }
     }
 
     #[test]
