@@ -159,7 +159,10 @@ fn process_rejects_missing_input_file_and_extra_args() {
         .output()
         .expect("execute Rust oracle");
     assert!(!extra_args.status.success(), "extra CLI args accepted");
-    assert!(extra_args.stdout.is_empty(), "extra CLI args emitted success");
+    assert!(
+        extra_args.stdout.is_empty(),
+        "extra CLI args emitted success"
+    );
     assert_eq!(
         String::from_utf8_lossy(&extra_args.stderr).trim(),
         "Usage: adaptive_stress [fixture.json]"
