@@ -82,13 +82,61 @@ fn mask_inline_code(line: &str) -> String {
             }
         }
         if let Some(end) = ending {
-            masked[i..end].fill(b' ');
+            // Preserve line endings for stable per-line link diagnostics.
+            for byte in &mut masked[i..end] {
+                if *byte != b'\n' && *byte != b'\r' {
+                    *byte = b' ';
+                }
+            }
             i = end;
         } else {
             i += n;
         }
     }
     String::from_utf8(masked).expect("replacing ASCII backticks preserves UTF-8")
+}
+
+
+// Mask code spans across contiguous Markdown paragraph lines, without allowing
+// an unmatched opener to swallow links beyond a blank line or a fenced block.
+// Existing single-line backtick escaping and fence rules remain authoritative.
+fn mask_paragraph_code_spans(markdown: &str) -> String {
+    let mut visible = String::with_capacity(markdown.len());
+    let mut paragraph = String::new();
+    let mut fenced: Option<(u8, usize)> = None;
+    for raw_line in markdown.split_inclusive('\n') {
+        let line = raw_line.strip_suffix('\n').unwrap_or(raw_line);
+        let line = line.strip_suffix('\r').unwrap_or(line);
+        let fence_boundary = match fence_marker(line) {
+            Some((marker, width, _)) if fenced.is_none() => {
+                fenced = Some((marker, width));
+                true
+            }
+            Some((marker, width, can_close)) => match fenced {
+                Some((old, old_width))
+                    if old == marker && width >= old_width && can_close =>
+                {
+                    fenced = None;
+                    true
+                }
+                _ => false,
+            },
+            None => false,
+        };
+        if fence_boundary || fenced.is_some() || line.trim().is_empty() {
+            if !paragraph.is_empty() {
+                visible.push_str(&mask_inline_code(&paragraph));
+                paragraph.clear();
+            }
+            visible.push_str(raw_line);
+        } else {
+            paragraph.push_str(raw_line);
+        }
+    }
+    if !paragraph.is_empty() {
+        visible.push_str(&mask_inline_code(&paragraph));
+    }
+    visible
 }
 
 fn decode_once(value: &str) -> Result<String, String> {
@@ -199,8 +247,9 @@ fn preceded_by_escape(bytes: &[u8], index: usize) -> bool {
 
 fn collect_links(markdown: &str, document: &str, report: &mut Report) -> Vec<String> {
     let mut paths = Vec::new();
+    let visible_markdown = mask_paragraph_code_spans(markdown);
     let mut fenced: Option<(u8, usize)> = None;
-    for (line_idx, line) in markdown.lines().enumerate() {
+    for (line_idx, line) in visible_markdown.lines().enumerate() {
         if let Some((marker, width, can_close)) = fence_marker(line) {
             match fenced {
                 None => {
@@ -487,6 +536,43 @@ mod tests {
         assert_eq!(paths, vec!["present.md"]);
         assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
         assert!(report.errors[0].contains("unsupported/unclosed link syntax"));
+    }
+
+
+    #[test]
+    fn multiline_inline_code_span_does_not_create_false_missing_link() {
+        let mut report = Report::default();
+        let paths = collect_links(
+            "\x60first code line\n[hidden](missing.md)\nlast code line\x60 [real](present.md)\n",
+            "README.md",
+            &mut report,
+        );
+        assert_eq!(paths, vec!["present.md"]);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn unmatched_multiline_code_opener_cannot_hide_real_links() {
+        let mut report = Report::default();
+        let paths = collect_links(
+            "\x60unclosed opener\n[real](missing.md)\n",
+            "README.md",
+            &mut report,
+        );
+        assert_eq!(paths, vec!["missing.md"]);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn multiline_code_does_not_cross_blank_or_fenced_boundaries() {
+        let mut report = Report::default();
+        let paths = collect_links(
+            "\x60unclosed opener\n\n[before](one.md)\n\x60\x60\x60text\n[hidden](skip.md)\n\x60\x60\x60\n[after](two.md)\n",
+            "README.md",
+            &mut report,
+        );
+        assert_eq!(paths, vec!["one.md", "two.md"]);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
     }
 
     #[test]
