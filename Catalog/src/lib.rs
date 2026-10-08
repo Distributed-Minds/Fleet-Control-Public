@@ -705,7 +705,6 @@ mod tests {
         assert!(validate_manifest(&duplicate).is_err());
     }
 
-
     #[test]
     fn invalidated_review_evidence_cannot_support_permission_decisions() {
         let revoked = changed(OPENRA, |manifest| {
@@ -719,7 +718,9 @@ mod tests {
         });
         let errors = validate_manifest(&revoked).unwrap_err();
         assert!(
-            errors.iter().any(|message| message.contains("permission references invalidated evidence")),
+            errors
+                .iter()
+                .any(|message| message.contains("permission references invalidated evidence")),
             "{errors:?}"
         );
 
