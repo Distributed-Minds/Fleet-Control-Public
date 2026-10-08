@@ -155,17 +155,10 @@ fn real_git_shallow_boundary_cannot_reuse_a_full_history_merge_base() {
 
     // Do not interpret a missing base in an incomplete history as proof that
     // the underlying commits have no common ancestor.
-    let truncated = git.execute(
-        &["merge-base", "--all", &descendant, &right],
-        "",
-        false,
-    );
+    let truncated = git.execute(&["merge-base", "--all", &descendant, &right], "", false);
     assert_eq!(truncated.status.code(), Some(1));
     assert!(truncated.stdout.is_empty());
 
     fs::remove_file(shallow_file).expect("restore full history view");
-    assert_eq!(
-        git.merge_bases(&descendant, &right, false),
-        [root].into()
-    );
+    assert_eq!(git.merge_bases(&descendant, &right, false), [root].into());
 }
