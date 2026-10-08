@@ -136,13 +136,11 @@ fn composition(case: &Map<String, Value>) -> Result<Option<(String, Value)>, Str
                 "NO_AUTHORITY"
             },
         )),
-        Some("ANY_OF_DECLARED") => Some(verdict(
-            if number(case, "surviving_roots") > 0 {
-                "BOUNDED_AUTHORITY"
-            } else {
-                "NO_AUTHORITY"
-            },
-        )),
+        Some("ANY_OF_DECLARED") => Some(verdict(if number(case, "surviving_roots") > 0 {
+            "BOUNDED_AUTHORITY"
+        } else {
+            "NO_AUTHORITY"
+        })),
         Some(other) => return Err(format!("unsupported composition: {other}")),
     };
     Ok(output)
@@ -165,7 +163,8 @@ fn evaluate(case: &Map<String, Value>) -> Result<(String, Value), String> {
     if number(case, "failed_descendants") > 0 {
         return Ok(result("expected_closure", "PARTIAL"));
     }
-    if yes(case, "declared_surfaces_complete") && yes(case, "undeclared_external_surfaces_unknown") {
+    if yes(case, "declared_surfaces_complete") && yes(case, "undeclared_external_surfaces_unknown")
+    {
         return Ok(result("expected_closure", "COMPLETE_FOR_DECLARED_SURFACES"));
     }
 
@@ -197,11 +196,13 @@ fn evaluate(case: &Map<String, Value>) -> Result<(String, Value), String> {
     }
 
     if case.contains_key("handoff_independent") {
-        return Ok(if yes(case, "handoff_independent") && yes(case, "retained_scope_exact") {
-            verdict("PRESERVE_BOUNDED")
-        } else {
-            verdict("REJECT")
-        });
+        return Ok(
+            if yes(case, "handoff_independent") && yes(case, "retained_scope_exact") {
+                verdict("PRESERVE_BOUNDED")
+            } else {
+                verdict("REJECT")
+            },
+        );
     }
 
     // Cyclic edges cannot manufacture authority; multi-root rules still bind.
@@ -244,7 +245,10 @@ fn evaluate(case: &Map<String, Value>) -> Result<(String, Value), String> {
 fn validate_fixture(source: &str) -> Result<usize, String> {
     let fixture: Fixture = serde_json::from_str(source).map_err(|e| e.to_string())?;
     if fixture.spec != 2 {
-        return Err(format!("unsupported authority-closure spec {}", fixture.spec));
+        return Err(format!(
+            "unsupported authority-closure spec {}",
+            fixture.spec
+        ));
     }
     if fixture.cases.len() != REQUIRED.len() {
         return Err(format!(
@@ -349,7 +353,10 @@ mod tests {
     #[test]
     fn invalid_types_and_unknown_semantics_fail_closed() {
         assert!(evaluate(&input(json!({"cycle":"false","external_root":true}))).is_err());
-        assert!(evaluate(&input(json!({"cycle":true,"external_root":true,"composition":"QUORUM"}))).is_err());
+        assert!(evaluate(&input(
+            json!({"cycle":true,"external_root":true,"composition":"QUORUM"})
+        ))
+        .is_err());
         assert!(evaluate(&input(json!({"expected":"NO_AUTHORITY","cycle":true}))).is_err());
         assert!(evaluate(&input(json!({"failed_descendants":-1}))).is_err());
     }
@@ -372,8 +379,12 @@ mod tests {
 
     #[test]
     fn material_changes_produce_different_verdicts() {
-        let denied = input(json!({"provider_credential_valid":true,"fleet_authority_revoked":true,"external_invalidation_complete":false}));
-        let settled = input(json!({"provider_credential_valid":true,"fleet_authority_revoked":true,"external_invalidation_complete":true}));
+        let denied = input(
+            json!({"provider_credential_valid":true,"fleet_authority_revoked":true,"external_invalidation_complete":false}),
+        );
+        let settled = input(
+            json!({"provider_credential_valid":true,"fleet_authority_revoked":true,"external_invalidation_complete":true}),
+        );
         assert_ne!(evaluate(&denied).unwrap(), evaluate(&settled).unwrap());
         check(
             json!({"handoff_independent":false,"retained_scope_exact":true}),
