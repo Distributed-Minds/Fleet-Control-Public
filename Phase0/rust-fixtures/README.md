@@ -7,13 +7,29 @@ specification v3 (17 decisions, 5 recovery cases, 13 traces = 35 cases).
 The original Python checker and JSON fixture remain untouched until all
 families have proven executable parity and the migration can integrate safely.
 
-## Run from the repository root
+## Reproduce the CI validation from the repository root
 
-With a Rust/Cargo toolchain installed:
+The [candidate validation workflow](../../.github/workflows/phase0-rust-containment.yml)
+uses **Rust 1.85.1** with rustfmt and Clippy. From a fresh clone, install a
+trusted `rustup` first (this prototype does **not** bundle a compiler), then
+run the same pinned-toolchain commands from the repository root:
 
-    cargo fetch --manifest-path Phase0/rust-fixtures/Cargo.toml --locked
-    cargo test --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline
-    cargo run --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline -- Phase0/fixtures/containment-spec3.json
+```sh
+set -eu
+rustup toolchain install 1.85.1 --profile minimal --component clippy --component rustfmt
+rustup run 1.85.1 cargo fmt --manifest-path Phase0/rust-fixtures/Cargo.toml -- --check
+rustup run 1.85.1 cargo fetch --manifest-path Phase0/rust-fixtures/Cargo.toml --locked
+rustup run 1.85.1 cargo test --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline
+rustup run 1.85.1 cargo clippy --manifest-path Phase0/rust-fixtures/Cargo.toml --all-targets --locked --offline -- -D warnings
+rustup run 1.85.1 cargo run --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline -- Phase0/fixtures/containment-spec3.json
+```
+
+Run these commands in order. The initial toolchain installation and
+`cargo fetch --locked` may need network access. `--offline` applies only
+after the dependencies have been fetched; it does **not** prove a cold-airgap
+install. Keep `--locked` so dependency resolution cannot silently change
+the committed lockfile. Failures in formatting, compilation, tests, Clippy,
+fixture execution or dependency fetch are **not** a passing validation.
 
 The CLI exits nonzero on an invalid schema/type, absent fixture, repeated ID,
 missing required semantic input or disagreement between its independently
