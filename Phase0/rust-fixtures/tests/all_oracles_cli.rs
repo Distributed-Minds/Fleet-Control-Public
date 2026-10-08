@@ -48,7 +48,10 @@ fn stderr(output: &Output) -> String {
 #[test]
 fn every_fixed_sibling_is_a_compiled_binary() {
     for path in SIBLINGS {
-        assert!(Path::new(path).is_file(), "required sibling not built: {path}");
+        assert!(
+            Path::new(path).is_file(),
+            "required sibling not built: {path}"
+        );
     }
 }
 
@@ -77,7 +80,12 @@ fn all_families_execute_real_oracles_and_report_only_actual_successes() {
 
 #[test]
 fn one_family_does_not_claim_other_families_passed() {
-    let output = invoke(&["--family", "authority_closure", "--root", root().to_str().unwrap()]);
+    let output = invoke(&[
+        "--family",
+        "authority_closure",
+        "--root",
+        root().to_str().unwrap(),
+    ]);
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(stdout(&output), "PASS authority_closure\n");
 }
