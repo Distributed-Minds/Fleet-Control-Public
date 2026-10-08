@@ -5,7 +5,7 @@
 //! Tests: rustc --edition=2021 --test -D warnings scripts/check-public-doc-links.rs -o /tmp/free-energy-doc-links-tests
 //!        /tmp/free-energy-doc-links-tests
 //!
-//! Supported: ordinary inline Markdown links with file destinations, fragments,
+//! Supported: ordinary inline Markdown links and image destinations, fragments,
 //! optional quoted titles, and angle-delimited destinations. This is not a full
 //! CommonMark or HTTP checker. Unsupported destination syntax is an error.
 
@@ -284,7 +284,6 @@ fn collect_links(markdown: &str, document: &str, report: &mut Report) -> Vec<Str
             // Markdown labels may contain balanced nested brackets. Stopping
             // at the first ] silently misses a valid [outer [inner]](file.md).
             // Escaped brackets do not affect the nesting depth.
-            let is_image = i > 0 && bytes[i - 1] == b'!' && !preceded_by_escape(bytes, i - 1);
             let mut after = i + 1;
             let mut label_depth = 1usize;
             while after < bytes.len() {
@@ -304,11 +303,6 @@ fn collect_links(markdown: &str, document: &str, report: &mut Report) -> Vec<Str
             }
             if after == bytes.len() {
                 i += 1;
-                continue;
-            }
-            if is_image {
-                // An image's nested alt text is not a local-link target.
-                i = after + 1;
                 continue;
             }
             if bytes.get(after + 1) != Some(&b'(') {
@@ -677,7 +671,7 @@ mod tests {
             "README.md",
             &mut report,
         );
-        assert_eq!(paths, vec!["exists.md", "other.md"]);
+        assert_eq!(paths, vec!["exists.md", "other.md", "missing.png"]);
         assert!(report.errors.is_empty(), "{:?}", report.errors);
     }
 
@@ -689,7 +683,7 @@ mod tests {
             "README.md",
             &mut report,
         );
-        assert_eq!(paths, vec!["a.md", "b.md"]);
+        assert_eq!(paths, vec!["a.md", "missing.png", "b.md"]);
         assert!(report.errors.is_empty(), "{:?}", report.errors);
     }
 
@@ -737,8 +731,40 @@ mod tests {
             "README.md",
             &mut report,
         );
-        assert_eq!(links, vec!["present.md"]);
+        assert_eq!(links, vec!["missing.png", "present.md"]);
         assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn local_image_destination_is_checked_but_nested_alt_link_is_not() {
+        let sandbox = Sandbox::new();
+        sandbox.write(
+            "README.md",
+            "![picture [alt](unrelated.md)](missing.png) [real](present.md)",
+        );
+        sandbox.write("present.md", "present");
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 2);
+        assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+        assert!(
+            report.errors[0].contains("target missing: missing.png"),
+            "{:?}",
+            report.errors
+        );
+        sandbox.write("missing.png", "local image");
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 2);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn unsafe_image_scheme_is_rejected_even_when_no_text_link_exists() {
+        let sandbox = Sandbox::new();
+        sandbox.write("README.md", "![unsafe](javascript:payload)");
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 0);
+        assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+        assert!(report.errors[0].contains("unsafe URI scheme"), "{:?}", report.errors);
     }
 
     #[test]
@@ -747,15 +773,16 @@ mod tests {
         sandbox.write("NEXT.md", "# next");
         sandbox.write("a b.md", "# space");
         sandbox.write("café.md", "# unicode");
+        sandbox.write("image.png", "local image fixture");
         sandbox.write("README.md", concat!(
             "[one](NEXT.md#section) [two](<a%20b.md> \"title\")\n",
             "[three](caf%C3%A9.md 'title') [frag](#heading)\n",
             "[external](https://example.com/no.md) [mail](mailto:me@example.com)\n",
-            "![image](missing.png) \x60[inline](missing.md)\x60\n",
+            "![image](image.png) \x60[inline](missing.md)\x60\n",
             "\x60\x60\x60md\n[code](missing.md)\n\x60\x60\x60\n"
         ));
         let result = sandbox.scan();
-        assert_eq!(result.local_links, 3);
+        assert_eq!(result.local_links, 4);
         assert!(result.errors.is_empty(), "{:?}", result.errors);
     }
 
