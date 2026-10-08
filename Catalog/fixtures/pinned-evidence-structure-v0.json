@@ -71,6 +71,90 @@
       "expected_valid": true
     },
     {
+      "id": "pinned-valid-nested-path",
+      "overrides": {
+        "path": "assets/credits.ron"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "pinned-valid-unicode-path",
+      "overrides": {
+        "path": "références/文件.txt"
+      },
+      "expected_valid": true
+    },
+    {
+      "id": "pinned-parent-traversal",
+      "overrides": {
+        "path": "../LICENSE"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "pinned-interior-parent-traversal",
+      "overrides": {
+        "path": "assets/../LICENSE"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "pinned-current-directory",
+      "overrides": {
+        "path": "./LICENSE"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "pinned-interior-current-directory",
+      "overrides": {
+        "path": "assets/./LICENSE"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "pinned-absolute-path",
+      "overrides": {
+        "path": "/etc/passwd"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "pinned-windows-drive-path",
+      "overrides": {
+        "path": "C:/Windows/system.ini"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "pinned-backslash-path",
+      "overrides": {
+        "path": "assets\\credits.ron"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "pinned-empty-segment-path",
+      "overrides": {
+        "path": "assets//credits.ron"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "pinned-trailing-slash-path",
+      "overrides": {
+        "path": "assets/"
+      },
+      "expected_valid": false
+    },
+    {
+      "id": "pinned-control-byte-path",
+      "overrides": {
+        "path": "LICENSE\netc"
+      },
+      "expected_valid": false
+    },
+    {
       "id": "mutable-page-no-revision",
       "overrides": {
         "evidence_kind": "MUTABLE_UPSTREAM_PAGE",
