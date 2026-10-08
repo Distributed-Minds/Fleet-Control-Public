@@ -10,7 +10,7 @@ This ledger separates project self-description from independent standards/resear
 
 Repository:
 - https://github.com/kian-cx/signetprotocol
-- observed main head: `36cf99c9a24d0ea1ef984c74a2f4d72fcb7fa85c`
+- observed main head: `2ddb136ee941705d3e1c020eaddad93be65026f2`
 
 Key sources:
 - README: https://github.com/kian-cx/signetprotocol/blob/main/README.md
@@ -187,3 +187,196 @@ The paper explicitly connects games/agents with HLA simulator interoperability a
 4. Treat model/vendor benchmarks as `CLAIMED` until reproduced.
 5. Record access limitations instead of converting “not found” into “does not exist.”
 6. Use jurisdiction-specific qualified sources before making prescriptive legal claims.
+
+
+---
+
+## L4 validation, conformance, ecosystem, and adoption sources
+
+### W3C implementation experience
+
+- W3C Process Document, §6.3.2 Implementation Experience  
+  https://www.w3.org/policies/process/#implementation-experience
+
+Evidence class: **primary standards-process source**.
+
+L4 relevance: explicitly asks about independent interoperable implementations, implementations by non-authors, public deployment, ecosystem-wide implementation experience, and implementation difficulties.
+
+### IETF standards maturity
+
+- RFC 6410 — Reducing the Standards Track to Two Maturity Levels  
+  https://www.rfc-editor.org/rfc/rfc6410.html
+
+Evidence class: **primary standards-process source**.
+
+L4 relevance: Internet Standard advancement requires at least two independent interoperating implementations with widespread deployment and successful operational experience, plus checks for interoperability-breaking errata and unused complexity.
+
+### Khronos conformance
+
+- OpenXR CTS Usage Instructions and Developer Guide  
+  https://registry.khronos.org/OpenXR/conformance/cts_usage.html
+- OpenXR conformance overview / ecosystem  
+  https://www.khronos.org/openxr/
+- OpenXR conformant products  
+  https://www.khronos.org/conformance/adopters/conformant-products/openxr
+- Vulkan CTS documentation  
+  https://github.khronos.org/Vulkan-Site/guide/latest/vulkan_cts.html
+- Vulkan conformant products  
+  https://www.khronos.org/conformance/adopters/conformant-products/vulkan
+
+Evidence class: **primary standards-organization / conformance sources**.
+
+L4 relevance: public CTS, exact suite/revision evidence, formal adopter/conformance claims, and versioned public implementation records.
+
+### OpenID conformance and pairwise interoperability
+
+- OpenID Foundation certification and conformance overview  
+  https://openid.net/certification/
+- OpenID Conformance Suite  
+  https://openid.net/certification/about-conformance-suite/
+- 2026 OpenID4VP/OpenID4VCI conformance launch with 2025 pairwise interoperability results  
+  https://openid.net/openid4vp-and-openid4vci-conformance-tests-are-complete-and-open-for-self-certification/
+
+Evidence class: **primary standards-organization / interoperability-event source**.
+
+L4 relevance: combines self-conformance with real pairwise testing and reports tested/possible pairings plus pass rates. The 2025 OpenID4VP event reports 153 of 224 possible pairings tested with more than 90% passing; the July 2025 OpenID4VCI event reports 47 pairs tested with 87% passing.
+
+### Web Platform Tests / Interop
+
+- Web Platform Tests documentation  
+  https://web-platform-tests.org/
+- Interop project  
+  https://github.com/web-platform-tests/interop
+- Interop 2026 README  
+  https://github.com/web-platform-tests/interop/blob/main/2026/README.md
+
+Evidence class: **primary open test-suite / implementation-collaboration source**.
+
+L4 relevance: one shared test corpus runs continuously across independent implementations; public per-engine and shared scores expose differential compatibility rather than only one implementation's test total.
+
+### OGC compliance testing
+
+- OGC Compliance Testing Program Policies & Procedures  
+  https://docs.ogc.org/pol/08-134r11.html
+- OGC TEAM Engine  
+  https://cite.ogc.org/teamengine/
+- OGC developer compliance overview  
+  https://developer.ogc.org/
+
+Evidence class: **primary standards-organization / compliance-program source**.
+
+L4 relevance: separates Abstract Test Suites (ATS), Executable Test Suites (ETS), and conformance classes. This is a useful model for mapping Signet normative assertions to executable tests and profile-scoped conformance.
+
+### HLA / SpaceFOM semantic-interoperability evidence
+
+- NASA NTRS — Promoting A-Priori Interoperability of HLA-Based Simulations in the Space Domain: The SISO Space Reference FOM Initiative  
+  https://ntrs.nasa.gov/citations/20160006730
+- NASA NTRS — On the Execution Control of HLA Federations using the SISO Space Reference FOM  
+  https://ntrs.nasa.gov/citations/20170005623
+- Fraunhofer — Towards a new NATO certification capability for HLA interoperability  
+  https://publica.fraunhofer.de/entities/publication/b3a0cb70-2a1a-4d39-983c-c6286549c66d
+
+Evidence class: **institutional technical literature / interoperability-program evidence**.
+
+L4 relevance: common HLA use did not automatically yield a-priori interoperability because organizations used incompatible Federation Object Models. Shared reference models, federation agreements, and explicit certification/testing were needed.
+
+### Metaverse Standards Forum implementation programs
+
+- Projects  
+  https://metaverse-standards.org/projects/
+- Forum Labs initiative  
+  https://metaverse-standards.org/forum-labs/
+- FAQ / operating model  
+  https://metaverse-standards.org/faq/
+
+Evidence class: **primary industry-forum source**.
+
+L4 relevance: emphasizes implementation prototyping, pilots, testbeds, plugfests, open tooling, and validation as adoption mechanisms. Membership/community size is therefore not treated as interoperability evidence by itself.
+
+
+### NASA Artemis / living-profile evidence
+
+- NASA NTRS — Development of the Artemis Distributed Simulation FOMs  
+  https://ntrs.nasa.gov/citations/20250000892
+- NASA NTRS — Evolving the SpaceFOM: Lessons Learned and Future Development  
+  https://ntrs.nasa.gov/citations/20250000915
+- NASA NTRS — Enabling Simulation Interoperability between International Standards in the Space Domain  
+  https://ntrs.nasa.gov/citations/20220009047
+
+Evidence class: **primary/institutional technical literature**.
+
+L4 relevance:
+
+- HLA + SpaceFOM provide a strong common foundation but Artemis still needs mission-specific common datatypes, messages, execution protocols, and FOM extensions;
+- implementation/deployment experience is explicitly used to evolve SpaceFOM;
+- bridging HLA, RPR FOM, SMP, and SpaceFOM requires explicit interoperability rules rather than name-level standards compatibility.
+
+This supports profile-scoped conformance, composition testing, and explicit cross-standard bridge evidence.
+
+
+---
+
+## Signet 2 response-paper sources added 2026-10-05
+
+### Signet 2 / Signet Forge primary design sources
+
+- Signet 2 proposal — intents, archetypes and translation profiles  
+  https://github.com/kian-cx/signetprotocol/blob/main/docs/content/proposals/translation-profiles.mdx
+- Signet Forge architecture and concepts  
+  https://github.com/kian-cx/signetprotocol/blob/main/docs/content/forge/architecture.mdx
+- Signet Forge reliability and limits  
+  https://github.com/kian-cx/signetprotocol/blob/main/docs/content/forge/reliability-and-limits.mdx
+- Signet Forge roadmap and open questions  
+  https://github.com/kian-cx/signetprotocol/blob/main/docs/content/forge/roadmap.mdx
+- Publication commit containing the full Signet 2 / Signet Forge design-document expansion  
+  https://github.com/kian-cx/signetprotocol/commit/2ddb136ee941705d3e1c020eaddad93be65026f2
+
+Evidence class: **primary project design source**.
+
+Observed status at research time: Signet 2 is explicitly a draft proposal and not implemented. The design proposes a shared intent/archetype semantic hub, capabilities, calibration and motion profiles, pinned translation profiles, an offline/human-confirmed resolver path, and Signet Forge as a separate companion tool.
+
+L4 relevance: this is the paper being answered. Claims are treated as proposed architecture or hypotheses rather than as implemented behavior.
+
+### NIST canonical-data-model scaling precedent
+
+- NIST SP 1108R2 — *NIST Framework and Roadmap for Smart Grid Interoperability Standards, Release 2.0*, §3.7.3 Common Understanding of Information  
+  https://www.nist.gov/system/files/documents/smartgrid/NIST_Framework_Release_2-0_corr.pdf
+
+Evidence class: **primary government interoperability framework**.
+
+L4 relevance: NIST explicitly describes bilateral semantic transformations among n systems as growing on the order of n² and a canonical data model reducing the mapping burden toward n+1. The same section also emphasizes semantic harmonization. This is strong precedent for distinguishing Signet 2's mapping-topology improvement from proof of semantic interoperability.
+
+### IETF capability-negotiation precedent
+
+- RFC 5939 — Session Description Protocol (SDP) Capability Negotiation  
+  https://www.rfc-editor.org/rfc/rfc5939.html
+
+Evidence class: **primary IETF standard**.
+
+L4 relevance: distinguishes advertised capabilities, potential configurations, actual configurations, and negotiation. The Signet lesson is conceptual rather than syntactic: capability declaration should not be conflated with the actual session configuration selected.
+
+### IPv6 Ready conformance/interoperability separation
+
+- IPv6 Ready news / test-plan updates  
+  https://www.ipv6ready.org/news.html
+- IPv6 Ready FAQ  
+  https://www.ipv6ready.org/faq.html
+
+Evidence class: **primary certification-program source**.
+
+L4 relevance: current program material distinguishes conformance testing from interoperability testing. The SRv6 Gold program requires both conformance and interoperability plans, and the FAQ describes submission of both test logs for relevant retesting. This is direct precedent for:
+
+~~~text
+SELF_CONFORMANCE != PAIRWISE_INTEROPERABILITY
+~~~
+
+### SpaceFOM V2 current semantic-interoperability evidence
+
+Crues, Zack; Möller, Björn; Garro, Alfredo; Dexter, Dan.  
+**SpaceFOM V2: The Next Generation in Space Simulation Interoperability and How You Can Help.**  
+SISO SIMposium, 2026. NASA NTRS Document ID 20260008222.  
+https://ntrs.nasa.gov/citations/20260008222
+
+Evidence class: **primary/institutional current technical source**.
+
+L4 relevance: explicitly states that heterogeneous simulation interoperability requires more than compatible software and needs common semantics for time, space, physical entities, and execution control. It also describes evolution through operational experience and multi-organization adoption. This supports a small, versioned semantic core that evolves from independent implementation evidence.
