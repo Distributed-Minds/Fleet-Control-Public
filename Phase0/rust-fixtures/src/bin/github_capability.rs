@@ -286,7 +286,10 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
                 errors.push(format!("case {}: canonical scenario name mismatch", c.id));
             }
             if c.expected != CANONICAL_VERDICTS[index] {
-                errors.push(format!("case {}: canonical expected outcome mismatch", c.id));
+                errors.push(format!(
+                    "case {}: canonical expected outcome mismatch",
+                    c.id
+                ));
             }
         }
     }
@@ -434,6 +437,4 @@ mod tests {
         // Case 1 previously had no input rule pinning this false outcome.
         let changed_outcome = mutate(1, "expected", json!("ACTION_BLOCKED"));
         assert!(checked(changed_outcome).is_err());
-    }
-
-}
+    }}
