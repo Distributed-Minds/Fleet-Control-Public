@@ -128,8 +128,8 @@ fn run_oracles(selection: Selection, root: &Path) -> Result<(), String> {
     if !root.join("Phase0/rust-fixtures/Cargo.toml").is_file() {
         return Err("root is missing Phase0/rust-fixtures/Cargo.toml".to_owned());
     }
-    let executable = env::current_exe()
-        .map_err(|error| format!("cannot locate runner executable: {error}"))?;
+    let executable =
+        env::current_exe().map_err(|error| format!("cannot locate runner executable: {error}"))?;
     let bin_dir = executable
         .parent()
         .ok_or("runner executable has no parent directory")?;
@@ -142,7 +142,10 @@ fn run_oracles(selection: Selection, root: &Path) -> Result<(), String> {
         }
         let target = bin_dir.join(oracle.executable);
         if !target.is_file() {
-            failed.push(format!("{}: compiled sibling executable is missing", oracle.name));
+            failed.push(format!(
+                "{}: compiled sibling executable is missing",
+                oracle.name
+            ));
             continue;
         }
         let mut command = Command::new(target);
@@ -187,7 +190,12 @@ mod tests {
     use super::*;
 
     fn options(input: &[&str]) -> Result<(Selection, PathBuf), String> {
-        parse_args(&input.iter().map(|value| (*value).to_owned()).collect::<Vec<_>>())
+        parse_args(
+            &input
+                .iter()
+                .map(|value| (*value).to_owned())
+                .collect::<Vec<_>>(),
+        )
     }
 
     #[test]
@@ -221,9 +229,7 @@ mod tests {
 
     #[test]
     fn wrong_checkout_root_fails_before_any_child_execution() {
-        assert!(run_oracles(Selection::All, Path::new("/nonexistent/free-energy-root"))
-            .is_err());
-        assert!(run_oracles(Selection::Family("containment".into()), Path::new("/"))
-            .is_err());
+        assert!(run_oracles(Selection::All, Path::new("/nonexistent/free-energy-root")).is_err());
+        assert!(run_oracles(Selection::Family("containment".into()), Path::new("/")).is_err());
     }
 }
