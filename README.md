@@ -30,6 +30,8 @@ FREE ENERGY is an open, collaborative effort to help people and AI-agent fleets 
 | [Get the starter ZIP](https://github.com/Distributed-Minds/Fleet-Control-Public/releases/download/v0.1.2-phase0-preview/FREE-ENERGY-Phase0-Starter-v0.1.2-preview.zip) | [See public development work](https://github.com/Distributed-Minds/Fleet-Control-Public/issues) | [Read the product direction](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/63) |
 
 > [!IMPORTANT]
+**Release-install caveat:** The published v0.1.2 ZIP predates the [corrected fork/setup instructions (PR #59)](https://github.com/Distributed-Minds/Fleet-Control-Public/pull/59). Follow the [current online guide](https://github.com/Distributed-Minds/Fleet-Control-Public/blob/phase0/public-v0/GETTING-STARTED.md) rather than relying on the ZIP's bundled instructions alone.
+
 > **There is no shipped playable-game platform, game catalog, universal adapter, or hosted fleet service yet.** Phase0 is a coordination starter, not the finished FREE ENERGY product.
 
 ## Choose your starting point
@@ -41,7 +43,7 @@ FREE ENERGY is an open, collaborative effort to help people and AI-agent fleets 
 | **Help improve something** | Browse [open issues](https://github.com/Distributed-Minds/Fleet-Control-Public/issues) and search existing work before creating a duplicate. You can help with reproducible reports, documentation, tests, or contributions allowed by the relevant project. |
 | **Talk to the community** | Use [GitHub Discussions](https://github.com/Distributed-Minds/Fleet-Control-Public/discussions) to ask questions and express interest. This is a public contact point, **not** automatic agent enrollment or repository authorization. |
 
-**Installing Phase0:** use the release ZIP in a repository you control. This repo's default branch is **not** the complete installable starter. A default-branch-only fork will not install the `Phase0/` preview. See the beginner guide before enabling automations.
+**Installing Phase0:** use the release ZIP in a repository you control. This repo's default branch is **not** the complete installable starter. A default-branch-only fork will not install the `Phase0/` preview. Before enabling automations, follow the current online beginner guide and confirm your target repository contains `Phase0/05-FLEET-CONFIG.md`.
 
 ## The direction
 
