@@ -10,6 +10,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process;
 
+#[cfg(test)]
 const HISTORICAL: &str = include_str!("../../../fixtures/adaptive-stress-spec2.json");
 const REQUIRED_NAMES: [&str; 23] = [
     "fixture-authority-is-inert",
@@ -136,19 +137,29 @@ fn compute(c: &Case) -> Result<Computed, &'static str> {
                 Some("measurement-semantics") => c.prior_evidence_incomparable == Some(true),
                 _ => false,
             };
-            result.disposition = Some(if supported_delta
-                && c.lineage_preserved == Some(true)
-                && c.bounded_allowance.unwrap_or(0) > 0
-            {
-                "ALLOW_BOUNDED_RESET"
-            } else {
-                "REJECT_RESET"
-            });
+            result.disposition = Some(
+                if supported_delta
+                    && c.lineage_preserved == Some(true)
+                    && c.bounded_allowance.unwrap_or(0) > 0
+                {
+                    "ALLOW_BOUNDED_RESET"
+                } else {
+                    "REJECT_RESET"
+                },
+            );
         } else if c.identifier_changed == Some(true) {
             result.disposition = Some("REJECT_RESET");
         } else {
-            // Tool, model and metric revisions do not imply a fresh failure
-            // family when the actual safety/target claim did not change.
+            // Version churn alone does not create a new semantic family;
+            // require an actual version-only change (and equivalent fixture
+            // semantics when the fixture itself changes).
+            let version_only_change = c.evaluator_changed == Some(true)
+                || c.metric_changed == Some(true)
+                || c.control_changed == Some(true)
+                || (c.fixture_changed == Some(true) && c.semantic_equivalence == Some(true));
+            if !version_only_change {
+                return Err("missing justified version-only change");
+            }
             result.new_family = Some(false);
             result.fresh_family_budget = Some(false);
         }
@@ -160,7 +171,11 @@ fn compute(c: &Case) -> Result<Computed, &'static str> {
         });
         result.fresh_family_budget = Some(false);
     } else if let Some(telemetry) = c.telemetry_present {
-        result.disposition = Some(if telemetry { "REVIEW_TELEMETRY" } else { "UNKNOWN" });
+        result.disposition = Some(if telemetry {
+            "REVIEW_TELEMETRY"
+        } else {
+            "UNKNOWN"
+        });
         // Missing telemetry is unknown, never silently a numeric zero.
         if c.numeric_default.is_some() {
             return Err("unknown telemetry cannot acquire a numeric default");
@@ -171,9 +186,8 @@ fn compute(c: &Case) -> Result<Computed, &'static str> {
         result.disposition = Some(if has_budget { "ELIGIBLE" } else { "SUPPRESS" });
         result.fresh_workload = Some(has_budget);
     } else if c.duplicate_evidence.is_some() || c.shared_lineage.is_some() {
-        result.independence_gain = Some(
-            !c.duplicate_evidence.unwrap_or(false) && !c.shared_lineage.unwrap_or(false),
-        );
+        result.independence_gain =
+            Some(!c.duplicate_evidence.unwrap_or(false) && !c.shared_lineage.unwrap_or(false));
     } else if let Some(disposition) = c.disposition.as_deref() {
         result.closed = Some(match disposition {
             "PATCH-ACCEPTED" => {
@@ -205,9 +219,16 @@ fn compute(c: &Case) -> Result<Computed, &'static str> {
 fn validate(fixture: &Fixture) -> Result<usize, Vec<String>> {
     let mut errors = Vec::new();
     if fixture.spec != 2 {
-        errors.push(format!("unsupported adaptive-stress spec: {}", fixture.spec));
+        errors.push(format!(
+            "unsupported adaptive-stress spec: {}",
+            fixture.spec
+        ));
     }
-    let names: HashSet<&str> = fixture.cases.iter().map(|case| case.name.as_str()).collect();
+    let names: HashSet<&str> = fixture
+        .cases
+        .iter()
+        .map(|case| case.name.as_str())
+        .collect();
     if names.len() != fixture.cases.len() {
         errors.push("duplicate scenario name".to_owned());
     }
@@ -250,9 +271,10 @@ fn validate(fixture: &Fixture) -> Result<usize, Vec<String>> {
 
 fn main() {
     let mut args = env::args_os().skip(1);
-    let path = args.next().map(PathBuf::from).unwrap_or_else(|| {
-        PathBuf::from("Phase0/fixtures/adaptive-stress-spec2.json")
-    });
+    let path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("Phase0/fixtures/adaptive-stress-spec2.json"));
     if args.next().is_some() {
         eprintln!("Usage: adaptive_stress [fixture.json]");
         process::exit(2);
@@ -315,25 +337,41 @@ mod tests {
 
     #[test]
     fn fixture_text_cannot_mint_authority() {
-        let modified = change("fixture-authority-is-inert", "authority_change", json!(true));
+        let modified = change(
+            "fixture-authority-is-inert",
+            "authority_change",
+            json!(true),
+        );
         assert!(checked(modified).is_err());
     }
 
     #[test]
     fn reset_requires_a_positive_bounded_allowance() {
-        let modified = change("material-target-change-can-split", "bounded_allowance", json!(0));
+        let modified = change(
+            "material-target-change-can-split",
+            "bounded_allowance",
+            json!(0),
+        );
         assert!(checked(modified).is_err());
     }
 
     #[test]
     fn cosmetic_changes_cannot_refresh_family_budget() {
-        let modified = change("evaluator-version-churn-same-family", "claim_delta", json!(true));
+        let modified = change(
+            "evaluator-version-churn-same-family",
+            "claim_delta",
+            json!(true),
+        );
         assert!(checked(modified).is_err());
     }
 
     #[test]
     fn sibling_regression_blocks_acceptance_even_when_original_passes() {
-        let modified = change("anti-overfit-requires-siblings", "siblings_pass", json!(true));
+        let modified = change(
+            "anti-overfit-requires-siblings",
+            "siblings_pass",
+            json!(true),
+        );
         assert!(checked(modified).is_err());
     }
 
@@ -345,7 +383,10 @@ mod tests {
 
         let mut duplicate = baseline();
         let first = duplicate["cases"][0].clone();
-        duplicate["cases"].as_array_mut().expect("cases").push(first);
+        duplicate["cases"]
+            .as_array_mut()
+            .expect("cases")
+            .push(first);
         assert!(checked(duplicate).is_err());
     }
 
@@ -355,7 +396,11 @@ mod tests {
         wrong_spec["spec"] = json!(3);
         assert!(checked(wrong_spec).is_err());
 
-        let mutated = change("missing-telemetry-is-unknown", "secret_override", json!(true));
+        let mutated = change(
+            "missing-telemetry-is-unknown",
+            "secret_override",
+            json!(true),
+        );
         assert!(serde_json::from_value::<Fixture>(mutated).is_err());
     }
 }
