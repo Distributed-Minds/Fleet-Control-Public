@@ -1140,14 +1140,15 @@ mod tests {
             let forged = valid.replacen(&marker, &format!("{marker}null,{marker}"), 1);
             let errors = validate_manifest(&forged).expect_err("duplicate must fail");
             assert!(
-                errors.iter().any(|error| error.contains("duplicate JSON object member")
-                    && error.contains(key)),
+                errors
+                    .iter()
+                    .any(|error| error.contains("duplicate JSON object member") && error.contains(key)),
                 "{key} was not rejected as a duplicate: {errors:?}"
             );
         }
 
         // Decoded JSON member names, not raw escape spellings, carry identity.
-        let alias = r#"{"evidence":1,"\\u0065vidence":2}"#;
+        let alias = r#"{"evidence":1,"\u0065vidence":2}"#;
         assert!(reject_duplicate_json_members(alias)
             .unwrap_err()
             .to_string()
