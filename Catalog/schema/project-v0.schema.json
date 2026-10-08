@@ -188,7 +188,29 @@
         "local_test_evidence_id": {
           "$ref": "#/$defs/maybe_string"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "FREE_ENERGY_VERIFIED"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "local_test_evidence_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ]
     },
     "rights": {
       "type": "object",
@@ -361,7 +383,33 @@
         "test_evidence_id": {
           "$ref": "#/$defs/maybe_string"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "TESTED"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "target_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "test_evidence_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ]
     },
     "evidence": {
       "type": "object",
