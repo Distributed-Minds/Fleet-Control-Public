@@ -49,6 +49,14 @@ This fork method copies **all** upstream branches, including historical/research
 
 Open [FREE ENERGY releases](https://github.com/Distributed-Minds/Fleet-Control-Public/releases), download the latest `FREE-ENERGY-Phase0-Starter-…-preview.zip`, and copy its entire `Phase0/` directory into the root of a repository you own; **commit** the files. Preserve any existing source code and your repository's own root `LICENSE`. This avoids copying upstream work-in-progress branches. The ZIP also contains the Project and automation prompt templates used in later steps.
 
+**Check the published ZIP before copying it.** For the existing [v0.1.2 release](https://github.com/Distributed-Minds/Fleet-Control-Public/releases/tag/v0.1.2-phase0-preview), download both `FREE-ENERGY-Phase0-Starter-v0.1.2-preview.zip` and its matching [`.zip.sha256` checksum file](https://github.com/Distributed-Minds/Fleet-Control-Public/releases/download/v0.1.2-phase0-preview/FREE-ENERGY-Phase0-Starter-v0.1.2-preview.zip.sha256) into the same folder. On a system with `sha256sum`, run this command **from that folder**:
+
+```sh
+sha256sum --check FREE-ENERGY-Phase0-Starter-v0.1.2-preview.zip.sha256
+```
+
+Continue only when the ZIP reports `OK`; **stop** on a missing file or checksum mismatch. Without `sha256sum`, calculate the downloaded ZIP's SHA-256 with a trusted hashing tool and compare it to the digest in the downloaded checksum file. Use the ZIP and checksum from the **same release**, and check that the checksum refers to the exact ZIP filename; do not assume future releases publish the same assets. Matching a checksum detects differences relative to that checksum file; it does **not independently authenticate the publisher**.
+
 **Keep the Phase0 license notice with the installed files.** Check that your installed `Phase0/LICENSE` contains the [FREE ENERGY Phase0 MIT notice](LICENSE). The current online preview includes that file inside `Phase0/`; the historical v0.1.2 ZIP predates this addition, so when installing from that ZIP, copy the public [Phase0 MIT notice](LICENSE) into `Phase0/LICENSE` yourself before committing. **Do not overwrite your existing repository's root `LICENSE`:** Phase0's MIT notice covers the copied Phase0 files, not unrelated files in your project.
 
 **Published ZIP version caveat:** The existing `v0.1.2-phase0-preview` release ZIP predates the corrected fork/default-branch instructions in this online guide. It is a historical starter package, **not** an archive of the current `phase0/public-v0` head. Follow these up-to-date online steps even if you use the ZIP, confirm `Phase0/05-FLEET-CONFIG.md` appears on **your repository's default branch**, and inspect the installed files before creating or enabling automations; do not rely on bundled older setup text alone.
