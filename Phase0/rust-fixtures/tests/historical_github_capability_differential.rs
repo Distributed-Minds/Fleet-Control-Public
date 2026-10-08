@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
-use std::process::{self, Command, Output};
+use std::process::{self, Command};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 const BASELINE: &str = include_str!("../../fixtures/github-capability-spec5.json");
