@@ -34,10 +34,7 @@ fn checked(label: &str, fixture: &Value, should_pass: bool) {
     .expect("write fixture bytes");
     drop(file);
 
-    let python_result = Command::new("python3")
-        .arg(&python)
-        .arg(&path)
-        .output();
+    let python_result = Command::new("python3").arg(&python).arg(&path).output();
     let rust_result = Command::new(rust).arg(&path).output();
     fs::remove_file(&path).expect("clean up temporary fixture");
     let python_result = python_result.expect("run historical Python checker");
