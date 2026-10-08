@@ -173,7 +173,9 @@ fn require_original_scenario_ids(suite: &Suite, failures: &mut Vec<String>) {
     let present: HashSet<&str> = suite.cases.iter().map(|case| case.id.as_str()).collect();
     for required in REQUIRED_HISTORICAL_CASE_IDS {
         if !present.contains(required) {
-            failures.push(format!("missing required historical scenario id: {required}"));
+            failures.push(format!(
+                "missing required historical scenario id: {required}"
+            ));
         }
     }
 }
