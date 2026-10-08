@@ -262,14 +262,22 @@ fn collect_links(markdown: &str, document: &str, report: &mut Report) -> Vec<Str
             let mut p = after + 2;
             let mut depth = 1usize;
             let mut quote: Option<u8> = None;
+            // A ')' inside <...> is part of an angle-delimited destination,
+            // not the closing ')' of the Markdown link.
+            let mut in_angle_destination = false;
             while p < bytes.len() {
                 let c = bytes[p];
                 if let Some(q) = quote {
                     if c == q {
                         quote = None;
                     }
+                } else if in_angle_destination {
+                    if c == b'>' {
+                        in_angle_destination = false;
+                    }
                 } else {
                     match c {
+                        b'<' if p == after + 2 => in_angle_destination = true,
                         b'"' | b'\'' => quote = Some(c),
                         b'(' => depth += 1,
                         b')' => {
@@ -453,6 +461,31 @@ mod tests {
         }
     }
 
+
+    #[test]
+    fn parentheses_inside_angle_destinations_do_not_close_links() {
+        let mut report = Report::default();
+        let paths = collect_links(
+            r#"[one](<docs/a)b.md>) [two](<docs/(draft).md> "title") [three](plain.md)"#,
+            "README.md",
+            &mut report,
+        );
+        assert_eq!(paths, vec!["docs/a)b.md", "docs/(draft).md", "plain.md"]);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn unclosed_angle_destination_still_fails_without_hiding_next_line() {
+        let mut report = Report::default();
+        let paths = collect_links(
+            "[bad](<unclosed)\\n[real](present.md)\\n",
+            "README.md",
+            &mut report,
+        );
+        assert_eq!(paths, vec!["present.md"]);
+        assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+        assert!(report.errors[0].contains("unsupported/unclosed link syntax"));
+    }
 
     #[test]
     fn escaped_backticks_leave_real_links_visible() {
