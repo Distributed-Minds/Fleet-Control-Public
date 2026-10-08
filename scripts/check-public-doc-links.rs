@@ -43,6 +43,12 @@ fn fence_marker(line: &str) -> Option<(u8, usize, bool)> {
     let size = bytes.iter().take_while(|&&c| c == first).count();
     // A fence opener may have an info string, but a closing fence must have
     // only whitespace after the marker. Return the distinction to the caller.
+    // CommonMark does not permit backticks in a backtick-fence info string.
+    // Accepting one would hide ordinary links underneath an invalid opener.
+    // Tilde-fenced info strings are allowed to contain backticks.
+    if first == b'\x60' && bytes[size..].contains(&b'\x60') {
+        return None;
+    }
     let closing_suffix_is_whitespace = bytes[size..].iter().all(|&b| b == b' ' || b == b'\t');
     (size >= 3).then_some((first, size, closing_suffix_is_whitespace))
 }
@@ -510,6 +516,32 @@ mod tests {
         }
     }
 
+
+    #[test]
+    fn invalid_backtick_fence_info_does_not_hide_broken_link() {
+        assert!(fence_marker("\x60\x60\x60rust\x60invalid").is_none());
+        let mut report = Report::default();
+        let paths = collect_links(
+            "\x60\x60\x60rust\x60invalid\n[broken](missing.md)\n\x60\x60\x60\n",
+            "README.md",
+            &mut report,
+        );
+        assert_eq!(paths, vec!["missing.md"]);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn tilde_fence_info_may_contain_backticks() {
+        assert!(fence_marker("~~~rust\x60allowed").is_some());
+        let mut report = Report::default();
+        let paths = collect_links(
+            "~~~rust\x60allowed\n[hidden](missing.md)\n~~~\n[real](present.md)\n",
+            "README.md",
+            &mut report,
+        );
+        assert_eq!(paths, vec!["present.md"]);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
 
     #[test]
     fn parentheses_inside_angle_destinations_do_not_close_links() {
