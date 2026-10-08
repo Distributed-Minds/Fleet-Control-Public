@@ -422,6 +422,7 @@ fn is_public_https_url(url: &str) -> bool {
             // Reject encoded authority/path separators and a second encoding layer.
             // This is an offline admission policy, not a URL rewrite parser.
             if decoded < 0x20
+                || decoded == b' '
                 || decoded == 0x7f
                 || matches!(decoded, b'/' | b'?' | b'#' | b'@' | b':' | b'\\' | b'%')
             {
