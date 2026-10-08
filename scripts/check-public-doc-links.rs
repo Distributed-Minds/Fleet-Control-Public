@@ -286,7 +286,11 @@ fn collect_links(markdown: &str, document: &str, report: &mut Report) -> Vec<Str
 }
 
 fn check_target(root: &Path, document: &str, target: &str) -> Result<(), String> {
-    let mut lexical = root.join(document).parent().expect("rooted document").to_path_buf();
+    let document_dir = root.join(document).parent().expect("rooted document").to_path_buf();
+    // Lexical analysis is an early escape check, not the path to resolve:
+    // collapsing symlink/.. first can validate a different file than the
+    // filesystem follows, including one outside the repository.
+    let mut lexical = document_dir.clone();
     for component in Path::new(target).components() {
         match component {
             Component::CurDir => {}
@@ -303,7 +307,9 @@ fn check_target(root: &Path, document: &str, target: &str) -> Result<(), String>
     if !lexical.starts_with(root) {
         return Err("link escapes repository".into());
     }
-    match lexical.canonicalize() {
+    // Resolve the original path with its symlink/.. order intact. The lexical
+    // path above is deliberately not used for the filesystem lookup.
+    match document_dir.join(target).canonicalize() {
         Ok(actual) if !actual.starts_with(root) => Err("link escapes repository (symlink)".into()),
         Ok(_) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err("target missing".into()),
@@ -599,6 +605,42 @@ mod tests {
         sandbox.write("target.md", "present");
         symlink(sandbox.0.join("source.md"), sandbox.0.join("README.md"))
             .expect("source symlink");
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 1);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_before_parent_component_cannot_hide_external_target() {
+        use std::os::unix::fs::symlink;
+        let sandbox = Sandbox::new();
+        let outside = Sandbox::new();
+        outside.write("inner/marker.md", "directory exists");
+        outside.write("outer.md", "external");
+        // The old lexical-only lookup selected this in-checkout shadow.
+        sandbox.write("outer.md", "inside shadow");
+        symlink(outside.0.join("inner"), sandbox.0.join("jump")).expect("directory symlink");
+        sandbox.write("README.md", "[bad](jump/../outer.md)\n");
+
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 1);
+        assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+        assert!(report.errors[0].contains("link escapes repository (symlink)"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_before_parent_component_resolves_inside_true_target() {
+        use std::os::unix::fs::symlink;
+        let sandbox = Sandbox::new();
+        sandbox.write("nested/inner/marker.md", "directory exists");
+        sandbox.write("nested/outer.md", "actual destination");
+        // There is no root/outer.md: lexical collapse would report missing.
+        symlink(sandbox.0.join("nested/inner"), sandbox.0.join("jump"))
+            .expect("directory symlink");
+        sandbox.write("README.md", "[good](jump/../outer.md)\n");
+
         let report = sandbox.scan();
         assert_eq!(report.local_links, 1);
         assert!(report.errors.is_empty(), "{:?}", report.errors);
