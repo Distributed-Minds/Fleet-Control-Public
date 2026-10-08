@@ -67,7 +67,18 @@ pub fn plan_compaction(
     let mut selected = BTreeSet::new();
     let mut operations = HashSet::new();
     let mut model_removals = Vec::with_capacity(witnesses.len());
+    // A batch is admitted against one coherent archive manifest generation.
+    // Individually valid witness snapshots from different generations cannot
+    // be composed into one plan without a trusted cross-generation cut.
+    let mut manifest_basis = None;
     for witness in witnesses {
+        match &manifest_basis {
+            Some(expected) if expected != &witness.manifest.basis => {
+                return Err(PlanFailure::InconsistentWitness);
+            }
+            None => manifest_basis = Some(witness.manifest.basis.clone()),
+            _ => {}
+        }
         let source = &witness.observed_source;
         if !operations.insert(witness.operation_id.as_str()) {
             return Err(PlanFailure::DuplicateCandidate);
@@ -352,6 +363,34 @@ mod tests {
         assert_eq!(
             plan_compaction(&archived, &live, &cut(), &[retry]),
             Err(PlanFailure::ReconcilePriorEffect)
+        );
+    }
+
+    #[test]
+    fn mixed_manifest_generations_cannot_form_a_single_compaction_plan() {
+        let (archived, live) = histories();
+        let first = witness(&live[0]);
+        let original_second = witness(&live[1]);
+        let mut moved_second = original_second.clone();
+
+        // The second witness is internally consistent, and independently
+        // eligible: only the combined plan crosses manifest generations.
+        moved_second.manifest.basis.generation += 1;
+        moved_second.archive.manifest.generation += 1;
+        moved_second.snapshot.manifest.generation += 1;
+        moved_second.durability.manifest.generation += 1;
+        assert_eq!(evaluate(&first), Verdict::EligibleModelOnly);
+        assert_eq!(evaluate(&moved_second), Verdict::EligibleModelOnly);
+
+        let original_live = live.clone();
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[first.clone(), moved_second]),
+            Err(PlanFailure::InconsistentWitness)
+        );
+        assert_eq!(live, original_live, "rejected model must not alter input");
+        assert!(
+            plan_compaction(&archived, &live, &cut(), &[first, original_second]).is_ok(),
+            "matching manifest generation must remain plannable"
         );
     }
 
