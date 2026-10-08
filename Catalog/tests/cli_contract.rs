@@ -87,6 +87,12 @@ fn missing_inputs_and_unsupported_commands_fail_closed() {
 #[test]
 fn deterministic_render_check_matches_committed_static_page() {
     let output = invoke(&["render", "--check"]);
-    assert!(output.status.success(), "committed catalog page is stale: {output:?}");
-    assert!(output.stderr.is_empty(), "unexpected render diagnostics: {output:?}");
+    assert!(
+        output.status.success(),
+        "committed catalog page is stale: {output:?}"
+    );
+    assert!(
+        output.stderr.is_empty(),
+        "unexpected render diagnostics: {output:?}"
+    );
 }
