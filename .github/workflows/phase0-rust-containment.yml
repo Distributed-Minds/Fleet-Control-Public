@@ -1,5 +1,11 @@
 name: Validate Phase0 Rust fixture candidates
 on:
+  push:
+    branches: [test/integration-candidate-canonical-json-20261008-w6p3]
+    paths:
+      - '.github/workflows/phase0-rust-containment.yml'
+      - 'Phase0/rust-fixtures/**'
+      - 'Phase0/fixtures/**'
   pull_request:
     branches: [phase0/public-v0, rust/phase0-fixture-oracles-71]
     paths:
