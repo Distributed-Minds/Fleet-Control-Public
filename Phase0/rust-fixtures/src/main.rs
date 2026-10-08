@@ -263,6 +263,20 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
             f.schema_version, f.spec_version
         ));
     }
+    // Containment specification v3 has 17 decision, 5 recovery and 13 trace
+    // baseline cases. Additional cases are allowed; silently dropping a family
+    // must never turn an incomplete fixture into a successful CLI invocation.
+    for (family, observed, minimum) in [
+        ("decision", f.decision_cases.len(), 17),
+        ("recovery", f.recovery_cases.len(), 5),
+        ("trace", f.trace_cases.len(), 13),
+    ] {
+        if observed < minimum {
+            failures.push(format!(
+                "incomplete {family} fixture coverage: expected at least {minimum}, found {observed}"
+            ));
+        }
+    }
     let mut ids = HashSet::new();
 
     for c in &f.decision_cases {
@@ -413,6 +427,36 @@ mod tests {
             .as_object_mut()
             .unwrap()
             .remove("authority_current");
+        assert!(validate(&fixture(altered)).is_err());
+    }
+
+    #[test]
+    fn deleted_decision_case_rejects_incomplete_coverage() {
+        let mut altered = original();
+        altered["decision_cases"].as_array_mut().unwrap().remove(0);
+        assert!(validate(&fixture(altered)).is_err());
+    }
+
+    #[test]
+    fn deleted_recovery_case_rejects_incomplete_coverage() {
+        let mut altered = original();
+        altered["recovery_cases"].as_array_mut().unwrap().remove(0);
+        assert!(validate(&fixture(altered)).is_err());
+    }
+
+    #[test]
+    fn deleted_trace_case_rejects_incomplete_coverage() {
+        let mut altered = original();
+        altered["trace_cases"].as_array_mut().unwrap().remove(0);
+        assert!(validate(&fixture(altered)).is_err());
+    }
+
+    #[test]
+    fn empty_containment_fixture_is_not_a_successful_run() {
+        let mut altered = original();
+        altered["decision_cases"] = json!([]);
+        altered["recovery_cases"] = json!([]);
+        altered["trace_cases"] = json!([]);
         assert!(validate(&fixture(altered)).is_err());
     }
 }
