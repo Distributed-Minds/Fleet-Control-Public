@@ -122,6 +122,9 @@ fn attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
             i += 1;
         }
         if i == bytes.len() || bytes[i] != b'=' {
+            if key.eq_ignore_ascii_case(name) {
+                return Some(""); // A present boolean attribute has an empty value.
+            }
             continue; // Boolean attribute; the next token may have a value.
         }
         i += 1;
@@ -819,6 +822,9 @@ data="x"></OBject><EMBED/>"#;
             r#"<a href="https://example.org/" ping="https://example.invalid/track">Visit</a>"#,
             r#"<a href="https://example.org/" PING="">Visit</a>"#,
             r#"<A HREF="https://example.org/" ATTRIBUTIONSRC="https://example.invalid/report">Visit</A>"#,
+            r#"<a attributionsrc href="https://example.org/">Visit</a>"#,
+            r#"<a rel="noopener" AtTrIbUtIoNsRc href="https://example.org/">Visit</a>"#,
+            r#"<a href="https://example.org/" AtTrIbUtIoNsRc>Visit</a>"#,
         ] {
             assert!(
                 has_unapproved_resource_markup(&tags(active_link)),
