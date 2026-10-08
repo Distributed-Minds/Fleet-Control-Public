@@ -230,8 +230,7 @@
           "then": {
             "properties": {
               "local_test_evidence_id": {
-                "type": "string",
-                "minLength": 1
+                "$ref": "#/$defs/slug"
               }
             }
           }
@@ -429,8 +428,7 @@
                 "minLength": 1
               },
               "test_evidence_id": {
-                "type": "string",
-                "minLength": 1
+                "$ref": "#/$defs/slug"
               }
             }
           }
