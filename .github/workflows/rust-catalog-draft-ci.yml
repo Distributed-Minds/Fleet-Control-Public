@@ -2,12 +2,12 @@
 name: Verify FREE ENERGY catalog Rust draft
 on:
   push:
-    branches: [phase0/public-v0]
+    branches: [phase0/public-v0, catalog/rust-v0-mvp]
     paths:
       - 'Catalog/**'
       - '.github/workflows/rust-catalog-draft-ci.yml'
   pull_request:
-    branches: [phase0/public-v0]
+    branches: [phase0/public-v0, catalog/rust-v0-mvp]
     paths:
       - 'Catalog/**'
       - '.github/workflows/rust-catalog-draft-ci.yml'
