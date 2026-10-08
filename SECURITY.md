@@ -28,8 +28,9 @@ available, withhold sensitive details rather than putting them in public posts.
 The outstanding confidential-intake and separately authorized release-control
 requirements are tracked in [public issue #38](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/38).
 That issue is a **status and design tracker**, not a confidential disclosure
-channel. Its retirement of the former Rehoboam public-exposure gate does not
-waive security, privacy, consent, or rights obligations.
+channel. The former Rehoboam public-exposure prerequisite was retired
+by explicit human direction; this does not waive security, privacy, consent,
+or rights obligations.
 
 ## Scope of this notice
 
