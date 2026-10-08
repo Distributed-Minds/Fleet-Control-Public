@@ -29,7 +29,9 @@ fn push_link(out: &mut String, url: &str, label: &str) {
 
 fn play_label(status: &PlayStatus) -> &'static str {
     match status {
-        PlayStatus::EngineOnly => "Engine only — install a separately rights-checked game/content pack",
+        PlayStatus::EngineOnly => {
+            "Engine only — install a separately rights-checked game/content pack"
+        }
         PlayStatus::UpstreamLinkOnly => "Upstream download link only — not verified by FREE ENERGY",
         PlayStatus::FreeEnergyVerified => "FREE ENERGY verified",
         PlayStatus::Unavailable => "Unavailable according to this draft record",
@@ -61,13 +63,25 @@ pub fn render_catalog(records: &[Project]) -> String {
         out.push_str("</code></p>\n<p><strong>Play:</strong> ");
         out.push_str(play_label(&project.play.status));
         out.push_str("</p>\n<p>");
-        push_link(&mut out, &project.upstream.canonical_source_url, "Source upstream (external)");
+        push_link(
+            &mut out,
+            &project.upstream.canonical_source_url,
+            "Source upstream (external)",
+        );
         out.push_str(" | ");
-        push_link(&mut out, &project.upstream.contribution_url, "Contribute upstream (external)");
+        push_link(
+            &mut out,
+            &project.upstream.contribution_url,
+            "Contribute upstream (external)",
+        );
         out.push_str("</p>\n");
         if let Some(download) = &project.play.upstream_download_url {
             out.push_str("<p>");
-            push_link(&mut out, download, "Open upstream download (unverified by FREE ENERGY)");
+            push_link(
+                &mut out,
+                download,
+                "Open upstream download (unverified by FREE ENERGY)",
+            );
             out.push_str("</p>\n");
         }
         if !project.play.content_requirements.is_empty() {
@@ -132,7 +146,9 @@ pub fn render_catalog(records: &[Project]) -> String {
         out.push_str(&escape(&project.review.reviewed_at));
         out.push_str(" — ");
         out.push_str(&escape(&project.review.record_status));
-        out.push_str(". Contributor-supplied reviewer metadata is not authenticated rights approval.</p>\n");
+        out.push_str(
+            ". Contributor-supplied reviewer metadata is not authenticated rights approval.</p>\n",
+        );
         out.push_str("</article>\n");
     }
     out.push_str("</main>\n</body>\n</html>\n");
