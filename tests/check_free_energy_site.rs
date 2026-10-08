@@ -19,15 +19,25 @@ const REPO: &str = "https://github.com/Distributed-Minds/Fleet-Control-Public";
 const RELEASE: &str = "v0.1.2-phase0-preview";
 const CONTACT: &str = "https://github.com/Distributed-Minds/Fleet-Control-Public/discussions";
 
+/// A public-contact anchor must be a live element inside the real primary
+/// navigation, not text in an HTML comment or another attribute's value.
 fn primary_contact_link(html: &str) -> bool {
-    let Some((_, tail)) = html.split_once(r#"<nav aria-label="Main navigation">"#) else {
-        return false;
-    };
-    let Some((nav, _)) = tail.split_once("</nav>") else {
-        return false;
-    };
-    let expected_link = format!(r#"<a href="{CONTACT}">Contact</a>"#);
-    nav.contains(&expected_link)
+    let mut in_primary_nav = false;
+    let mut has_contact = false;
+    for tag in tags(html) {
+        if !in_primary_nav {
+            if is_open_element(tag, "nav")
+                && attribute(tag, "aria-label") == Some("Main navigation")
+            {
+                in_primary_nav = true;
+            }
+        } else if tag.trim().eq_ignore_ascii_case("/nav") {
+            return has_contact;
+        } else if is_open_element(tag, "a") && attribute(tag, "href") == Some(CONTACT) {
+            has_contact = true;
+        }
+    }
+    false // Unclosed primary navigation is not a valid contact route.
 }
 
 /// Collect complete source tags while excluding HTML comments and treating
@@ -391,6 +401,27 @@ mod tests {
         assert!(!primary_contact_link(&format!(
             r#"<nav aria-label="Main navigation"></nav><footer>{link}</footer>"#
         )));
+    }
+
+    #[test]
+    fn commented_or_attribute_embedded_contact_links_do_not_satisfy_navigation() {
+        let link = format!(r#"<a href="{CONTACT}">Contact</a>"#);
+        let commented_nav = format!(
+            r#"<!-- <nav aria-label="Main navigation">{link}</nav> -->"#
+        );
+        assert!(!primary_contact_link(&commented_nav));
+        let commented_link = format!(
+            r#"<nav aria-label="Main navigation"><!-- {link} --></nav>"#
+        );
+        assert!(!primary_contact_link(&commented_link));
+        let attribute_link = format!(
+            r#"<nav aria-label="Main navigation"><span title='{link}'></span></nav>"#
+        );
+        assert!(!primary_contact_link(&attribute_link));
+        let real_link = format!(
+            r#"<nav aria-label="Main navigation">{link}</nav>"#
+        );
+        assert!(primary_contact_link(&real_link));
     }
 
     #[test]
