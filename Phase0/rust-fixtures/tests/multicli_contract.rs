@@ -10,11 +10,16 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 static NEXT_INPUT: AtomicUsize = AtomicUsize::new(0);
 
-const CLIS: [(&str, &str, &str); 7] = [
+const CLIS: [(&str, &str, &str); 8] = [
     (
         "containment",
         env!("CARGO_BIN_EXE_free-energy-phase0-fixtures"),
         "containment-spec3.json",
+    ),
+    (
+        "ad_hoc_research",
+        env!("CARGO_BIN_EXE_ad_hoc_research"),
+        "ad-hoc-research-spec1.json",
     ),
     (
         "adaptive_stress",
@@ -148,6 +153,9 @@ fn every_external_file_cli_rejects_a_mutated_historical_semantic_input() {
             fs::read_to_string(historical_fixture(filename)).expect("read historical fixture");
         let mut fixture: Value = serde_json::from_str(&original).expect("parse historical fixture");
         match family {
+            "ad_hoc_research" => {
+                fixture["publication_cases"][0]["authority_current"] = json!(false);
+            }
             "containment" => fixture["decision_cases"][0]["authority_current"] = json!(false),
             "adaptive_stress" => fixture["cases"][0]["expected"] = json!("FORGED_SUCCESS"),
             "authority_closure" => fixture["cases"][0]["name"] = json!("forged-unknown-case"),
@@ -165,5 +173,24 @@ fn every_external_file_cli_rejects_a_mutated_historical_semantic_input() {
         }
         let modified = serde_json::to_string(&fixture).expect("serialize mutated fixture");
         assert_denied(&invoke_temporary(binary, &modified), family);
+    }
+}
+
+#[test]
+fn every_staged_external_file_cli_fails_closed_on_missing_fixture_path() {
+    // A missing fixture is not an empty successful oracle evaluation. Check
+    // process exit, no positive stdout and an actionable error for all eight.
+    let never_created = std::env::temp_dir().join(format!(
+        "free-energy-fixture-intentionally-absent-{}-{}.json",
+        process::id(),
+        NEXT_INPUT.fetch_add(1, Ordering::Relaxed)
+    ));
+    assert!(!never_created.exists(), "negative input unexpectedly exists");
+    for (family, binary, _) in CLIS {
+        let output = invoke(
+            binary,
+            &[never_created.to_str().expect("UTF-8 missing path")],
+        );
+        assert_denied(&output, family);
     }
 }
