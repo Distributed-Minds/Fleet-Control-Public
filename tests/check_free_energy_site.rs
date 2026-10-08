@@ -161,6 +161,16 @@ fn attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
 
 /// Count actual participation-card articles rather than matching text that
 /// might appear in comments, quoted attributes, or unrelated elements.
+/// Reject inert template containers: their descendants are parsed as source
+/// tags by this limited checker but are not rendered as ordinary page content.
+/// A hidden template must not satisfy visible Contact/navigation/card checks.
+fn disallowed_site_elements(elements: &[&str]) -> Vec<&'static str> {
+    ["script", "iframe", "form", "object", "embed", "template"]
+        .into_iter()
+        .filter(|name| elements.iter().any(|tag| is_open_element(tag, name)))
+        .collect()
+}
+
 fn route_card_count(html: &str) -> usize {
     tags(html)
         .iter()
@@ -322,12 +332,8 @@ fn validate(root: &Path) -> Vec<String> {
         !has_browser_navigation_override(&elements),
         "Unexpected base URL override or automatic meta refresh",
     );
-    for forbidden in ["script", "iframe", "form", "object", "embed"] {
-        expect(
-            &mut errors,
-            !elements.iter().any(|tag| is_open_element(tag, forbidden)),
-            format!("Unexpected active/embedded element: {forbidden}"),
-        );
+    for forbidden in disallowed_site_elements(&elements) {
+        errors.push(format!("Unexpected active, embedded, or inert element: {forbidden}"));
     }
     expect(
         &mut errors,
@@ -655,6 +661,28 @@ data="x"></OBject><EMBED/>"#;
         assert!(!is_open_element("/script", "script"));
         assert!(is_open_element("a\nhref=\"#main\"", "a"));
         assert!(is_open_element("MAIN\tid=\"main\"", "main"));
+    }
+
+    #[test]
+    fn inert_template_cannot_forge_visible_contact_and_participation() {
+        let html = format!(
+            r#"<template><nav aria-label="Main navigation"><a href="{CONTACT}">Contact</a></nav><article class="route-card"></article></template>"#
+        );
+        // The lightweight scanner sees template descendants: they must not be
+        // trusted as visible site content without rejecting the container.
+        assert!(primary_contact_link(&html));
+        assert_eq!(route_card_count(&html), 1);
+        assert_eq!(disallowed_site_elements(&tags(&html)), ["template"]);
+
+        let ordinary = format!(
+            r#"<nav aria-label="Main navigation"><a href="{CONTACT}">Contact</a></nav><article class="route-card"></article>"#
+        );
+        assert!(primary_contact_link(&ordinary));
+        assert_eq!(route_card_count(&ordinary), 1);
+        assert!(disallowed_site_elements(&tags(&ordinary)).is_empty());
+
+        let mixed_case = tags("<TeMpLaTe data-purpose='hidden'>Text</TeMpLaTe>");
+        assert_eq!(disallowed_site_elements(&mixed_case), ["template"]);
     }
 
     #[test]
