@@ -9,6 +9,47 @@ use std::fs;
 use std::path::PathBuf;
 use std::process;
 
+const REQUIRED_DECISION_IDS: &[&str] = &[
+    "backlog-cannot-renew",
+    "duplicate-semantic-case",
+    "policy-generation-move",
+    "missing-restoration-debt",
+];
+const REQUIRED_WORKLOAD_IDS: &[&str] = &[
+    "ordinary-load",
+    "correlated-burst-overload",
+    "sustained-arrivals-restoration-progress",
+    "priority-starvation-detected",
+    "priority-starvation-failsafe",
+    "zero-restoration-capacity",
+    "service-loss-then-recovery",
+    "restored-terminal",
+    "separate-restoration-capacity",
+];
+const REQUIRED_PLANNING_IDS: &[&str] = &[
+    "rare-event-false-positive-heavy",
+    "sensitivity-baseline",
+    "low-action-volume",
+    "high-action-volume",
+];
+
+// A case count alone is not coverage: replacing one historical negative
+// scenario with a new, self-consistent positive scenario must fail admission.
+fn require_original_ids<'a>(
+    family: &str,
+    ids: impl Iterator<Item = &'a str>,
+    required: &[&str],
+    failures: &mut Vec<String>,
+) {
+    let observed: HashSet<&str> = ids.collect();
+    let expected: HashSet<&str> = required.iter().copied().collect();
+    if observed != expected {
+        failures.push(format!(
+            "{family} family has missing, extra, or renamed historical case identities"
+        ));
+    }
+}
+
 fn yes() -> bool {
     true
 }
@@ -324,6 +365,24 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
             failures.push(format!("incomplete {name} family: {found} < {minimum}"));
         }
     }
+    require_original_ids(
+        "decision",
+        f.decision_cases.iter().map(|case| case.id.as_str()),
+        REQUIRED_DECISION_IDS,
+        &mut failures,
+    );
+    require_original_ids(
+        "workload",
+        f.workload_cases.iter().map(|case| case.id.as_str()),
+        REQUIRED_WORKLOAD_IDS,
+        &mut failures,
+    );
+    require_original_ids(
+        "planning",
+        f.planning_cases.iter().map(|case| case.id.as_str()),
+        REQUIRED_PLANNING_IDS,
+        &mut failures,
+    );
     let mut seen = HashSet::new();
     for id in f
         .decision_cases
@@ -539,6 +598,21 @@ mod tests {
         let mut changed = original();
         changed["decision_cases"][0]["expected"] = json!("OK");
         assert!(mutated(changed).is_err());
+    }
+
+    #[test]
+    fn renamed_historical_case_in_any_family_must_not_false_pass() {
+        for family in ["decision_cases", "workload_cases", "planning_cases"] {
+            let mut changed = original();
+            changed[family][0]["id"] = json!("invented-easy-positive-case");
+            let errors = mutated(changed)
+                .expect_err("original scenario identity may not be substituted")
+                .join(" ");
+            assert!(
+                errors.contains("missing, extra, or renamed historical case identities"),
+                "{family}: {errors}"
+            );
+        }
     }
 
     #[test]
