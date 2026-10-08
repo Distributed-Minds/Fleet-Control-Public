@@ -144,7 +144,10 @@ pub struct Review {
 
 fn is_full_git_sha(value: &str) -> bool {
     // The pinned v0 schema requires lowercase SHA-1 literals, not uppercase aliases.
-    value.len() == 40 && value.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    value.len() == 40
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 fn is_relative_path(value: &str) -> bool {
@@ -152,13 +155,10 @@ fn is_relative_path(value: &str) -> bool {
         && !value.starts_with('/')
         && !value.contains('\\')
         && !value.chars().any(char::is_control)
-        && value.split('/').all(|part| {
-            !part.is_empty()
-                && part != "."
-                && part != ".."
-                && part.trim() == part
-        })
-        && !value.as_bytes().get(1).is_some_and(|b| *b == b':')
+        && value
+            .split('/')
+            .all(|part| !part.is_empty() && part != "." && part != ".." && part.trim() == part)
+        && value.as_bytes().get(1).is_none_or(|b| *b != b':')
 }
 
 /// Conservative, offline admission for externally displayed links. This does
@@ -167,16 +167,16 @@ fn is_relative_path(value: &str) -> bool {
 /// of scope until their admission/normalization semantics are specified.
 fn is_public_https_url(url: &str) -> bool {
     if !url.starts_with("https://")
-        || url.chars().any(|c| c.is_control() || c.is_whitespace() || c == '\\')
+        || url
+            .chars()
+            .any(|c| c.is_control() || c.is_whitespace() || c == '\\')
     {
         return false;
     }
 
     let rest = &url["https://".len()..];
     let authority = rest.split(&['/', '?', '#'][..]).next().unwrap_or_default();
-    if authority.len() > 253
-        || authority.bytes().any(|c| matches!(c, b'@' | b':' | b'%'))
-    {
+    if authority.len() > 253 || authority.bytes().any(|c| matches!(c, b'@' | b':' | b'%')) {
         return false;
     }
     let labels: Vec<_> = authority.split('.').collect();
@@ -186,12 +186,18 @@ fn is_public_https_url(url: &str) -> bool {
                 || label.len() > 63
                 || label.starts_with('-')
                 || label.ends_with('-')
-                || !label.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+                || !label
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'-')
         })
     {
         return false;
     }
-    let tld = labels.last().copied().unwrap_or_default().to_ascii_lowercase();
+    let tld = labels
+        .last()
+        .copied()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
     if tld.len() < 2
         || !tld.bytes().all(|b| b.is_ascii_alphabetic())
         || matches!(
@@ -238,8 +244,8 @@ fn is_public_https_url(url: &str) -> bool {
 /// Parse the closed object layout and reject a bounded set of dangerous
 /// cross-record claims. Success is NOT full JSON Schema or rights approval.
 pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
-    let record: Project = serde_json::from_str(json)
-        .map_err(|e| vec![format!("JSON/typed manifest: {e}")])?;
+    let record: Project =
+        serde_json::from_str(json).map_err(|e| vec![format!("JSON/typed manifest: {e}")])?;
     let mut problems = Vec::new();
 
     if record.schema != "free-energy.project/v0" {
@@ -249,7 +255,12 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
         Some(rev) if !is_full_git_sha(rev) => {
             problems.push("upstream source_revision must be a full 40-hex commit".to_string());
         }
-        None if record.upstream.source_revision_reason.as_deref().is_none_or(|r| r.trim().is_empty()) => {
+        None if record
+            .upstream
+            .source_revision_reason
+            .as_deref()
+            .is_none_or(|r| r.trim().is_empty()) =>
+        {
             problems.push("unpinned upstream source revision requires a reason".to_string());
         }
         _ => {}
@@ -257,8 +268,14 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
 
     for (field, url) in [
         ("upstream.discovery_url", &record.upstream.discovery_url),
-        ("upstream.canonical_source_url", &record.upstream.canonical_source_url),
-        ("upstream.contribution_url", &record.upstream.contribution_url),
+        (
+            "upstream.canonical_source_url",
+            &record.upstream.canonical_source_url,
+        ),
+        (
+            "upstream.contribution_url",
+            &record.upstream.contribution_url,
+        ),
         ("upstream.issue_url", &record.upstream.issue_url),
     ] {
         if !is_public_https_url(url) {
@@ -281,18 +298,26 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
     let mut evidence = HashMap::new();
     for item in &record.evidence {
         if !is_public_https_url(&item.url) {
-            problems.push(format!("inadmissible external URL: evidence {}", item.evidence_id));
+            problems.push(format!(
+                "inadmissible external URL: evidence {}",
+                item.evidence_id
+            ));
         }
         if evidence.insert(item.evidence_id.as_str(), item).is_some() {
             problems.push(format!("duplicate evidence ID: {}", item.evidence_id));
         }
-        if item.evidence_kind == "PINNED_REPOSITORY_FILE" {
-            if item.commit.as_deref().is_none_or(|s| !is_full_git_sha(s))
+        if item.evidence_kind == "PINNED_REPOSITORY_FILE"
+            && (item.commit.as_deref().is_none_or(|s| !is_full_git_sha(s))
                 || item.path.as_deref().is_none_or(|s| !is_relative_path(s))
-                || item.repository.as_deref().is_none_or(|url| !is_public_https_url(url))
-            {
-                problems.push(format!("invalid pinned repository evidence: {}", item.evidence_id));
-            }
+                || item
+                    .repository
+                    .as_deref()
+                    .is_none_or(|url| !is_public_https_url(url)))
+        {
+            problems.push(format!(
+                "invalid pinned repository evidence: {}",
+                item.evidence_id
+            ));
         }
     }
 
@@ -310,7 +335,10 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
             match evidence.get(id.as_str()) {
                 None => problems.push(format!("claim {} has unknown evidence {id}", item.claim_id)),
                 Some(ref_item) if ref_item.currentness == "INVALIDATED" => {
-                    problems.push(format!("claim {} references invalidated evidence {id}", item.claim_id));
+                    problems.push(format!(
+                        "claim {} references invalidated evidence {id}",
+                        item.claim_id
+                    ));
                 }
                 _ => {}
             }
@@ -325,20 +353,27 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
     let mut permission_keys = HashSet::new();
     for item in &record.permission_decisions {
         if !scopes.contains(&(item.component.as_str(), item.scope.as_str())) {
-            problems.push(format!("permission scope has no rights claim: {} / {}", item.component, item.scope));
+            problems.push(format!(
+                "permission scope has no rights claim: {} / {}",
+                item.component, item.scope
+            ));
         }
         if !permission_keys.insert((
             item.component.as_str(),
             item.scope.as_str(),
             item.use_kind.as_str(),
         )) {
-            problems.push(format!("duplicate permission action: {} / {} / {}", item.component, item.scope, item.use_kind));
+            problems.push(format!(
+                "duplicate permission action: {} / {} / {}",
+                item.component, item.scope, item.use_kind
+            ));
         }
         if item.decision_reason.trim().is_empty() {
             problems.push("permission decision requires a nonblank reason".to_string());
         }
         if item.decision == PermissionStatus::NotAuthorized
-            && (item.decided_at.is_none() || item.reviewer.as_deref().is_none_or(|s| s.trim().is_empty()))
+            && (item.decided_at.is_none()
+                || item.reviewer.as_deref().is_none_or(|s| s.trim().is_empty()))
         {
             problems.push("NOT_AUTHORIZED requires review date and reviewer".to_string());
         }
@@ -355,7 +390,9 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
         if evidence.get(id).is_none_or(|item| {
             item.evidence_kind != "FREE_ENERGY_LOCAL_TEST" || item.currentness == "INVALIDATED"
         }) {
-            problems.push(format!("local play references missing or ineligible test evidence {id}"));
+            problems.push(format!(
+                "local play references missing or ineligible test evidence {id}"
+            ));
         }
         if record.play.status != PlayStatus::FreeEnergyVerified {
             problems.push("unverified play status must not assert local test evidence".to_string());
@@ -369,19 +406,29 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
     let mut history_links = HashMap::new();
     for event in &record.review.claim_history {
         if !claims.contains(event.old_claim_id.as_str()) {
-            problems.push(format!("supersession references unknown old claim {}", event.old_claim_id));
+            problems.push(format!(
+                "supersession references unknown old claim {}",
+                event.old_claim_id
+            ));
         }
         if !history_sources.insert(event.old_claim_id.as_str()) {
-            problems.push(format!("duplicate supersession source {}", event.old_claim_id));
+            problems.push(format!(
+                "duplicate supersession source {}",
+                event.old_claim_id
+            ));
         }
         if let Some(new_id) = event.new_claim_id.as_deref() {
             if !claims.contains(new_id) {
-                problems.push(format!("supersession references unknown new claim {new_id}"));
+                problems.push(format!(
+                    "supersession references unknown new claim {new_id}"
+                ));
             }
             if new_id == event.old_claim_id {
                 problems.push(format!("claim self-supersession: {new_id}"));
             }
-            history_links.entry(event.old_claim_id.as_str()).or_insert(new_id);
+            history_links
+                .entry(event.old_claim_id.as_str())
+                .or_insert(new_id);
         }
     }
     let mut examined = HashSet::new();
@@ -416,7 +463,9 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
         _ => {}
     }
     if record.adapter.status == AdapterStatus::Tested {
-        problems.push("TESTED adapter requires a separately implemented conformance contract".to_string());
+        problems.push(
+            "TESTED adapter requires a separately implemented conformance contract".to_string(),
+        );
     }
 
     if problems.is_empty() {
@@ -515,7 +564,10 @@ mod tests {
             }]);
         });
         let errors = validate_manifest(&self_link).unwrap_err();
-        assert!(errors.iter().any(|e| e.contains("self-supersession")), "{errors:?}");
+        assert!(
+            errors.iter().any(|e| e.contains("self-supersession")),
+            "{errors:?}"
+        );
 
         let cycle = changed(LUANTI, |v| {
             v["review"]["claim_history"] = json!([
@@ -526,7 +578,12 @@ mod tests {
             ]);
         });
         let errors = validate_manifest(&cycle).unwrap_err();
-        assert!(errors.iter().any(|e| e.contains("cyclic claim supersession")), "{errors:?}");
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.contains("cyclic claim supersession")),
+            "{errors:?}"
+        );
 
         let duplicate = changed(LUANTI, |v| {
             v["review"]["claim_history"] = json!([
@@ -537,7 +594,12 @@ mod tests {
             ]);
         });
         let errors = validate_manifest(&duplicate).unwrap_err();
-        assert!(errors.iter().any(|e| e.contains("duplicate supersession source")), "{errors:?}");
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.contains("duplicate supersession source")),
+            "{errors:?}"
+        );
 
         let acyclic = changed(LUANTI, |v| {
             v["review"]["claim_history"] = json!([{
@@ -577,10 +639,9 @@ mod tests {
     #[test]
     fn authored_semantic_identity_fixture_covers_all_cases() {
         let base: Value = serde_json::from_str(LUANTI).expect("Luanti baseline");
-        let suite: Value = serde_json::from_str(include_str!(
-            "../fixtures/semantic-id-resolution-v0.json"
-        ))
-        .expect("semantic ID fixture");
+        let suite: Value =
+            serde_json::from_str(include_str!("../fixtures/semantic-id-resolution-v0.json"))
+                .expect("semantic ID fixture");
         let cases = suite["cases"].as_array().expect("fixture cases");
         assert_eq!(cases.len(), 13, "all authored semantic ID cases must run");
         for case in cases {
@@ -590,7 +651,9 @@ mod tests {
                 let pointer = change["pointer"].as_str().expect("JSON pointer");
                 *record.pointer_mut(pointer).expect("existing target") = change["value"].clone();
             }
-            let expected = case["expected_semantic_valid"].as_bool().expect("expected verdict");
+            let expected = case["expected_semantic_valid"]
+                .as_bool()
+                .expect("expected verdict");
             let actual = validate_manifest(&record.to_string()).is_ok();
             assert_eq!(actual, expected, "semantic fixture {}", case["id"]);
         }
@@ -630,5 +693,4 @@ mod tests {
         });
         assert!(validate_manifest(&mirror).is_err());
     }
-
 }
