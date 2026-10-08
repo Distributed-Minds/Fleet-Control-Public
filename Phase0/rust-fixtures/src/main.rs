@@ -617,9 +617,15 @@ mod tests {
             let first_id = changed[family][0]["id"].as_str().unwrap().to_owned();
             changed[family][0]["id"] = json!(format!("{first_id}-renamed"));
             let result = validate(&fixture(changed));
-            assert!(result.is_err(), "{family}: renamed baseline case was accepted");
             assert!(
-                result.unwrap_err().iter().any(|error| error.contains("missing required")),
+                result.is_err(),
+                "{family}: renamed baseline case was accepted"
+            );
+            assert!(
+                result
+                    .unwrap_err()
+                    .iter()
+                    .any(|error| error.contains("missing required")),
                 "{family}: expected missing historical ID diagnostic"
             );
         }
@@ -630,8 +636,10 @@ mod tests {
         let mut changed = original();
         let mut additional = changed["decision_cases"][0].clone();
         additional["id"] = json!("additional-valid-decision-case");
-        changed["decision_cases"].as_array_mut().unwrap().push(additional);
+        changed["decision_cases"]
+            .as_array_mut()
+            .unwrap()
+            .push(additional);
         assert_eq!(validate(&fixture(changed)), Ok(36));
     }
-
 }
