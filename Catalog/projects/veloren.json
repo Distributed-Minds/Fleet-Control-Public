@@ -44,7 +44,7 @@
       "claim_kind": "PUBLISHER_LICENSE",
       "component": "MEDIA",
       "scope_kind": "PREFIX",
-      "scope": "voxygen/audio/soundtrack",
+      "scope": "assets/voxygen/audio/soundtrack",
       "statement": "The pinned assets/credits.ron records selected soundtrack entries as CC BY-NC-SA 4.0 with additional per-track wording; these exceptions block blanket reuse claims.",
       "license_id": "CC-BY-NC-SA-4.0",
       "exceptions_or_restrictions": [
@@ -100,7 +100,7 @@
     },
     {
       "component": "MEDIA",
-      "scope": "voxygen/audio/soundtrack",
+      "scope": "assets/voxygen/audio/soundtrack",
       "use": "BUNDLE",
       "decision": "REVIEW_REQUIRED",
       "review_evidence_ids": [],
@@ -110,7 +110,7 @@
     },
     {
       "component": "MEDIA",
-      "scope": "voxygen/audio/soundtrack",
+      "scope": "assets/voxygen/audio/soundtrack",
       "use": "HOST",
       "decision": "REVIEW_REQUIRED",
       "review_evidence_ids": [],
@@ -120,7 +120,7 @@
     },
     {
       "component": "MEDIA",
-      "scope": "voxygen/audio/soundtrack",
+      "scope": "assets/voxygen/audio/soundtrack",
       "use": "TRANSFORM",
       "decision": "REVIEW_REQUIRED",
       "review_evidence_ids": [],
@@ -130,7 +130,7 @@
     },
     {
       "component": "MEDIA",
-      "scope": "voxygen/audio/soundtrack",
+      "scope": "assets/voxygen/audio/soundtrack",
       "use": "CROSS_GAME_REUSE",
       "decision": "REVIEW_REQUIRED",
       "review_evidence_ids": [],
