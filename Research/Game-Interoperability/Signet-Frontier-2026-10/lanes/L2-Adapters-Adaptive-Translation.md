@@ -169,6 +169,137 @@ Hand off to:
 
 L2 is useful when a new adapter can be built mostly by filling a well-defined contract, and any AI assistance produces inspectable artifacts rather than hidden runtime semantics.
 
+> **Source reconciliation (2026-10-08):** The empirical pass below comes from the corrected L2 source at `ba65b131559a28cf0cb7d3416d492dbd1d91b316`. Its historical PASS/FAIL observations were **not rerun** during this reconciliation. The later integrated archival and third-party rights caveats remain authoritative; this text is not runtime acceptance, redistribution clearance, or product release.
+
+## Current pass — 2026-10-05
+
+**Status: first design/research pass complete; empirical implementation pass remains open.**
+
+Durable outputs:
+
+- [Adapter Engineering Findings](L2-Adapter-Engineering-Findings.md)
+- [L2 Source Ledger](L2-Source-Ledger.md)
+
+The current design delta is:
+
+> **generated contract glue + thin handwritten game/engine hook shim + explicit frozen semantic mappings + replay/conformance evidence**
+
+The next high-value step is an empirical adapter-generator prototype against at least one native engine/plugin target and one gateway/reimplementation target, followed by the closed-set mapping benchmark defined in the findings.
+
+Independent public benchmark execution belongs to L4.
+
+### Signet 2 response
+
+Signet subsequently published a concrete Signet 2 draft that converges with the lane's deterministic-core/adaptive-edge direction.
+
+Public response manuscript:
+
+- `Publications/Game-Interoperability/RESPONSE-TO-SIGNET-2-ARCHITECTURE-DRAFT.md`
+
+The response keeps the Signet 2 core direction and concentrates on the remaining engineering boundary: typed authority inside profiles, evidence-bearing locks, calibration observability, resolver abstention/OOD handling, drift invalidation, generated adapter glue, and a stronger staged benchmark.
+
+### Executable profile/drift experiment
+
+The empirical pass has started with a deliberately small contract test:
+
+- `Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Verifiable-Translation-Prototype/`
+
+Observed local result:
+
+```text
+typed profile: PASS
+semantic mapping fire-primary: SUSPECT
+changed dependency: integration_surface_digest
+changed dependency: game_version
+```
+
+This proves the proposed state distinction is executable: `pinned` keeps the choice deterministic while changed evidence moves the mapping out of `VALID`.
+
+Next L2 implementation seam: machine-readable adapter ABI descriptor → deterministic generated glue, followed by replay fixtures.
+
+### Deterministic generated-glue experiment
+
+The second executable L2 fixture is:
+
+- `Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Verifiable-Translation-Prototype/adapter-shim-generation/`
+
+Observed result:
+
+```text
+deterministic-generation: PASS
+c-header-syntax: PASS
+typescript-syntax: PASS
+```
+
+The same descriptor generated C, Rust, C# and TypeScript contract surfaces with stable hashes across two clean runs.
+
+This advances L2.2 from design prose to a proof-of-mechanism. It does **not** prove the proposed shim API is the right final Signet API; it proves the repetitive interface layer can be made machine-readable and reproducible while target-specific behavior remains handwritten.
+
+Next empirical step: implement one generated surface against a real engine/plugin or controlled gateway and drive it through replay/conformance evidence.
+
+### Real-target empirical correction
+
+The empirical pass now includes two different integration modes:
+
+1. **OPEN_ENGINE / Godot 4.7.2 GDExtension**
+   - real ABI-source subset;
+   - compiled shared library;
+   - host-harness initialization/version test PASS.
+
+2. **CONTROLLED_SERVER_GATEWAY / documented Signet Minecraft gateway**
+   - Source-RCON framing PASS;
+   - v0 logical shim coverage FAIL_EXPECTED.
+
+The negative gateway result invalidated the first fixed logical shim as a candidate generic adapter API.
+
+Replacement research fixture:
+
+- `Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Verifiable-Translation-Prototype/adapter-role-contract-v1/`
+
+v1 describes target operations by translator role and validates 7/7 documented Minecraft responsibilities while making zero generic Godot gameplay claims.
+
+**Current status:** empirical implementation pass active. Code-generation mechanism retained; logical contract revised from evidence.
+
+
+### Role-contract v1 generation pass
+
+The corrected descriptor is now executable rather than schema-only.
+
+Results:
+
+```text
+minecraft-deterministic-generation: PASS
+godot-deterministic-generation: PASS
+generated-c-header-syntax: PASS
+negative descriptor tests: 3/3 rejected as expected
+```
+
+This closes the immediate falsification loop:
+
+`v0 generated API -> real gateway mismatch -> role-based v1 -> deterministic generated artifacts`.
+
+The remaining Godot runtime step is explicitly blocked by binary availability in this execution environment, so no `GODOT_RUNTIME_PASS` claim is made.
+
+Next L2 decision point: either execute the live Godot loader test when a runtime binary is available, or move to the resolver pilot using the now evidence-derived adapter operation model.
+
+### Resolver pilot started
+
+A source-anchored seed harness now exists:
+
+- `Research/Game-Interoperability/Signet-Frontier-2026-10/experiments/L2-Resolver-Pilot/`
+
+Initial result:
+
+```text
+gold_oracle: 1.000 base / 1.000 no-match / 1.000 order-stability
+lexical: 1.000 base / 0.000 no-match / 0.167 order-stability
+first:   1.000 base / 0.000 no-match / 0.000 order-stability
+```
+
+`gold_oracle` reads the case's stored gold label, so it is a harness sanity check and upper bound, not a resolver baseline. The 100% base score for the deliberately bad first-candidate baseline demonstrates why the final benchmark cannot rely on top-1 accuracy under one candidate ordering.
+
+The harness is intentionally pre-model. CLM/Laya/LLM backends remain open until the case set and evaluation mechanics are frozen enough to make their results meaningful.
+
 ## Corrected L2 research archive (integrated 2026-10-08)
 
 The corrected L2 experiment sources were preserved, without replacing this
