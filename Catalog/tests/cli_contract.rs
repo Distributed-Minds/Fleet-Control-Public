@@ -88,8 +88,14 @@ fn missing_inputs_and_unsupported_commands_fail_closed() {
 fn project_directory_admits_all_pilot_manifests_in_sorted_order() {
     let projects = manifest("projects");
     let output = invoke(&["validate", &projects]);
-    assert!(output.status.success(), "project directory rejected: {output:?}");
-    assert!(output.stderr.is_empty(), "unexpected diagnostics: {output:?}");
+    assert!(
+        output.status.success(),
+        "project directory rejected: {output:?}"
+    );
+    assert!(
+        output.stderr.is_empty(),
+        "unexpected diagnostics: {output:?}"
+    );
     let stdout = String::from_utf8(output.stdout).expect("UTF-8 output");
     let paths: Vec<_> = stdout
         .lines()

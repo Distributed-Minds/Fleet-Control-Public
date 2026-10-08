@@ -183,10 +183,9 @@ fn main() -> ExitCode {
                                     count += 1;
                                 }
                             }
-                            Err(error) => errors.push(format!(
-                                "{}: directory entry: {error}",
-                                path.display()
-                            )),
+                            Err(error) => {
+                                errors.push(format!("{}: directory entry: {error}", path.display()))
+                            }
                         }
                     }
                     if count == 0 {
