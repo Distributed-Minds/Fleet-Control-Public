@@ -1,0 +1,70 @@
+[
+  {
+    "vector_id": "COMP-UNICODE-001",
+    "purpose": "Non-BMP semantic-reference ordering. SEM-ORDER-1 uses UTF-16 code units, so U+10000 (surrogate pair D800 DC00) sorts before U+E000. Selection order is reversed to also exercise COMP-1. Before the correction Python used Unicode code-point order and would have emitted the opposite profile/concept order.",
+    "input": {
+      "selected_profiles": [
+        {
+          "id": "https://example.org/sem/profile/x/\uE000",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        {
+          "id": "https://example.org/sem/profile/x/\uD800\uDC00",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "catalog": [
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/x/\uD800\uDC00",
+            "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "requires": [],
+          "exports": [
+            {
+              "id": "https://example.org/sem/profile/x/\uD800\uDC00#c",
+              "definition_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+            }
+          ]
+        },
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/x/\uE000",
+            "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "requires": [],
+          "exports": [
+            {
+              "id": "https://example.org/sem/profile/x/\uE000#c",
+              "definition_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            }
+          ]
+        }
+      ]
+    },
+    "expected_composition": {
+      "profiles": [
+        {
+          "id": "https://example.org/sem/profile/x/\uD800\uDC00",
+          "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "id": "https://example.org/sem/profile/x/\uE000",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "concepts": [
+        {
+          "id": "https://example.org/sem/profile/x/\uD800\uDC00#c",
+          "definition_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        },
+        {
+          "id": "https://example.org/sem/profile/x/\uE000#c",
+          "definition_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        }
+      ]
+    },
+    "expected_jcs": "{\"concepts\":[{\"definition_hash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"id\":\"https://example.org/sem/profile/x/\uD800\uDC00#c\"},{\"definition_hash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"id\":\"https://example.org/sem/profile/x/\uE000#c\"}],\"profiles\":[{\"definition_hash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"id\":\"https://example.org/sem/profile/x/\uD800\uDC00\"},{\"definition_hash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"id\":\"https://example.org/sem/profile/x/\uE000\"}]}",
+    "expected_profile_set_hash": "sha256:c42280138296c4590fc89773ea13c8425fbe7b306b575d039743e11cf38dc47a"
+  }
+]

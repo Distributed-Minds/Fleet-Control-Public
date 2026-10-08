@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Distributed-Minds/Fleet-Control-Public/schemas/signet-semantic-definition-0.schema.json",
+  "title": "Candidate semantic definition envelope",
+  "description": "Unaffiliated L1 research draft. Hash only the normative member after source-canonical set ordering and RFC 8785 JCS.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "normative"
+  ],
+  "properties": {
+    "kind": {
+      "const": "signet.semantic-definition"
+    },
+    "normative": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "semantic_id",
+        "definition_kind",
+        "requires",
+        "optional_requires",
+        "conflicts",
+        "exports"
+      ],
+      "properties": {
+        "semantic_id": {
+          "type": "string",
+          "format": "uri"
+        },
+        "definition_kind": {
+          "type": "string",
+          "enum": [
+            "core",
+            "profile",
+            "concept",
+            "ordering-model",
+            "visibility-policy",
+            "ruleset",
+            "extension"
+          ]
+        },
+        "requires": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "definition_hash"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uri"
+              },
+              "definition_hash": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            }
+          }
+        },
+        "optional_requires": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "definition_hash"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uri"
+              },
+              "definition_hash": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            }
+          }
+        },
+        "conflicts": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "definition_hash"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uri"
+              },
+              "definition_hash": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            }
+          }
+        },
+        "exports": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "definition_hash"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uri"
+              },
+              "definition_hash": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            }
+          }
+        },
+        "extends": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "child",
+              "parent"
+            ],
+            "properties": {
+              "child": {
+                "type": "string",
+                "format": "uri"
+              },
+              "parent": {
+                "type": "string",
+                "format": "uri"
+              }
+            }
+          }
+        },
+        "ordering_constraints": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "accepted"
+          ],
+          "properties": {
+            "accepted": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "definition_hash"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "definition_hash": {
+                    "type": "string",
+                    "pattern": "^sha256:[0-9a-f]{64}$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "visibility_constraints": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "accepted"
+          ],
+          "properties": {
+            "accepted": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "definition_hash"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "definition_hash": {
+                    "type": "string",
+                    "pattern": "^sha256:[0-9a-f]{64}$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "authority_scopes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      }
+    },
+    "annotations": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Non-normative; excluded from definition hashing."
+    }
+  }
+}

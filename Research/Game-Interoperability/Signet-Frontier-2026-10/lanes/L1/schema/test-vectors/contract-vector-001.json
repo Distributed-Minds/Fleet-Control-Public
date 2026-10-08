@@ -1,0 +1,38 @@
+{
+  "vector_id": "CONTRACT-VECTOR-001",
+  "contract": {
+    "authority": {
+      "https://example.org/sem/authority/player-intent/1": "participant:self",
+      "https://example.org/sem/authority/session-rules/1": "server:rules"
+    },
+    "core": {
+      "id": "https://signetprotocol.io/sem/core/session/1",
+      "definition_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "fallbacks": [],
+    "ordering_model": {
+      "id": "https://example.org/sem/ordering/turn-sequence/1",
+      "definition_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    "profiles": [
+      {
+        "id": "https://example.org/sem/profile/card-zones/1",
+        "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      {
+        "id": "https://example.org/sem/profile/turn-taking/1",
+        "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    "ruleset": {
+      "id": "https://example.org/sem/ruleset/example-card-game/1",
+      "definition_hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    "visibility_policy": {
+      "id": "https://example.org/sem/visibility/private-hands/1",
+      "definition_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    }
+  },
+  "expected_jcs": "{\"authority\":{\"https://example.org/sem/authority/player-intent/1\":\"participant:self\",\"https://example.org/sem/authority/session-rules/1\":\"server:rules\"},\"core\":{\"definition_hash\":\"sha256:0000000000000000000000000000000000000000000000000000000000000000\",\"id\":\"https://signetprotocol.io/sem/core/session/1\"},\"fallbacks\":[],\"ordering_model\":{\"definition_hash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"id\":\"https://example.org/sem/ordering/turn-sequence/1\"},\"profiles\":[{\"definition_hash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"id\":\"https://example.org/sem/profile/card-zones/1\"},{\"definition_hash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"id\":\"https://example.org/sem/profile/turn-taking/1\"}],\"ruleset\":{\"definition_hash\":\"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"id\":\"https://example.org/sem/ruleset/example-card-game/1\"},\"visibility_policy\":{\"definition_hash\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"id\":\"https://example.org/sem/visibility/private-hands/1\"}}",
+  "expected_contract_hash": "sha256:49539b9e09a204fe8d1a5a44f247247a19c591f66d902623d62695e2819fe2b0"
+}

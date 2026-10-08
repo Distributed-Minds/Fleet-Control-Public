@@ -1,0 +1,56 @@
+[
+  {
+    "vector_id": "COMP-NEG-SET-ORDER-001a",
+    "purpose": "selected_profiles is semantically unordered (COMP-1). A selected ref with a bad hash plus an unsupported selected ref must reject with the same reason regardless of presentation order.",
+    "expected_reason": "SEMANTIC_DEFINITION_CONFLICT",
+    "input": {
+      "selected_profiles": [
+        {
+          "id": "https://example.org/sem/profile/aaa-source-order/1",
+          "definition_hash": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+        },
+        {
+          "id": "https://example.org/sem/profile/bbb-missing/1",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "catalog": [
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/aaa-source-order/1",
+            "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "requires": [],
+          "exports": []
+        }
+      ]
+    }
+  },
+  {
+    "vector_id": "COMP-NEG-SET-ORDER-001b",
+    "purpose": "Same selected-profile set as COMP-NEG-SET-ORDER-001a in the opposite source order; canonicalization must yield the identical rejection reason.",
+    "expected_reason": "SEMANTIC_DEFINITION_CONFLICT",
+    "input": {
+      "selected_profiles": [
+        {
+          "id": "https://example.org/sem/profile/bbb-missing/1",
+          "definition_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        {
+          "id": "https://example.org/sem/profile/aaa-source-order/1",
+          "definition_hash": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+        }
+      ],
+      "catalog": [
+        {
+          "semantic": {
+            "id": "https://example.org/sem/profile/aaa-source-order/1",
+            "definition_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "requires": [],
+          "exports": []
+        }
+      ]
+    }
+  }
+]

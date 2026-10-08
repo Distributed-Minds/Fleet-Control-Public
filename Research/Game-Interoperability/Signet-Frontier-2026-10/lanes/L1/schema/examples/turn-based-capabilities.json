@@ -1,0 +1,54 @@
+{
+  "kind": "signet.capabilities",
+  "core": {
+    "id": "https://signetprotocol.io/sem/core/session/1",
+    "definition_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "participant": {
+    "participant_id": "participant:turn-client-a",
+    "game_id": "example-turn-game",
+    "adapter": {
+      "implementation_id": "https://example.org/adapters/turn-game",
+      "version": "0.1.0"
+    }
+  },
+  "protocols": [
+    "signet/2-draft"
+  ],
+  "profiles": [
+    {
+      "semantic": {
+        "id": "https://signetprotocol.io/sem/profile/turn-taking/1",
+        "definition_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "roles": {
+        "publish": [
+          "https://signetprotocol.io/sem/profile/turn-taking/1#intent/move"
+        ],
+        "consume": [
+          "https://signetprotocol.io/sem/profile/turn-taking/1#state/board",
+          "https://signetprotocol.io/sem/profile/turn-taking/1#event/move-applied"
+        ],
+        "observe": []
+      },
+      "required": [
+        "https://signetprotocol.io/sem/profile/turn-taking/1#state/board"
+      ],
+      "optional": [],
+      "fallbacks": []
+    }
+  ],
+  "ordering_models": [
+    {
+      "id": "https://signetprotocol.io/sem/ordering/turn-sequence/1",
+      "definition_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  ],
+  "authority_publish": [
+    "https://signetprotocol.io/sem/authority/player-intent/1"
+  ],
+  "authority_consume": [
+    "https://signetprotocol.io/sem/authority/session-rules/1"
+  ],
+  "visibility_policies": []
+}
