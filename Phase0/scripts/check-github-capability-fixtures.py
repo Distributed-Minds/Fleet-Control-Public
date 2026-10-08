@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -9,13 +10,51 @@ REQUIRED_IDS = set(range(1, 29))
 MUTATING_ACTIONS = {"scheduled_write", "cleanup", "default_branch_write"}
 MUTATION_ALLOW = {"ALLOW_FENCED", "ALLOW_RECOVERY"}
 
+# Integrity baseline for the historical 28 scenarios, separate from fixture data.
+# This detects silent fixture expectation/name drift; it is NOT a semantic
+# outcome reducer and does NOT prove scheduled GitHub behavior.
+CANONICAL_CASES = {
+    1: ("interactive-write-scheduled-read-only", "CAPABILITY_ABSENT"),
+    2: ("interactive-action-scheduled-missing", "CAPABILITY_ABSENT"),
+    3: ("scheduled-stricter-approval", "ACTION_PAUSED"),
+    4: ("repository-scope-differs", "ACTION_BLOCKED"),
+    5: ("capability-evidence-drift", "REVALIDATE"),
+    6: ("connector-without-mutation-action", "CAPABILITY_ABSENT"),
+    7: ("repository-policy-rejects-action", "ACTION_BLOCKED"),
+    8: ("probe-would-touch-default-branch", "ACTION_BLOCKED"),
+    9: ("cutoff-after-create", "CLEANUP_REQUIRED"),
+    10: ("cutoff-before-cleanup", "CLEANUP_REQUIRED"),
+    11: ("duplicate-retry", "REUSE_ATTEMPT"),
+    12: ("cleanup-permission-lost", "RECOVERY_REQUIRED"),
+    13: ("locator-reused", "AMBIGUOUS"),
+    14: ("cleanup-ack-lost", "PASSED_CLEAN"),
+    15: ("repeated-cutoff-bounded", "CLEANUP_REQUIRED"),
+    16: ("concurrent-generations-one-namespace", "ALLOW_FENCED"),
+    17: ("old-probe-after-successor", "AUTHORITY_STALE"),
+    18: ("stale-probe-cleanup-without-transfer", "RECOVERY_REQUIRED"),
+    19: ("authority-lost-before-cleanup", "RECOVERY_REQUIRED"),
+    20: ("forged-authority-metadata", "AUTHORITY_UNAVAILABLE"),
+    21: ("bounded-recovery-transfer", "ALLOW_RECOVERY"),
+    22: ("authority-adapter-incompatible", "AUTHORITY_UNAVAILABLE"),
+    23: ("capability-current-authority-expired", "AUTHORITY_STALE"),
+    24: ("context-recreated-successor", "REUSE_LINEAGE"),
+    25: ("context-id-reused-different-installation", "LINEAGE_UNKNOWN"),
+    26: ("product-migration-access-only", "LINEAGE_UNKNOWN"),
+    27: ("successor-orphan-cleanup-needs-transfer", "RECOVERY_REQUIRED"),
+    28: ("lineage-map-version-skew", "LINEAGE_UNKNOWN"),
+}
+
+
 
 def fail(message: str) -> None:
     raise SystemExit(f"FAIL: {message}")
 
 
 def main() -> None:
-    data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    if len(sys.argv) > 2:
+        fail("usage: check-github-capability-fixtures.py [fixture.json]")
+    fixture = Path(sys.argv[1]) if len(sys.argv) == 2 else FIXTURE
+    data = json.loads(fixture.read_text(encoding="utf-8"))
     if data.get("spec") != 5 or data.get("issue") != 11:
         fail("fixture must identify issue 11 spec 5")
 
@@ -23,7 +62,12 @@ def main() -> None:
     if not isinstance(cases, list):
         fail("cases must be a list")
 
+    if any(not isinstance(case, dict) for case in cases):
+        fail("every case must be an object")
+
     ids = [case.get("id") for case in cases]
+    if any(type(cid) is not int for cid in ids):
+        fail("fixture IDs must be integers")
     if len(ids) != len(set(ids)):
         fail("fixture IDs must be unique")
     if set(ids) != REQUIRED_IDS:
@@ -64,24 +108,12 @@ def main() -> None:
             fail(f"case {cid}: approval-required scheduled action cannot be autonomous success")
 
     by_id = {case["id"]: case for case in cases}
-    exact = {
-        8: "ACTION_BLOCKED",
-        13: "AMBIGUOUS",
-        17: "AUTHORITY_STALE",
-        18: "RECOVERY_REQUIRED",
-        19: "RECOVERY_REQUIRED",
-        20: "AUTHORITY_UNAVAILABLE",
-        21: "ALLOW_RECOVERY",
-        22: "AUTHORITY_UNAVAILABLE",
-        23: "AUTHORITY_STALE",
-        25: "LINEAGE_UNKNOWN",
-        26: "LINEAGE_UNKNOWN",
-        27: "RECOVERY_REQUIRED",
-        28: "LINEAGE_UNKNOWN",
-    }
-    for cid, expected in exact.items():
-        if by_id[cid].get("expected") != expected:
-            fail(f"case {cid}: expected {expected}")
+    for cid, (name, expected) in CANONICAL_CASES.items():
+        case = by_id[cid]
+        if case.get("name") != name:
+            fail(f"case {cid}: expected canonical scenario name {name!r}")
+        if case.get("expected") != expected:
+            fail(f"case {cid}: expected canonical outcome {expected}")
 
     print(f"PASS: {len(cases)} GitHub capability acceptance fixtures")
 
