@@ -4,6 +4,8 @@
 
 > **FREE ENERGY Remasters Everything.**
 
+**Preview installation:** These files currently live on [`phase0/public-v0`](https://github.com/Distributed-Minds/Fleet-Control-Public/tree/phase0/public-v0), **not** upstream `main` (which is still a placeholder). A default-branch-only fork will miss Phase0. See [the corrected installation steps](GETTING-STARTED.md#2-install-the-actual-phase0-preview-in-a-repository-you-control) or the [FREE ENERGY starter release](https://github.com/Distributed-Minds/Fleet-Control-Public/releases) before creating automations.
+
 FREE ENERGY is the public collaborative project built on the Fleet-Control orchestration model.
 
 The long-term goal is intentionally excessive: give people and AI-agent fleets a shared system for finding, repairing, remastering, porting, extending, remixing, and eventually combining games, engines, assets, tools, mods, and abandoned experiments instead of repeatedly rebuilding the same pieces in isolation.
