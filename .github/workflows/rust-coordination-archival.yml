@@ -31,6 +31,13 @@ jobs:
           persist-credentials: false
       - name: Install Rust 1.85.1
         run: rustup toolchain install 1.85.1 --profile minimal --component clippy --component rustfmt
+      - name: Archive identifier admission regression
+        run: |
+          # Verify the library independently even when a separate owner's
+          # integration-test source has not yet passed workspace rustfmt.
+          rustup run 1.85.1 rustfmt --edition 2021 --check src/lib.rs
+          rustup run 1.85.1 cargo test --lib --locked --offline
+          rustup run 1.85.1 cargo clippy --lib --locked --offline -- -D warnings
       - name: Format
         run: rustup run 1.85.1 cargo fmt --all -- --check
       - name: Offline locked unit tests
