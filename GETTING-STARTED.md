@@ -250,3 +250,16 @@ A plain clone without `--branch phase0/public-v0` checks out upstream `main`, wh
 Start with a disposable repository or non-critical project. Watch several runs. Read the issues and PRs. Keep `HUMAN_MERGE_ONLY` until you understand the behavior.
 
 The Markdown state machine coordinates work; it does not replace ordinary repository permissions, backups, CI, tests, security inspection, or human judgment.
+
+## Optional: verify onboarding links from source (maintainers)
+
+The public documentation link checker is maintained in **Rust**, not Python or npm. This step is for contributors editing the source checkout, **not** a prerequisite for installing Phase0 or using the published v0.1.2 ZIP. With `rustc` available, run from the checkout root:
+
+```sh
+rustc --edition=2021 -D warnings --test scripts/check-public-doc-links.rs -o /tmp/free-energy-doc-links-tests
+/tmp/free-energy-doc-links-tests
+rustc --edition=2021 -D warnings scripts/check-public-doc-links.rs -o /tmp/free-energy-doc-links
+/tmp/free-energy-doc-links --root "$PWD"
+```
+
+The last command checks local file targets in eight onboarding documents, rejecting missing, malformed or unsafe destinations. It does **not** request external URLs, validate `#fragments`, or implement full CommonMark. A nonzero exit is a failed check. Pass `--root` explicitly because the compiled binary may live outside the checkout. The pinned GitHub Actions validator additionally exercises executable failure cases on a disposable fixture root.
