@@ -53,7 +53,9 @@ fn main() -> ExitCode {
     }
 
     let result = validate_loaded(
-        loaded.iter().map(|(path, text)| (path.as_str(), text.as_str())),
+        loaded
+            .iter()
+            .map(|(path, text)| (path.as_str(), text.as_str())),
     );
     match result {
         Ok(records) if errors.is_empty() => {
@@ -94,10 +96,11 @@ mod tests {
 
     #[test]
     fn duplicate_project_ids_are_rejected_across_files() {
-        let failures =
-            validate_loaded([("one.json", LUANTI), ("two.json", LUANTI)]).unwrap_err();
+        let failures = validate_loaded([("one.json", LUANTI), ("two.json", LUANTI)]).unwrap_err();
         assert!(
-            failures.iter().any(|error| error.contains("two.json: duplicate project ID:")),
+            failures
+                .iter()
+                .any(|error| error.contains("two.json: duplicate project ID:")),
             "{failures:?}"
         );
     }
