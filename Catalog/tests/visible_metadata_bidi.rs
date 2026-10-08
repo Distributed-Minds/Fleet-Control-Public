@@ -13,16 +13,17 @@ fn pilot() -> Value {
 fn all_supported_directional_controls_are_rejected_in_display_name() {
     assert!(validate_manifest(LUANTI).is_ok());
     for control in [
-        '\u{061c}', '\u{200e}', '\u{200f}', '\u{202a}', '\u{202b}',
-        '\u{202c}', '\u{202d}', '\u{202e}', '\u{2066}', '\u{2067}',
-        '\u{2068}', '\u{2069}',
+        '\u{061c}', '\u{200e}', '\u{200f}', '\u{202a}', '\u{202b}', '\u{202c}', '\u{202d}',
+        '\u{202e}', '\u{2066}', '\u{2067}', '\u{2068}', '\u{2069}',
     ] {
         let mut record = pilot();
         record["display_name"] = json!(format!("Luanti{control} verified"));
-        let errors = validate_manifest(&record.to_string())
-            .expect_err("directional spoof must be rejected");
+        let errors =
+            validate_manifest(&record.to_string()).expect_err("directional spoof must be rejected");
         assert!(
-            errors.iter().any(|e| e.contains("display_name: bidirectional formatting control")),
+            errors
+                .iter()
+                .any(|e| e.contains("display_name: bidirectional formatting control")),
             "control U+{:04X} was not rejected as visible metadata: {errors:?}",
             control as u32
         );
@@ -49,10 +50,12 @@ fn right_claim_permission_evidence_and_review_text_cannot_spoof_display() {
         let mut record = pilot();
         let field = record.pointer_mut(pointer).expect("pilot field");
         *field = json!("trusted\u{202e}denied");
-        let errors = validate_manifest(&record.to_string())
-            .expect_err("bidi metadata must fail closed");
+        let errors =
+            validate_manifest(&record.to_string()).expect_err("bidi metadata must fail closed");
         assert!(
-            errors.iter().any(|e| e.contains("bidirectional formatting control")),
+            errors
+                .iter()
+                .any(|e| e.contains("bidirectional formatting control")),
             "{pointer} bypassed displayed-metadata guard: {errors:?}"
         );
     }
@@ -63,7 +66,9 @@ fn optional_and_nested_text_cannot_bypass_the_guard() {
     let mut record = pilot();
     record["permission_decisions"][0]["reviewer"] = json!("forged\u{2066}authority");
     let errors = validate_manifest(&record.to_string()).expect_err("invalid reviewer");
-    assert!(errors.iter().any(|e| e.contains("permission_decisions[0].reviewer: bidirectional")));
+    assert!(errors
+        .iter()
+        .any(|e| e.contains("permission_decisions[0].reviewer: bidirectional")));
 
     let mut record = pilot();
     record["review"]["claim_history"] = json!([{
@@ -73,7 +78,9 @@ fn optional_and_nested_text_cannot_bypass_the_guard() {
         "at": "2026-10-08T00:00:00Z"
     }]);
     let errors = validate_manifest(&record.to_string()).expect_err("invalid claim history");
-    assert!(errors.iter().any(|e| e.contains("review.claim_history[0].reason: bidirectional")));
+    assert!(errors
+        .iter()
+        .any(|e| e.contains("review.claim_history[0].reason: bidirectional")));
 }
 
 #[test]

@@ -398,7 +398,9 @@ fn check_slug(problems: &mut Vec<String>, path: &str, value: &str) {
 // Non-ASCII language text that has no directional controls remains supported.
 fn check_visible_text(problems: &mut Vec<String>, path: &str, value: &str) {
     if value.chars().any(is_bidi_format_character) {
-        problems.push(format!("{path}: bidirectional formatting control in visible metadata"));
+        problems.push(format!(
+            "{path}: bidirectional formatting control in visible metadata"
+        ));
     }
 }
 
@@ -433,13 +435,25 @@ fn validate_visible_metadata(record: &Project, problems: &mut Vec<String>) {
             ("scope", decision.scope.as_str()),
             ("decision_reason", decision.decision_reason.as_str()),
         ] {
-            check_visible_text(problems, &format!("permission_decisions[{i}].{field}"), value);
+            check_visible_text(
+                problems,
+                &format!("permission_decisions[{i}].{field}"),
+                value,
+            );
         }
         if let Some(value) = &decision.reviewer {
-            check_visible_text(problems, &format!("permission_decisions[{i}].reviewer"), value);
+            check_visible_text(
+                problems,
+                &format!("permission_decisions[{i}].reviewer"),
+                value,
+            );
         }
         if let Some(value) = &decision.decided_at {
-            check_visible_text(problems, &format!("permission_decisions[{i}].decided_at"), value);
+            check_visible_text(
+                problems,
+                &format!("permission_decisions[{i}].decided_at"),
+                value,
+            );
         }
     }
     for (i, evidence) in record.evidence.iter().enumerate() {
@@ -458,11 +472,12 @@ fn validate_visible_metadata(record: &Project, problems: &mut Vec<String>) {
         check_visible_text(problems, field, value);
     }
     for (i, event) in record.review.claim_history.iter().enumerate() {
-        for (field, value) in [
-            ("reason", event.reason.as_str()),
-            ("at", event.at.as_str()),
-        ] {
-            check_visible_text(problems, &format!("review.claim_history[{i}].{field}"), value);
+        for (field, value) in [("reason", event.reason.as_str()), ("at", event.at.as_str())] {
+            check_visible_text(
+                problems,
+                &format!("review.claim_history[{i}].{field}"),
+                value,
+            );
         }
     }
 }
