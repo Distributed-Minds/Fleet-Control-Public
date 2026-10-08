@@ -320,8 +320,8 @@ fn run() -> Result<(), String> {
     if args.next().is_some() {
         return Err("usage: free-energy-phase0-fixtures [fixture.json]".to_owned());
     }
-    let content = fs::read_to_string(&input)
-        .map_err(|e| format!("cannot read {}: {e}", input.display()))?;
+    let content =
+        fs::read_to_string(&input).map_err(|e| format!("cannot read {}: {e}", input.display()))?;
     let fixture: Fixture = serde_json::from_str(&content)
         .map_err(|e| format!("invalid fixture {}: {e}", input.display()))?;
     match validate(&fixture) {
@@ -409,7 +409,10 @@ mod tests {
     #[test]
     fn omitted_authority_is_not_implicitly_granted() {
         let mut altered = original();
-        altered["decision_cases"][0].as_object_mut().unwrap().remove("authority_current");
+        altered["decision_cases"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("authority_current");
         assert!(validate(&fixture(altered)).is_err());
     }
 }
