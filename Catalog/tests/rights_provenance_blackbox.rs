@@ -34,17 +34,14 @@ fn write_temporary(record: &Value) -> PathBuf {
         .create_new(true)
         .open(&path)
         .expect("unique temporary manifest");
-    file.write_all(
-        &serde_json::to_vec(record).expect("serialize attack manifest"),
-    )
-    .expect("write attack manifest");
+    file.write_all(&serde_json::to_vec(record).expect("serialize attack manifest"))
+        .expect("write attack manifest");
     path
 }
 
 fn validate_batch(record: &Value) -> Output {
     let path = write_temporary(record);
-    let known_good = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("projects/openra.json");
+    let known_good = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("projects/openra.json");
     let result = Command::new(env!("CARGO_BIN_EXE_free-energy-catalog"))
         .arg("validate")
         .arg(known_good)
