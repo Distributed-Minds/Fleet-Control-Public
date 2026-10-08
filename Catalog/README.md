@@ -2,7 +2,7 @@
 
 Canonical specification: [issue #60](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/60), **Phase0 spec version 5**. Governing executable-language/no-npm rule: [issue #70](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/70).
 
-This non-default draft currently provides a **reviewable, declarative JSON Schema, three conservative pilot manifests, and seven authored fixture files**. The fixture expectations are inputs for a future compiled runner, not passing executable tests. This is not an installable catalog product, published catalog, verified game index, validator, renderer, authorized asset collection, or completed v5 implementation.
+This non-default draft currently provides a **reviewable, declarative JSON Schema, three conservative pilot manifests, and several authored fixture files**. The fixture expectations are inputs for a future compiled runner, not passing executable tests. This is not an installable catalog product, published catalog, verified game index, validator, renderer, authorized asset collection, or completed v5 implementation.
 
 - `schema/project-v0.schema.json`: closed Draft 2020-12 **structural** schema; `APPROVED_FOR_SCOPE` is deliberately not a permitted v0 permission decision. Its `https` regex is **not** the required security-grade URL validation.
 - `projects/luanti.json`: an engine-only route; separately installed game/content required.
@@ -11,9 +11,9 @@ This non-default draft currently provides a **reviewable, declarative JSON Schem
 
 All three records are `DRAFT`; no `FREE_ENERGY_VERIFIED` play status, `TESTED` adapter, `APPROVED_FOR_SCOPE` rights grant or local game/build test is asserted. Evidence dates describe the historical 2026-10-08 research snapshots. Moving upstream pages are **not** pinned repository evidence. Publisher rights statements remain subject to use-specific independent review. This format does **not** mechanically guarantee append-only claim history or authenticate a manifest's `reviewer` string.
 
-## Authored verification fixtures (not executed)
+## Verification fixture snapshot — 847af19d (not executed)
 
-These files are source-controlled **test inputs and expected verdicts**, not a Rust test suite or evidence that a complete Draft 2020-12 or semantic validator currently passes. All paths below are relative to `Catalog/`.
+The seven files below were inspected at [source commit `847af19d`](https://github.com/Distributed-Minds/Fleet-Control-Public/commit/847af19d3fd9a58403b902e24772af98b61bb064). This is a **historical snapshot, not an exhaustive live directory inventory**: other parallel operators have since added fixture files. Check the [current fixture directory](fixtures/) for newer inputs. These are source-controlled test inputs/expected verdicts, **not executed Rust tests** or proof of Draft 2020-12 or semantic validator conformance. Paths below are relative to `Catalog/`.
 
 | Fixture | Input contract | Declared cases |
 | --- | --- | ---: |
@@ -25,7 +25,7 @@ These files are source-controlled **test inputs and expected verdicts**, not a R
 | [`fixtures/unpinned-upstream-reason-v0.json`](fixtures/unpinned-upstream-reason-v0.json) | Required explanation for an unpinned upstream revision | 8 |
 | [`fixtures/forged-approval-v0.json`](fixtures/forged-approval-v0.json) | One **complete negative manifest**, not a fragment suite: a forged human-review record attempts forbidden `APPROVED_FOR_SCOPE` | 1 record |
 
-The first six files declare **91 fragment cases** (26 expected valid, 65 expected invalid) using `base`/`base_*`, `target_pointer`, case overrides and `expected_valid`; they need an actual compatible schema runner to resolve the target `$defs`, apply overrides, and compare outcomes. The seventh file is a separate full-manifest negative to reject regardless of self-asserted review evidence. These counts describe authored expectations only; **none of the 92 inputs constitutes an observed test PASS**. Structural acceptance would not prove source authenticity, safe URL destinations, rights clearance, a tested adapter, or a working downloadable game.
+At that source snapshot, the first six files declared **91 fragment cases** (26 expected valid, 65 expected invalid) using `base`/`base_*`, `target_pointer`, case overrides and `expected_valid`; they need an actual compatible schema runner to resolve the target `$defs`, apply overrides, and compare outcomes. At the same source snapshot, the seventh file was a separate full-manifest negative to reject regardless of self-asserted review evidence. These counts describe authored expectations only; **none of those 92 snapshot inputs constitutes an observed test PASS**. Structural acceptance would not prove source authenticity, safe URL destinations, rights clearance, a tested adapter, or a working downloadable game.
 
 ## Remaining implementation (not yet delivered)
 
