@@ -229,6 +229,20 @@ fn check(cases: &[Case]) -> Result<usize, Vec<String>> {
         let Some(actual) = observed.get(&case.name) else {
             continue;
         };
+        // Equality to the case itself is not an independent cross-case witness.
+        // Reject it even when all computed topology and virtual-base fields match.
+        for (kind, reference) in [
+            ("same_set_as", case.same_set_as.as_deref()),
+            ("same_computation_as", case.same_computation_as.as_deref()),
+            ("different_computation_from", case.different_computation_from.as_deref()),
+        ] {
+            if reference == Some(case.name.as_str()) {
+                errors.push(format!(
+                    "{}: {kind} requires a distinct witness case",
+                    case.name
+                ));
+            }
+        }
         if let Some(other) = case.same_set_as.as_deref() {
             match observed.get(other) {
                 Some(basis) if actual.topology == basis.topology => {}
@@ -435,6 +449,31 @@ mod tests {
         for case in baseline() {
             let observed = compute(&case).expect("valid modeled fixture");
             assert!(!observed.mutation_authority);
+        }
+    }
+
+    #[test]
+    fn cross_case_assertions_cannot_use_self_as_their_witness() {
+        for (name, kind) in [
+            ("multiple-reordered", "same_set_as"),
+            ("multi-virtual-a-reordered", "same_computation_as"),
+            ("multi-virtual-version-drift", "different_computation_from"),
+        ] {
+            let mut cases = baseline();
+            let case = case_mut(&mut cases, name);
+            match kind {
+                "same_set_as" => case.same_set_as = Some(name.to_owned()),
+                "same_computation_as" => case.same_computation_as = Some(name.to_owned()),
+                "different_computation_from" => {
+                    case.different_computation_from = Some(name.to_owned())
+                }
+                _ => unreachable!(),
+            }
+            let errors = check(&cases).expect_err("self-reference must fail closed");
+            assert!(
+                errors.iter().any(|error| error.contains("requires a distinct witness case")),
+                "{name}/{kind}: {errors:?}"
+            );
         }
     }
 
