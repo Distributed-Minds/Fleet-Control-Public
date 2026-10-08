@@ -419,7 +419,8 @@ mod tests {
 
     #[test]
     fn each_independent_base_is_required() {
-        let cases: [(fn(&mut DeleteWitness), Denial); 9] = [
+        type NegativeCase = (fn(&mut DeleteWitness), Denial);
+        let cases: [NegativeCase; 9] = [
             (
                 |w| w.archive.exact_remote_readback = false,
                 Denial::ArchiveNotExact,
