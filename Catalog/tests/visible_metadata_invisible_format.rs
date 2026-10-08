@@ -53,7 +53,11 @@ fn ordinary_visible_unicode_remains_valid_and_bidi_diagnostics_are_preserved() {
     for good in ["Café", "東京", "مرحبا", "Veloren – collaborative"] {
         for (pointer, _) in FIELDS {
             let result = validate_manifest(&with_value(pointer, good));
-            assert!(result.is_ok(), "{pointer} rejected {good:?}: {:?}", result.err());
+            assert!(
+                result.is_ok(),
+                "{pointer} rejected {good:?}: {:?}",
+                result.err()
+            );
         }
     }
 
