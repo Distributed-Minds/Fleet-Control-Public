@@ -1,0 +1,47 @@
+name: Rust public onboarding link checker
+
+# Validation only: no secrets, publishing, deployments, or default-branch writes.
+on:
+  pull_request:
+    branches:
+      - phase0/public-v0
+    paths:
+      - .github/workflows/rust-public-doc-links.yml
+      - scripts/check-public-doc-links.rs
+      - README.md
+      - GETTING-STARTED.md
+      - HELP-A-PROJECT.md
+      - WORKFLOW-GUIDES.md
+      - TROUBLESHOOTING.md
+      - BRANDING.md
+      - release-kit/README-FIRST.md
+      - release-kit/INSTALL-CHECKLIST.md
+
+permissions:
+  contents: read
+
+jobs:
+  rust-public-doc-links:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install pinned compiler
+        run: rustup toolchain install 1.85.1 --profile minimal
+      - name: Compile and execute Rust unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup run 1.85.1 rustc --edition=2021 -D warnings --test \
+            scripts/check-public-doc-links.rs -o "$RUNNER_TEMP/free-energy-doc-link-tests"
+          "$RUNNER_TEMP/free-energy-doc-link-tests" --test-threads=1
+      - name: Compile and execute the real onboarding-link CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup run 1.85.1 rustc --edition=2021 -D warnings \
+            scripts/check-public-doc-links.rs -o "$RUNNER_TEMP/free-energy-doc-links"
+          "$RUNNER_TEMP/free-energy-doc-links" --root "$GITHUB_WORKSPACE"
