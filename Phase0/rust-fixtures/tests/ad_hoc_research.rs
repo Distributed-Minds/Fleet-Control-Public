@@ -236,9 +236,7 @@ fn identity(case: &Value, templates: &Map<String, Value>) -> Result<Value, Strin
         "exceptional-mutation-active-collision" => {
             if !flag(case, "explicit_existing_surface_authority", false)? {
                 "READ_ONLY"
-            } else if flag(case, "active_overlap", false)?
-                && !flag(case, "safe_takeover", false)?
-            {
+            } else if flag(case, "active_overlap", false)? && !flag(case, "safe_takeover", false)? {
                 "YIELD"
             } else {
                 "MUTATION_ELIGIBLE"
@@ -357,9 +355,7 @@ fn concurrent(case: &Value) -> Result<Value, String> {
         if strategy == "atomic_unique" || strategy == "serialized" {
             artifacts = artifacts.max(1);
             lineages = 1;
-        } else if strategy == "reconcile_after_create"
-            && !flag(case, "inventory_complete", true)?
-        {
+        } else if strategy == "reconcile_after_create" && !flag(case, "inventory_complete", true)? {
             return Ok(json!({
                 "disposition": "BLOCK_INVENTORY_UNKNOWN",
                 "provider_artifacts": artifacts,
