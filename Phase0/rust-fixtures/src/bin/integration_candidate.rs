@@ -78,6 +78,16 @@ fn git_id(value: &str) -> bool {
             .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
+/// Byte-exact canonical candidate material for a future vetted SHA-256 engine.
+/// Mirrors Python json.dumps(sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+/// for this typed, integer/string-only schema; serde_json's pinned default Map
+/// ordering is lexical and serialization retains UTF-8 Unicode text.
+/// This function DOES NOT compute or verify a cryptographic candidate identity.
+fn canonical_candidate_bytes(candidate: &Candidate) -> Result<Vec<u8>, String> {
+    let value = serde_json::to_value(candidate).map_err(|error| error.to_string())?;
+    serde_json::to_vec(&value).map_err(|error| error.to_string())
+}
+
 fn validate_candidate(candidate: &Candidate, supported: &[usize]) -> Result<(), String> {
     if candidate.schema_version != "integration-candidate-v1"
         || candidate.operation_kind != "explicit-merge"
@@ -131,8 +141,8 @@ fn disposition(case: &Case, normal: &Candidate) -> Result<String, String> {
     let mut reversed = normal.clone();
     reversed.parents.reverse();
     if c == &reversed && c.parents != normal.parents {
-        let original = serde_json::to_vec(normal).map_err(|e| e.to_string())?;
-        let ordered = serde_json::to_vec(c).map_err(|e| e.to_string())?;
+        let original = canonical_candidate_bytes(normal)?;
+        let ordered = canonical_candidate_bytes(c)?;
         if original == ordered {
             return Err("reversed parents did not change canonical payload".to_owned());
         }
@@ -339,5 +349,74 @@ mod tests {
         let mut fixture = sample();
         fixture.stale_head_cases.clear();
         assert!(validate(&fixture).is_err());
+    }
+
+    #[test]
+    fn python_canonical_json_bytes_match_four_historical_vectors() {
+        let fixture = sample();
+        // Immutable byte vectors from the original Python canonical_json
+        // contract, not the expected disposition fields in the fixtures.
+        let normal = fixture
+            .cases
+            .iter()
+            .find(|case| case.name == "normal-two-parent")
+            .unwrap();
+        let reversed = fixture
+            .cases
+            .iter()
+            .find(|case| case.name == "reversed-parents-same-tree")
+            .unwrap();
+        assert_eq!(
+            canonical_candidate_bytes(&normal.candidate).unwrap(),
+            r###"{"compatibility_basis":"constructor-v1-exact","constructor_version":"constructor-v1","metadata":{"author":"Example Author <author@example.invalid>","author_time":"1700000000 +0000","committer":"Example Committer <committer@example.invalid>","committer_time":"1700000000 +0000","encoding":"UTF-8","message":"Integrate source\n","signature_policy":"none"},"operation_kind":"explicit-merge","parent_count":2,"parents":["1111111111111111111111111111111111111111","2222222222222222222222222222222222222222"],"schema_version":"integration-candidate-v1","source_commit":"2222222222222222222222222222222222222222","target_commit":"1111111111111111111111111111111111111111","tree":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"###.as_bytes()
+        );
+        assert_eq!(
+            canonical_candidate_bytes(&reversed.candidate).unwrap(),
+            r###"{"compatibility_basis":"constructor-v1-exact","constructor_version":"constructor-v1","metadata":{"author":"Example Author <author@example.invalid>","author_time":"1700000000 +0000","committer":"Example Committer <committer@example.invalid>","committer_time":"1700000000 +0000","encoding":"UTF-8","message":"Integrate source\n","signature_policy":"none"},"operation_kind":"explicit-merge","parent_count":2,"parents":["2222222222222222222222222222222222222222","1111111111111111111111111111111111111111"],"schema_version":"integration-candidate-v1","source_commit":"2222222222222222222222222222222222222222","target_commit":"1111111111111111111111111111111111111111","tree":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"###.as_bytes()
+        );
+        assert_ne!(
+            canonical_candidate_bytes(&normal.candidate).unwrap(),
+            canonical_candidate_bytes(&reversed.candidate).unwrap(),
+            "parent reversal changes the canonical input to SHA-256"
+        );
+        for case in &fixture.cases {
+            assert!(
+                canonical_candidate_bytes(&case.candidate).is_ok(),
+                "all four historical candidate envelopes must serialize"
+            );
+        }
+    }
+
+    #[test]
+    fn python_utf8_and_embedded_newline_bytes_do_not_become_ascii_escapes() {
+        let mut candidate = sample().cases.remove(0).candidate;
+        candidate.metadata.author = "Jörg ∑ 東京".to_owned();
+        candidate.metadata.message = "Line one\\nLine two".to_owned();
+        let bytes = canonical_candidate_bytes(&candidate).unwrap();
+        assert_eq!(bytes, r###"{"compatibility_basis":"constructor-v1-exact","constructor_version":"constructor-v1","metadata":{"author":"Jörg ∑ 東京","author_time":"1700000000 +0000","committer":"Example Committer <committer@example.invalid>","committer_time":"1700000000 +0000","encoding":"UTF-8","message":"Line one\nLine two","signature_policy":"none"},"operation_kind":"explicit-merge","parent_count":2,"parents":["1111111111111111111111111111111111111111","2222222222222222222222222222222222222222"],"schema_version":"integration-candidate-v1","source_commit":"2222222222222222222222222222222222222222","target_commit":"1111111111111111111111111111111111111111","tree":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"###.as_bytes());
+        let decoded = String::from_utf8(bytes).expect("canonical material is UTF-8");
+        assert!(decoded.contains("Jörg ∑ 東京"));
+        assert!(!decoded.contains(r"\\u"));
+    }
+
+    #[test]
+    fn normalized_candidate_bytes_bind_metadata_tree_and_constructor_generation() {
+        let original = sample().cases.remove(0).candidate;
+        let baseline = canonical_candidate_bytes(&original).unwrap();
+        let mut changed = original.clone();
+        changed.tree = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_owned();
+        assert_ne!(baseline, canonical_candidate_bytes(&changed).unwrap());
+        changed = original.clone();
+        changed.metadata.message.push('!');
+        assert_ne!(baseline, canonical_candidate_bytes(&changed).unwrap());
+        changed = original.clone();
+        changed.parent_count = 3;
+        assert_ne!(baseline, canonical_candidate_bytes(&changed).unwrap());
+        changed = original.clone();
+        changed.constructor_version = "constructor-v2".to_owned();
+        assert_ne!(baseline, canonical_candidate_bytes(&changed).unwrap());
+        changed = original.clone();
+        changed.compatibility_basis = "alternate".to_owned();
+        assert_ne!(baseline, canonical_candidate_bytes(&changed).unwrap());
     }
 }
