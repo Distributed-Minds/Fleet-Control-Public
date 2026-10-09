@@ -101,8 +101,8 @@ where
 /// checked-in page must not follow an untracked filesystem symlink out of the
 /// project source directory (or silently accept a JSON-named directory).
 fn read_render_manifest(path: &Path) -> Result<String, String> {
-    let metadata =
-        fs::symlink_metadata(path).map_err(|error| format!("{}: {error}", format_args!("{path:?}")))?;
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| format!("{}: {error}", format_args!("{path:?}")))?;
     if !metadata.file_type().is_file() {
         return Err(format!(
             "{}: render source must be a regular file (symlinks prohibited)",
@@ -268,12 +268,17 @@ fn main() -> ExitCode {
                                     count += 1;
                                 }
                             }
-                            Err(error) => errors
-                                .push(format!("{}: directory entry: {error}", format_args!("{path:?}"))),
+                            Err(error) => errors.push(format!(
+                                "{}: directory entry: {error}",
+                                format_args!("{path:?}")
+                            )),
                         }
                     }
                     if count == 0 {
-                        errors.push(format!("{}: no JSON manifests found", format_args!("{path:?}")));
+                        errors.push(format!(
+                            "{}: no JSON manifests found",
+                            format_args!("{path:?}")
+                        ));
                     }
                 }
                 Err(error) => errors.push(format!("{}: {error}", format_args!("{path:?}"))),
