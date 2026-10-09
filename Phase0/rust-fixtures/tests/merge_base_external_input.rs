@@ -121,6 +121,33 @@ fn external_cli_rejects_corrupt_bytes_and_wrong_shape_without_success() {
 }
 
 #[test]
+fn external_cli_rejects_self_referential_cross_case_witnesses() {
+    let baseline: Value = serde_json::from_str(BASELINE).expect("historical fixture");
+    for (name, field) in [
+        ("multiple-reordered", "same_set_as"),
+        ("multi-virtual-a-reordered", "same_computation_as"),
+        ("multi-virtual-version-drift", "different_computation_from"),
+    ] {
+        let mut cases = baseline.clone();
+        let case = cases
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|case| case["name"] == name)
+            .expect("cross-case historical fixture");
+        // Preserve the expected verdict and all evidence except its witness.
+        case[field] = json!(name);
+        let output = run_json(&cases);
+        assert_rejected(&output, "self-referential cross-case witness");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("requires a distinct witness case"),
+            "{name}/{field}: {:?}",
+            output.stderr
+        );
+    }
+}
+
+#[test]
 fn external_cli_rejects_missing_file_and_extra_arguments() {
     let program = env!("CARGO_BIN_EXE_merge_base_topology");
     let output = Command::new(program)
