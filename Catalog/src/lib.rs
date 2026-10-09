@@ -539,7 +539,22 @@ fn is_public_https_url(url: &str) -> bool {
     }
     // Reject invalid UTF-8 after decoding; its browser presentation is not
     // reliably equivalent to the evidence URL being reviewed.
-    if !std::str::from_utf8(&decoded_url).is_ok_and(|s| !s.chars().any(is_inadmissible_decoded)) {
+    let Ok(decoded) = std::str::from_utf8(&decoded_url) else {
+        return false;
+    };
+    if decoded.chars().any(is_inadmissible_decoded) {
+        return false;
+    }
+    // Browsers remove dot segments before navigating. Without this check an
+    // apparently pinned or reviewed URL can resolve to a different path,
+    // including when the dots are percent-encoded or mixed-case escaped.
+    // Only inspect the path: query/fragment text is not normalized this way.
+    let after_authority = &decoded["https://".len() + authority.len()..];
+    let path = after_authority
+        .split(['?', '#'])
+        .next()
+        .unwrap_or_default();
+    if path.split('/').any(|segment| matches!(segment, "." | "..")) {
         return false;
     }
     true
@@ -1040,6 +1055,19 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
         if !is_public_https_url(&item.url) {
             problems.push(format!(
                 "inadmissible external URL: evidence {}",
+                item.evidence_id
+            ));
+        }
+        // A non-pinned evidence record may still carry an optional repository
+        // link. Validate it regardless of evidence kind: otherwise a malformed
+        // or misleading URI escapes admission by changing the kind field.
+        if item
+            .repository
+            .as_deref()
+            .is_some_and(|url| !is_public_https_url(url))
+        {
+            problems.push(format!(
+                "inadmissible external URL: evidence {} repository",
                 item.evidence_id
             ));
         }
