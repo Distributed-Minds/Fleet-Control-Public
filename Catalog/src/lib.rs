@@ -1433,30 +1433,41 @@ mod tests {
 
     #[test]
     fn invisible_plane14_tags_fail_closed_in_paths_links_and_visible_metadata() {
+        use std::fmt::Write as _;
+
         validate_manifest(VELOREN).expect("baseline manifest must remain valid");
-        for tag in ['\u{e0001}', '\u{e0020}', '\u{e0061}', '\u{e007e}', '\u{e007f}'] {
+        for tag in [
+            '\u{e0001}',
+            '\u{e0020}',
+            '\u{e0061}',
+            '\u{e007e}',
+            '\u{e007f}',
+        ] {
             let path = format!("assets/visible{tag}filename.png");
-            assert!(!is_relative_path(&path), "tagged rights path admitted: {path:?}");
+            assert!(
+                !is_relative_path(&path),
+                "tagged rights path admitted: {path:?}"
+            );
 
             let raw_url = format!("https://example.org/visible{tag}filename");
             assert!(!is_public_https_url(&raw_url), "raw tag URL admitted");
-            let encoded_tag = tag
-                .to_string()
-                .as_bytes()
-                .iter()
-                .map(|byte| format!("%{byte:02X}"))
-                .collect::<String>();
+            let mut encoded_tag = String::new();
+            for byte in tag.to_string().bytes() {
+                write!(&mut encoded_tag, "%{byte:02X}").expect("format UTF-8 tag bytes");
+            }
             let encoded_url = format!("https://example.org/visible{encoded_tag}filename");
-            assert!(!is_public_https_url(&encoded_url), "encoded tag URL admitted");
+            assert!(
+                !is_public_https_url(&encoded_url),
+                "encoded tag URL admitted"
+            );
 
             let displayed = changed(VELOREN, |record| {
                 record["display_name"] = json!(format!("Visible{tag}Game"));
             });
             let display_errors = validate_manifest(&displayed).unwrap_err();
             assert!(
-                display_errors.iter().any(|error| error.contains(
-                    "default-ignorable formatting control in visible metadata"
-                )),
+                display_errors.iter().any(|error| error
+                    .contains("default-ignorable formatting control in visible metadata")),
                 "tagged visible metadata was not specifically rejected: {display_errors:?}"
             );
 
