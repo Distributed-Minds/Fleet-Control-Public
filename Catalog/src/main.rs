@@ -554,7 +554,10 @@ mod atomic_render_tests {
             read_regular_generated_page(&target).is_err(),
             "matching external HTML must not pass render --check"
         );
-        assert_eq!(fs::read_to_string(real_site.join("index.html")).unwrap(), "original");
+        assert_eq!(
+            fs::read_to_string(real_site.join("index.html")).unwrap(),
+            "original"
+        );
         fs::remove_dir_all(&dir).expect("clean isolated sandbox");
     }
 
@@ -721,11 +724,11 @@ mod render_manifest_file_admission_tests {
         let error = read_render_manifest(&aliased_file)
             .expect_err("symlinked ancestor must not supply a regular manifest");
         assert!(error.contains("symlinked ancestor"), "{error}");
-        assert_eq!(fs::read_to_string(real_projects.join("luanti.json")).unwrap(), PILOT);
         assert_eq!(
-            super::reject_symlinked_ancestors(&real_projects),
-            Ok(())
+            fs::read_to_string(real_projects.join("luanti.json")).unwrap(),
+            PILOT
         );
+        assert!(super::reject_symlinked_ancestors(&real_projects).is_ok());
     }
 
     #[test]
