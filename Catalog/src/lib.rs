@@ -1572,9 +1572,17 @@ mod tests {
 
         validate_manifest(VELOREN).expect("pilot baseline");
         for marker in [
-            '\u{115f}', '\u{1160}', '\u{3164}', '\u{ffa0}',
-            '\u{2061}', '\u{206a}', '\u{fe00}', '\u{fe0e}',
-            '\u{fe0f}', '\u{e0100}', '\u{e01ef}',
+            '\u{115f}',
+            '\u{1160}',
+            '\u{3164}',
+            '\u{ffa0}',
+            '\u{2061}',
+            '\u{206a}',
+            '\u{fe00}',
+            '\u{fe0e}',
+            '\u{fe0f}',
+            '\u{e0100}',
+            '\u{e01ef}',
         ] {
             let path = format!("assets/music{marker}theme.ogg");
             assert!(!is_relative_path(&path), "spoofed path: {path:?}");
@@ -1592,17 +1600,32 @@ mod tests {
                 v["rights_claims"][0]["scope"] = json!(path.clone());
             });
             let errors = validate_manifest(&rights).unwrap_err();
-            assert!(errors.iter().any(|e| e.contains("unsafe rights path scope")), "{errors:?}");
+            assert!(
+                errors
+                    .iter()
+                    .any(|e| e.contains("unsafe rights path scope")),
+                "{errors:?}"
+            );
             let evidence = changed(VELOREN, |v| {
                 v["evidence"][0]["path"] = json!(path.clone());
             });
             let errors = validate_manifest(&evidence).unwrap_err();
-            assert!(errors.iter().any(|e| e.contains("invalid pinned repository evidence")), "{errors:?}");
+            assert!(
+                errors
+                    .iter()
+                    .any(|e| e.contains("invalid pinned repository evidence")),
+                "{errors:?}"
+            );
             let metadata = changed(VELOREN, |v| {
                 v["display_name"] = json!(format!("Music{marker}Game"));
             });
             let errors = validate_manifest(&metadata).unwrap_err();
-            assert!(errors.iter().any(|e| e.contains("default-ignorable formatting control")), "{errors:?}");
+            assert!(
+                errors
+                    .iter()
+                    .any(|e| e.contains("default-ignorable formatting control")),
+                "{errors:?}"
+            );
         }
         assert!(is_relative_path("assets/música/café.png"));
         assert!(is_public_https_url("https://example.org/music%20theme"));
