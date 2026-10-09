@@ -131,7 +131,6 @@ impl<'de> Deserialize<'de> for StrictJson {
 }
 
 
-
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Case {
@@ -449,8 +448,7 @@ fn check(cases: &[Case]) -> Result<usize, Vec<String>> {
 }
 
 fn parse_cases(content: &str) -> Result<Vec<Case>, String> {
-    let StrictJson(value) =
-        serde_json::from_str(content).map_err(|error| error.to_string())?;
+    let StrictJson(value) = serde_json::from_str(content).map_err(|error| error.to_string())?;
     serde_json::from_value(value).map_err(|error| error.to_string())
 }
 
@@ -586,7 +584,6 @@ mod tests {
         assert!(compute(&readable).is_ok());
     }
 
-
     #[test]
     fn duplicate_json_keys_at_every_nesting_level_fail_before_identity_checks() {
         // A normal serde_json decode may silently select the last value for
@@ -594,10 +591,22 @@ mod tests {
         // appear to bind the same basis. The compiled CLI must reject them.
         for (label, input) in [
             ("case field", r#"[{"name":"first","name":"second"}]"#),
-            ("escaped case field", r#"[{"name":"first","n\u0061me":"second"}]"#),
-            ("virtual field", r#"[{"virtual":{"algorithm":"git","algorithm":"other"}}]"#),
-            ("virtual option", r#"[{"virtual":{"options":{"x":"one","x":"two"}}}]"#),
-            ("escaped option", r#"[{"virtual":{"options":{"x":"one","\u0078":"two"}}}]"#),
+            (
+                "escaped case field",
+                r#"[{"name":"first","n\u0061me":"second"}]"#,
+            ),
+            (
+                "virtual field",
+                r#"[{"virtual":{"algorithm":"git","algorithm":"other"}}]"#,
+            ),
+            (
+                "virtual option",
+                r#"[{"virtual":{"options":{"x":"one","x":"two"}}}]"#,
+            ),
+            (
+                "escaped option",
+                r#"[{"virtual":{"options":{"x":"one","\u0078":"two"}}}]"#,
+            ),
         ] {
             let error = parse_cases(input).expect_err("duplicate map key must fail");
             assert!(
