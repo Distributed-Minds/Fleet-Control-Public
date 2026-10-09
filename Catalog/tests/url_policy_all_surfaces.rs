@@ -77,7 +77,19 @@ fn benign_https_urls_remain_admitted_at_every_additional_surface() {
             "https://gitlab.com/example/project/issues",
             "https://codeberg.org/example/project",
         ] {
-            let result = validate_manifest(&changed_url(field, safe_url));
+            let result = if field == "/evidence/0/repository" {
+                // Generic HTTPS admission is separate from a pinned file's
+                // cross-field permalink identity. Use non-pinned evidence.
+                let mut record: Value = serde_json::from_str(VELOREN).expect("valid pilot JSON");
+                record["evidence"][0]["evidence_kind"] = json!("MUTABLE_UPSTREAM_PAGE");
+                record["evidence"][0]["currentness"] = json!("OBSERVED_AT");
+                record["evidence"][0]["commit"] = Value::Null;
+                record["evidence"][0]["path"] = Value::Null;
+                record["evidence"][0]["repository"] = json!(safe_url);
+                validate_manifest(&record.to_string())
+            } else {
+                validate_manifest(&changed_url(field, safe_url))
+            };
             assert!(
                 result.is_ok(),
                 "{field}: valid HTTPS URL rejected: {safe_url}: {:?}",

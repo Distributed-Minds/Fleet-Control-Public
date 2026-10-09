@@ -75,6 +75,15 @@ fn check_suite(name: &str, fixture: &str, expected_count: usize) {
             *manifest
                 .pointer_mut(field)
                 .unwrap_or_else(|| panic!("missing tested URL field {field}")) = json!(case.url);
+            if field == "/evidence/0/url" {
+                // Authored URL suites test standalone URL syntax, not whether
+                // an arbitrary link matches an immutable Git file identity.
+                manifest["evidence"][0]["evidence_kind"] = json!("MUTABLE_UPSTREAM_PAGE");
+                manifest["evidence"][0]["currentness"] = json!("OBSERVED_AT");
+                manifest["evidence"][0]["repository"] = Value::Null;
+                manifest["evidence"][0]["commit"] = Value::Null;
+                manifest["evidence"][0]["path"] = Value::Null;
+            }
             let changed = serde_json::to_string(&manifest).expect("serialize test mutation");
             let result = validate_manifest(&changed);
             if admitted {
