@@ -10,13 +10,7 @@
 //! an omitted prefix/suffix or fabricated positions.
 
 use free_energy_coordination_archival::ownership::{reduce_model_only, Scope, State, Transition};
-use std::{
-    collections::HashMap,
-    env, fs,
-    io::Read,
-    path::Path,
-    process::ExitCode,
-};
+use std::{collections::HashMap, env, fs, io::Read, path::Path, process::ExitCode};
 
 const MAX_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_RECORDS: usize = 100_000;
@@ -96,7 +90,9 @@ fn parse_row(
             )
             || fields.insert(key, value).is_some()
         {
-            return Err(format!("row {row}: unknown, empty or duplicate field {key:?}"));
+            return Err(format!(
+                "row {row}: unknown, empty or duplicate field {key:?}"
+            ));
         }
     }
 
@@ -130,7 +126,10 @@ fn parse_row(
         Some(&"none" | &"-") => None,
         Some(value) if !value.is_empty() => Some((*value).to_owned()),
         Some(_) => return Err(format!("row {row}: invalid branch")),
-        None if terminal => old.ok_or("terminal without prior run scope")?.branch.clone(),
+        None if terminal => old
+            .ok_or("terminal without prior run scope")?
+            .branch
+            .clone(),
         None => return Err(format!("row {row}: missing branch")),
     };
     let seam = match fields.get("seam") {
@@ -182,8 +181,8 @@ fn parse_native(input: &str) -> Result<Vec<Transition>, String> {
 }
 
 fn read_bounded(path: &Path) -> Result<String, String> {
-    let before = fs::symlink_metadata(path)
-        .map_err(|error| format!("cannot stat {path:?}: {error}"))?;
+    let before =
+        fs::symlink_metadata(path).map_err(|error| format!("cannot stat {path:?}: {error}"))?;
     if !before.file_type().is_file() {
         return Err("source must be a non-symlink regular file".to_owned());
     }
@@ -247,7 +246,11 @@ fn main() -> ExitCode {
             for lease in active {
                 println!(
                     "MODEL_ACTIVE run={:?} state={:?} comment_id={} branch={:?} seam={:?}",
-                    lease.run, lease.state, lease.latest_comment_id, lease.scope.branch, lease.scope.seam
+                    lease.run,
+                    lease.state,
+                    lease.latest_comment_id,
+                    lease.scope.branch,
+                    lease.scope.seam
                 );
             }
             println!("MODEL_ONLY untrusted_input no_provider_authentication no_mutation_authority");
@@ -278,7 +281,9 @@ mod tests {
         let ended = format!(
             "{input}13\t104\tPHASE0 | seq=4 | run=run-a | agent=agent | state=HANDOFF | mission=none | head=abc | prev=103 | outcome=verified\n"
         );
-        assert!(reduce_model_only(&parse_native(&ended).unwrap()).unwrap().is_empty());
+        assert!(reduce_model_only(&parse_native(&ended).unwrap())
+            .unwrap()
+            .is_empty());
     }
 
     #[test]
@@ -290,9 +295,8 @@ mod tests {
             sample().replace("11\t102", "11\t101"),
             sample().replace("11\t102", "11\tnot-a-number"),
         ] {
-            let result = parse_native(&invalid).and_then(|r| {
-                reduce_model_only(&r).map_err(|error| format!("{error:?}"))
-            });
+            let result = parse_native(&invalid)
+                .and_then(|r| reduce_model_only(&r).map_err(|error| format!("{error:?}")));
             assert!(result.is_err(), "unexpectedly admitted {invalid:?}");
         }
         let drift = sample().replace(
