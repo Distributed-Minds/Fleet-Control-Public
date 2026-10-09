@@ -4,7 +4,9 @@
 //! reproducible virtual-base merge. A real integration planner must separately
 //! establish complete best-base discovery under its effective Git history view.
 
-use serde::Deserialize;
+use serde::de::{self, MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer};
+use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
 const HISTORICAL_CASE_COUNT: usize = 12;
@@ -25,6 +27,108 @@ const HISTORICAL_CASE_NAMES: [&str; HISTORICAL_CASE_COUNT] = [
     "best-base-moved",
 ];
 const FIXTURES: &str = include_str!("../../../fixtures/merge-base-topology-spec2.json");
+
+// Merge-base fixture identity must not depend on last-key-wins JSON parsing.
+// Inspect the entire input recursively before typed deserialization, including
+// decoded Unicode escapes and nested virtual computation options.
+struct StrictJson(Value);
+
+impl<'de> Deserialize<'de> for StrictJson {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct StrictVisitor;
+
+        impl<'de> Visitor<'de> for StrictVisitor {
+            type Value = StrictJson;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("JSON without duplicate object keys")
+            }
+
+            fn visit_unit<E>(self) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::Null))
+            }
+
+            fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::Bool(value)))
+            }
+
+            fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::from(value)))
+            }
+
+            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::from(value)))
+            }
+
+            fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                serde_json::Number::from_f64(value)
+                    .map(|number| StrictJson(Value::Number(number)))
+                    .ok_or_else(|| de::Error::custom("non-finite JSON number"))
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::String(value.to_owned())))
+            }
+
+            fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::String(value)))
+            }
+
+            fn visit_seq<A>(self, mut sequence: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut values = Vec::new();
+                while let Some(StrictJson(value)) = sequence.next_element::<StrictJson>()? {
+                    values.push(value);
+                }
+                Ok(StrictJson(Value::Array(values)))
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut values = serde_json::Map::new();
+                while let Some((key, StrictJson(value))) = map.next_entry::<String, StrictJson>()? {
+                    if values.contains_key(&key) {
+                        return Err(de::Error::custom(format!(
+                            "duplicate JSON object key: {key}"
+                        )));
+                    }
+                    values.insert(key, value);
+                }
+                Ok(StrictJson(Value::Object(values)))
+            }
+        }
+
+        deserializer.deserialize_any(StrictVisitor)
+    }
+}
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -342,6 +446,11 @@ fn check(cases: &[Case]) -> Result<usize, Vec<String>> {
     }
 }
 
+fn parse_cases(content: &str) -> Result<Vec<Case>, String> {
+    let StrictJson(value) = serde_json::from_str(content).map_err(|error| error.to_string())?;
+    serde_json::from_value(value).map_err(|error| error.to_string())
+}
+
 // Preserve a zero-argument checked-in baseline, but also admit caller-owned
 // fixtures for actual process-level semantic regression and input-boundary
 // tests. This oracle remains read-only and grants no Git mutation authority.
@@ -360,7 +469,7 @@ fn run() -> Result<usize, String> {
         })?,
         None => FIXTURES.to_owned(),
     };
-    let cases: Vec<Case> = serde_json::from_str(&content)
+    let cases = parse_cases(&content)
         .map_err(|error| format!("merge-base-topology fixture parse failed: {error}"))?;
     check(&cases).map_err(|errors| errors.join("\n"))
 }
@@ -472,6 +581,43 @@ mod tests {
             .clone();
         readable.history_view = "café-λ".to_owned();
         assert!(compute(&readable).is_ok());
+    }
+
+    #[test]
+    fn duplicate_json_keys_at_every_nesting_level_fail_before_identity_checks() {
+        // A normal serde_json decode may silently select the last value for
+        // virtual computation options; both byte-distinct inputs would then
+        // appear to bind the same basis. The compiled CLI must reject them.
+        for (label, input) in [
+            ("case field", r#"[{"name":"first","name":"second"}]"#),
+            (
+                "escaped case field",
+                r#"[{"name":"first","n\u0061me":"second"}]"#,
+            ),
+            (
+                "virtual field",
+                r#"[{"virtual":{"algorithm":"git","algorithm":"other"}}]"#,
+            ),
+            (
+                "virtual option",
+                r#"[{"virtual":{"options":{"x":"one","x":"two"}}}]"#,
+            ),
+            (
+                "escaped option",
+                r#"[{"virtual":{"options":{"x":"one","\u0078":"two"}}}]"#,
+            ),
+        ] {
+            let error = parse_cases(input).expect_err("duplicate map key must fail");
+            assert!(
+                error.contains("duplicate JSON object key"),
+                "{label}: unexpected failure: {error}"
+            );
+        }
+        assert_eq!(
+            parse_cases(FIXTURES).map(|cases| cases.len()),
+            Ok(HISTORICAL_CASE_COUNT),
+            "the historical source fixture must remain accepted"
+        );
     }
 
     #[test]
