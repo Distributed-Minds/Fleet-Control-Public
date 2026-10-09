@@ -382,6 +382,22 @@ fn collect_links(markdown: &str, document: &str, report: &mut Report) -> Vec<Str
                 i = after + 2;
                 continue;
             }
+            // A clickable image badge is simultaneously an outer text link
+            // and a real inline image. Inspect its image destination too;
+            // otherwise [![badge](missing.svg)](present.md) appears healthy.
+            // Ordinary nested links inside image alt text are not links.
+            let label = &visible[i + 1..after];
+            if label.starts_with("![") {
+                let mut nested_report = Report::default();
+                paths.extend(collect_links(label, document, &mut nested_report));
+                for error in nested_report.errors {
+                    // Recursive inspection has a one-line input; retain the
+                    // actual outer-document line in malformed URI diagnostics.
+                    let one_line_prefix = format!("{document}:1:");
+                    let actual_prefix = format!("{document}:{}:", line_idx + 1);
+                    report.errors.push(error.replacen(&one_line_prefix, &actual_prefix, 1));
+                }
+            }
             match parse_destination(&visible[after + 2..p]) {
                 Ok(Some(path)) => paths.push(path),
                 Ok(None) => {}
@@ -913,6 +929,39 @@ mod tests {
         assert!(report.errors.is_empty(), "{:?}", report.errors);
     }
 
+    #[test]
+    fn clickable_image_badge_checks_both_inline_destinations() {
+        let sandbox = Sandbox::new();
+        sandbox.write("present.md", "existing destination");
+        sandbox.write("README.md", "[![build](missing.svg)](present.md)\n");
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 2);
+        assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+        assert!(report.errors[0].contains("target missing: missing.svg"));
+
+        sandbox.write("missing.svg", "existing badge");
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 2);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn unsafe_badge_image_scheme_is_not_hidden_by_valid_outer_link() {
+        let sandbox = Sandbox::new();
+        sandbox.write("present.md", "existing destination");
+        sandbox.write(
+            "README.md",
+            "first line\nsecond line\n[![status](javascript:payload)](present.md)\n",
+        );
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 1);
+        assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+        assert!(
+            report.errors[0].contains("README.md:3: unsupported or unsafe URI scheme"),
+            "{:?}",
+            report.errors
+        );
+    }
     #[test]
     fn unsafe_image_scheme_is_rejected_even_when_no_text_link_exists() {
         let sandbox = Sandbox::new();
