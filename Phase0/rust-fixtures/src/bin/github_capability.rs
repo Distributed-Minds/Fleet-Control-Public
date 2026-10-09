@@ -9,8 +9,9 @@
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::env;
-use std::fs;
-use std::path::PathBuf;
+use std::fs::{self, File};
+use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::process;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize)]
@@ -344,6 +345,49 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
     }
 }
 
+const MAX_EXTERNAL_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
+
+// Model-only fixture CLI: bound caller-controlled IO; this is not an
+// atomic directory confinement protocol or a live provider authority check.
+fn read_fixture_bounded(input: &Path) -> Result<String, String> {
+    let before = fs::symlink_metadata(input)
+        .map_err(|e| format!("cannot inspect {input:?}: {e}"))?;
+    if !before.file_type().is_file() {
+        return Err(format!("fixture {input:?} must be a regular file (no symlinks)"));
+    }
+    if before.len() > MAX_EXTERNAL_FIXTURE_BYTES {
+        return Err(format!("fixture {input:?} exceeds {MAX_EXTERNAL_FIXTURE_BYTES} bytes"));
+    }
+
+    let file = File::open(input).map_err(|e| format!("cannot open {input:?}: {e}"))?;
+    let opened = file
+        .metadata()
+        .map_err(|e| format!("cannot inspect opened fixture {input:?}: {e}"))?;
+    if !opened.is_file() {
+        return Err(format!("opened fixture {input:?} is not a regular file"));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if opened.dev() != before.dev() || opened.ino() != before.ino() {
+            return Err(format!("fixture identity changed before opening {input:?}"));
+        }
+    }
+    if opened.len() > MAX_EXTERNAL_FIXTURE_BYTES {
+        return Err(format!("opened fixture {input:?} exceeds {MAX_EXTERNAL_FIXTURE_BYTES} bytes"));
+    }
+
+    // The read cap also rejects data added between metadata checks and read.
+    let mut json = String::new();
+    file.take(MAX_EXTERNAL_FIXTURE_BYTES + 1)
+        .read_to_string(&mut json)
+        .map_err(|e| format!("cannot read {input:?}: {e}"))?;
+    if json.len() as u64 > MAX_EXTERNAL_FIXTURE_BYTES {
+        return Err(format!("fixture {input:?} exceeds {MAX_EXTERNAL_FIXTURE_BYTES} bytes"));
+    }
+    Ok(json)
+}
+
 fn run() -> Result<(), String> {
     let mut args = env::args_os().skip(1);
     let input = args
@@ -353,10 +397,9 @@ fn run() -> Result<(), String> {
     if args.next().is_some() {
         return Err("usage: github_capability [fixture.json]".to_owned());
     }
-    let json =
-        fs::read_to_string(&input).map_err(|e| format!("cannot read {}: {e}", input.display()))?;
+    let json = read_fixture_bounded(&input)?;
     let fixture: Fixture = serde_json::from_str(&json)
-        .map_err(|e| format!("invalid fixture {}: {e}", input.display()))?;
+        .map_err(|e| format!("invalid fixture {input:?}: {e}"))?;
     match validate(&fixture) {
         Ok(count) => {
             println!("GitHub capability invariant fixtures (Rust): {count} checked");
