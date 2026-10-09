@@ -17,7 +17,7 @@ fn invoke(path: &std::path::Path) -> std::process::Output {
 
 fn hostile_path(tag: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!(
-        "free-energy-catalog-negative-{}-{}-{tag}\nTYPED-BOUNDARY-ONLY forged/project: \"fake.json\"",
+        "free-energy-catalog-negative-{}-{}-{tag}\nTYPED-BOUNDARY-ONLY forged-project: \"fake.json\"",
         std::process::id(),
         NEXT.fetch_add(1, Ordering::Relaxed)
     ))
