@@ -9,6 +9,12 @@ use std::{
     process::ExitCode,
 };
 
+/// Escape filesystem labels before writing error diagnostics. Paths are untrusted
+/// data; embedded newline and terminal controls must never forge log records.
+fn diagnostic_path(path: &Path) -> String {
+    format!("{path:?}")
+}
+
 /// Refuse symlinked render output directories, including links outside the
 /// project tree. This is a local input-admission check, not a race-free
 /// filesystem sandbox against concurrent untrusted directory replacement.
@@ -66,8 +72,7 @@ fn write_complete_page(output: &Path, html: &str) -> io::Result<()> {
 }
 
 /// Validate readable manifests as one unit. Rejected input cannot emit
-/// a partial positive catalog admission result. Path labels are escaped in
-/// diagnostics: an untrusted newline must never forge another log record.
+/// a partial positive catalog admission result.
 fn validate_loaded<'a, I>(sources: I) -> Result<Vec<(String, String)>, Vec<String>>
 where
     I: IntoIterator<Item = (&'a str, &'a str)>,
@@ -101,15 +106,38 @@ where
 /// checked-in page must not follow an untracked filesystem symlink out of the
 /// project source directory (or silently accept a JSON-named directory).
 fn read_render_manifest(path: &Path) -> Result<String, String> {
-    let metadata = fs::symlink_metadata(path)
-        .map_err(|error| format!("{}: {error}", format_args!("{path:?}")))?;
+    let metadata =
+        fs::symlink_metadata(path).map_err(|error| format!("{}: {error}", diagnostic_path(&path)))?;
     if !metadata.file_type().is_file() {
         return Err(format!(
             "{}: render source must be a regular file (symlinks prohibited)",
-            format_args!("{path:?}")
+            diagnostic_path(&path)
         ));
     }
-    fs::read_to_string(path).map_err(|error| format!("{}: {error}", format_args!("{path:?}")))
+    fs::read_to_string(path).map_err(|error| format!("{}: {error}", diagnostic_path(&path)))
+}
+
+/// Collect the complete manifest set only from a real project directory.
+/// A symlink at the directory boundary could otherwise redirect the preview
+/// renderer to unrelated JSON files before per-file admission takes place.
+fn collect_render_manifests(project_dir: &Path) -> Result<Vec<std::path::PathBuf>, String> {
+    validate_output_directory(project_dir)
+        .map_err(|error| format!("{}: {error}", diagnostic_path(&project_dir)))?;
+    let entries =
+        fs::read_dir(project_dir).map_err(|error| format!("{}: {error}", diagnostic_path(&project_dir)))?;
+    let mut paths = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|error| format!("project directory entry: {error}"))?;
+        let path = entry.path();
+        if path.extension().and_then(|extension| extension.to_str()) == Some("json") {
+            paths.push(path);
+        }
+    }
+    paths.sort();
+    if paths.is_empty() {
+        return Err("No project JSON manifests found".to_owned());
+    }
+    Ok(paths)
 }
 
 /// Render only after every local pilot manifest passes typed admission.
@@ -122,33 +150,13 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
     let check = !args.is_empty();
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let project_dir = root.join("projects");
-    let entries = match fs::read_dir(&project_dir) {
-        Ok(entries) => entries,
+    let paths = match collect_render_manifests(&project_dir) {
+        Ok(paths) => paths,
         Err(error) => {
-            eprintln!("{}: {error}", format_args!("{project_dir:?}"));
+            eprintln!("{error}");
             return ExitCode::FAILURE;
         }
     };
-    let mut paths = Vec::new();
-    for entry in entries {
-        match entry {
-            Ok(entry) => {
-                let path = entry.path();
-                if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                    paths.push(path);
-                }
-            }
-            Err(error) => {
-                eprintln!("project directory entry: {error}");
-                return ExitCode::FAILURE;
-            }
-        }
-    }
-    paths.sort();
-    if paths.is_empty() {
-        eprintln!("No project JSON manifests found");
-        return ExitCode::FAILURE;
-    }
     let mut records = Vec::new();
     let mut ids = HashSet::new();
     let mut problems = Vec::new();
@@ -159,7 +167,7 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
                     if !ids.insert(record.id.clone()) {
                         problems.push(format!(
                             "{}: duplicate project ID: {}",
-                            format_args!("{path:?}"),
+                            diagnostic_path(&path),
                             record.id
                         ));
                     } else {
@@ -168,11 +176,11 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
                 }
                 Err(errors) => {
                     for error in errors {
-                        problems.push(format!("{}: {error}", format_args!("{path:?}")));
+                        problems.push(format!("{}: {error}", diagnostic_path(&path)));
                     }
                 }
             },
-            Err(error) => problems.push(format!("{}: {error}", format_args!("{path:?}"))),
+            Err(error) => problems.push(format!("{}: {error}", diagnostic_path(&path))),
         }
     }
     if !problems.is_empty() {
@@ -188,7 +196,7 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
         if let Err(error) =
             validate_output_directory(output.parent().expect("catalog output always has a parent"))
         {
-            eprintln!("{}: {error}", format_args!("{output:?}"));
+            eprintln!("{}: {error}", diagnostic_path(&output));
             return ExitCode::FAILURE;
         }
         match fs::read_to_string(&output) {
@@ -201,19 +209,19 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
             Ok(_) => {
                 eprintln!(
                     "{}: generated HTML differs; run render to regenerate",
-                    format_args!("{output:?}")
+                    diagnostic_path(&output)
                 );
                 ExitCode::FAILURE
             }
             Err(error) => {
-                eprintln!("{}: {error}", format_args!("{output:?}"));
+                eprintln!("{}: {error}", diagnostic_path(&output));
                 ExitCode::FAILURE
             }
         }
     } else {
         if let Some(parent) = output.parent() {
             if let Err(error) = fs::create_dir_all(parent) {
-                eprintln!("{}: {error}", format_args!("{parent:?}"));
+                eprintln!("{}: {error}", diagnostic_path(&parent));
                 return ExitCode::FAILURE;
             }
         }
@@ -221,12 +229,12 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
             Ok(()) => {
                 println!(
                     "Generated {} from typed pilot records (draft only)",
-                    format_args!("{output:?}")
+                    output.display()
                 );
                 ExitCode::SUCCESS
             }
             Err(error) => {
-                eprintln!("{}: {error}", format_args!("{output:?}"));
+                eprintln!("{}: {error}", diagnostic_path(&output));
                 ExitCode::FAILURE
             }
         }
@@ -256,6 +264,15 @@ fn main() -> ExitCode {
     for input in paths {
         let path = std::path::PathBuf::from(input);
         if path.is_dir() {
+            // is_dir() follows symlinks. Reject a supplied alias before
+            // enumerating files outside the chosen project directory.
+            if fs::symlink_metadata(&path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+                errors.push(format!(
+                    "{}: symlinked project directory prohibited",
+                    diagnostic_path(&path)
+                ));
+                continue;
+            }
             let mut count = 0;
             match fs::read_dir(&path) {
                 Ok(entries) => {
@@ -268,20 +285,16 @@ fn main() -> ExitCode {
                                     count += 1;
                                 }
                             }
-                            Err(error) => errors.push(format!(
-                                "{}: directory entry: {error}",
-                                format_args!("{path:?}")
-                            )),
+                            Err(error) => {
+                                errors.push(format!("{}: directory entry: {error}", diagnostic_path(&path)))
+                            }
                         }
                     }
                     if count == 0 {
-                        errors.push(format!(
-                            "{}: no JSON manifests found",
-                            format_args!("{path:?}")
-                        ));
+                        errors.push(format!("{}: no JSON manifests found", diagnostic_path(&path)));
                     }
                 }
-                Err(error) => errors.push(format!("{}: {error}", format_args!("{path:?}"))),
+                Err(error) => errors.push(format!("{}: {error}", diagnostic_path(&path))),
             }
         } else {
             manifest_paths.push(path);
@@ -291,9 +304,29 @@ fn main() -> ExitCode {
 
     let mut loaded = Vec::new();
     for path in manifest_paths {
+        // Explicit manifests and directory children use the same pre-read
+        // admission rule. This does not prevent concurrent path replacement.
+        match fs::symlink_metadata(&path) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                errors.push(format!("{}: symlinked manifest prohibited", diagnostic_path(&path)));
+                continue;
+            }
+            Ok(metadata) if !metadata.file_type().is_file() => {
+                errors.push(format!(
+                    "{}: manifest is not a regular file",
+                    diagnostic_path(&path)
+                ));
+                continue;
+            }
+            Err(error) => {
+                errors.push(format!("{}: {error}", diagnostic_path(&path)));
+                continue;
+            }
+            Ok(_) => {}
+        }
         match fs::read_to_string(&path) {
             Ok(text) => loaded.push((path.to_string_lossy().into_owned(), text)),
-            Err(error) => errors.push(format!("{}: {error}", format_args!("{path:?}"))),
+            Err(error) => errors.push(format!("{}: {error}", diagnostic_path(&path))),
         }
     }
 
@@ -351,7 +384,7 @@ mod tests {
         assert!(
             failures
                 .iter()
-                .any(|error| error.contains("\"two.json\": duplicate project ID:")),
+                .any(|error| error.contains("\\"two.json\\": duplicate project ID:")),
             "{failures:?}"
         );
     }
@@ -490,6 +523,56 @@ mod render_manifest_file_admission_tests {
         fn drop(&mut self) {
             fs::remove_dir_all(&self.0).expect("remove isolated fixture");
         }
+    }
+
+    #[test]
+    fn only_json_children_of_a_real_project_directory_are_sorted() {
+        let sandbox = Sandbox::new();
+        let projects = sandbox.0.join("projects");
+        fs::create_dir(&projects).expect("create project source");
+        fs::write(projects.join("z.json"), PILOT).expect("write last manifest");
+        fs::write(projects.join("a.json"), PILOT).expect("write first manifest");
+        fs::write(projects.join("notes.txt"), "not a manifest").expect("write unrelated file");
+        let files = super::collect_render_manifests(&projects).expect("admit real directory");
+        assert_eq!(
+            files,
+            vec![projects.join("a.json"), projects.join("z.json")]
+        );
+    }
+
+    #[test]
+    fn missing_empty_or_nondirectory_project_sources_fail_closed() {
+        let sandbox = Sandbox::new();
+        let missing = sandbox.0.join("missing");
+        assert!(super::collect_render_manifests(&missing).is_err());
+        let regular_file = sandbox.0.join("projects");
+        fs::write(&regular_file, PILOT).expect("create file instead of directory");
+        assert!(super::collect_render_manifests(&regular_file).is_err());
+        fs::remove_file(&regular_file).expect("remove file");
+        fs::create_dir(&regular_file).expect("create empty directory");
+        assert!(super::collect_render_manifests(&regular_file).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn project_directory_symlink_cannot_redirect_render_inputs() {
+        use std::os::unix::fs::symlink;
+
+        let sandbox = Sandbox::new();
+        let external = sandbox.0.join("unrelated-projects");
+        fs::create_dir(&external).expect("create outside source directory");
+        fs::write(external.join("project.json"), PILOT).expect("seed outside data");
+        let project_alias = sandbox.0.join("projects");
+        symlink(&external, &project_alias).expect("redirect project directory");
+
+        let error = super::collect_render_manifests(&project_alias)
+            .expect_err("symlinked directory must never supply rendered projects");
+        assert!(error.contains("symlink prohibited"), "{error}");
+        assert_eq!(
+            fs::read_to_string(external.join("project.json")).unwrap(),
+            PILOT,
+            "rejected input must remain unchanged"
+        );
     }
 
     #[test]

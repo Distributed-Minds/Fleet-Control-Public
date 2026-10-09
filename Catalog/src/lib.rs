@@ -385,7 +385,14 @@ fn is_portable_repository_segment(part: &str) -> bool {
 fn is_invisible_path_format(ch: char) -> bool {
     matches!(
         ch,
-        '\u{00ad}' | '\u{034f}' | '\u{180e}' | '\u{200b}'..='\u{200d}' | '\u{2060}' | '\u{feff}'
+        '\u{00ad}'
+            | '\u{034f}'
+            | '\u{180e}'
+            | '\u{200b}'..='\u{200d}'
+            | '\u{2060}'
+            | '\u{feff}'
+            | '\u{e0001}' // Plane 14 language tag
+            | '\u{e0020}'..='\u{e007f}' // Plane 14 tag text and terminator
     )
 }
 
@@ -423,7 +430,9 @@ fn is_bidi_format(ch: char) -> bool {
 // source URL contains no forbidden whitespace. Check the decoded scalar values
 // with the same conservative policy used for unescaped characters.
 fn is_inadmissible_decoded(ch: char) -> bool {
-    !ch.is_ascii() && (ch.is_control() || ch.is_whitespace() || is_bidi_format(ch))
+    (!ch.is_ascii() && (ch.is_control() || ch.is_whitespace()))
+        || is_bidi_format(ch)
+        || is_invisible_path_format(ch)
 }
 
 /// Conservative, offline admission for externally displayed links. This does
@@ -525,6 +534,50 @@ fn is_public_https_url(url: &str) -> bool {
         return false;
     }
     true
+}
+
+/// Check that a pinned repository file's human-facing permalink identifies
+/// exactly the repository, commit and path declared in the evidence record.
+/// This does not fetch bytes, authenticate a source, or grant any usage rights.
+/// For now only reviewed GitHub/GitLab permalink layouts are accepted.
+fn pinned_evidence_link_matches(repository: &str, commit: &str, path: &str, url: &str) -> bool {
+    if !is_public_https_url(repository)
+        || !is_public_https_url(url)
+        || !is_full_git_sha(commit)
+        || !is_relative_path(path)
+        || repository.ends_with('/')
+        || repository.chars().any(|ch| matches!(ch, '?' | '#' | '%'))
+        || url.chars().any(|ch| matches!(ch, '?' | '#'))
+    {
+        return false;
+    }
+
+    let Some(rest) = repository.strip_prefix("https://") else {
+        return false;
+    };
+    let mut components = rest.split('/');
+    let host = components.next().unwrap_or_default();
+    let segments: Vec<_> = components.collect();
+    if segments.len() < 2
+        || segments.iter().any(|segment| {
+            segment.is_empty()
+                || *segment == "."
+                || *segment == ".."
+                || !segment
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || b"-._".contains(&byte))
+        })
+    {
+        return false;
+    }
+    let marker = if host.eq_ignore_ascii_case("github.com") && segments.len() == 2 {
+        "/blob/"
+    } else if host.eq_ignore_ascii_case("gitlab.com") {
+        "/-/blob/"
+    } else {
+        return false;
+    };
+    url == format!("{repository}{marker}{commit}/{}", path.replace(' ', "%20"))
 }
 
 // These enum vocabularies are part of the checked-in v5 JSON Schema, but
@@ -729,6 +782,11 @@ fn check_visible_text(problems: &mut Vec<String>, path: &str, value: &str) {
     if value.chars().any(is_bidi_format_character) {
         problems.push(format!(
             "{path}: bidirectional formatting control in visible metadata"
+        ));
+    }
+    if value.chars().any(is_invisible_path_format) {
+        problems.push(format!(
+            "{path}: default-ignorable formatting control in visible metadata"
         ));
     }
 }
@@ -991,6 +1049,20 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
                 "invalid pinned repository evidence: {}",
                 item.evidence_id
             ));
+        }
+        // A pinned-revision claim must not borrow a valid URL pointing at
+        // some other repository, commit, or file. Shape alone is insufficient.
+        if item.evidence_kind == "PINNED_REPOSITORY_FILE" {
+            if let (Some(repository), Some(commit), Some(path)) =
+                (&item.repository, &item.commit, &item.path)
+            {
+                if !pinned_evidence_link_matches(repository, commit, path, &item.url) {
+                    problems.push(format!(
+                        "pinned repository evidence URL does not match repository/commit/path: {}",
+                        item.evidence_id
+                    ));
+                }
+            }
         }
     }
 
@@ -1415,6 +1487,74 @@ mod tests {
             v["upstream"]["source_revision"] = json!("master");
         });
         assert!(validate_manifest(&attack).is_err());
+    }
+
+    #[test]
+    fn invisible_plane14_tags_fail_closed_in_paths_links_and_visible_metadata() {
+        use std::fmt::Write as _;
+
+        validate_manifest(VELOREN).expect("baseline manifest must remain valid");
+        for tag in [
+            '\u{e0001}',
+            '\u{e0020}',
+            '\u{e0061}',
+            '\u{e007e}',
+            '\u{e007f}',
+        ] {
+            let path = format!("assets/visible{tag}filename.png");
+            assert!(
+                !is_relative_path(&path),
+                "tagged rights path admitted: {path:?}"
+            );
+
+            let raw_url = format!("https://example.org/visible{tag}filename");
+            assert!(!is_public_https_url(&raw_url), "raw tag URL admitted");
+            let mut encoded_tag = String::new();
+            for byte in tag.to_string().bytes() {
+                write!(&mut encoded_tag, "%{byte:02X}").expect("format UTF-8 tag bytes");
+            }
+            let encoded_url = format!("https://example.org/visible{encoded_tag}filename");
+            assert!(
+                !is_public_https_url(&encoded_url),
+                "encoded tag URL admitted"
+            );
+
+            let displayed = changed(VELOREN, |record| {
+                record["display_name"] = json!(format!("Visible{tag}Game"));
+            });
+            let display_errors = validate_manifest(&displayed).unwrap_err();
+            assert!(
+                display_errors.iter().any(|error| error
+                    .contains("default-ignorable formatting control in visible metadata")),
+                "tagged visible metadata was not specifically rejected: {display_errors:?}"
+            );
+
+            let rights = changed(VELOREN, |record| {
+                record["rights_claims"][0]["scope_kind"] = json!("PATH");
+                record["rights_claims"][0]["scope"] = json!(path);
+            });
+            let rights_errors = validate_manifest(&rights).unwrap_err();
+            assert!(
+                rights_errors
+                    .iter()
+                    .any(|error| error.contains("unsafe rights path scope")),
+                "tagged rights scope was not specifically rejected: {rights_errors:?}"
+            );
+
+            let evidence = changed(VELOREN, |record| {
+                record["evidence"][0]["path"] = json!(path);
+            });
+            let evidence_errors = validate_manifest(&evidence).unwrap_err();
+            assert!(
+                evidence_errors
+                    .iter()
+                    .any(|error| error.contains("invalid pinned repository evidence")),
+                "tagged evidence path was not specifically rejected: {evidence_errors:?}"
+            );
+        }
+        assert!(is_relative_path("assets/música.png"));
+        assert!(is_public_https_url("https://example.org/visible/filename"));
+        validate_manifest(VELOREN).expect("Unicode tag checks must not corrupt baseline");
     }
 
     #[test]

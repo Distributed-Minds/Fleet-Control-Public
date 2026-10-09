@@ -31,6 +31,15 @@ fn rights_path(value: &str) -> Value {
 fn evidence_path(value: &str) -> Value {
     let mut project = baseline();
     project["evidence"][0]["path"] = json!(value);
+    // Keep the positive path test independent of permalink consistency:
+    // a changed immutable path also requires a changed outward file link.
+    let original = project["evidence"][0]["url"]
+        .as_str()
+        .expect("pilot evidence URL")
+        .strip_suffix("LICENSE.txt")
+        .expect("pilot URL points to LICENSE.txt")
+        .to_owned();
+    project["evidence"][0]["url"] = json!(format!("{original}{value}"));
     project
 }
 
