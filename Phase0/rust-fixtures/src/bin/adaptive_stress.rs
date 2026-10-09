@@ -164,7 +164,10 @@ fn compute(c: &Case) -> Result<Computed<'_>, &'static str> {
                 || c.named_blocker.is_some()
                 || c.corrective_surface.is_some(),
         ),
-        (9, c.siblings_pass.is_some() || c.regression_present.is_some()),
+        (
+            9,
+            c.siblings_pass.is_some() || c.regression_present.is_some(),
+        ),
         (10, c.lineage_present.is_some()),
     ];
     if witnesses
@@ -501,16 +504,19 @@ mod tests {
             ("ack-loss-reconciles-first", "authority_change", json!(true)),
             ("fixture-authority-is-inert", "bounded_allowance", json!(9)),
             ("ack-loss-reconciles-first", "numeric_default", json!(2)),
-            ("missing-telemetry-is-unknown", "candidate_identity", json!(true)),
+            (
+                "missing-telemetry-is-unknown",
+                "candidate_identity",
+                json!(true),
+            ),
             ("evaluation-budget-exhaustion", "siblings_pass", json!(true)),
             ("patch-accepted-is-closure", "lineage_present", json!(true)),
         ] {
             let errors = checked(change(case_name, field, forged))
                 .expect_err("cross-operation evidence must be rejected");
             assert!(
-                errors
-                    .iter()
-                    .any(|message| message.contains("witness does not belong to selected semantic operation")),
+                errors.iter().any(|message| message
+                    .contains("witness does not belong to selected semantic operation")),
                 "unexpected acceptance for {case_name} / {field}: {errors:?}"
             );
         }
