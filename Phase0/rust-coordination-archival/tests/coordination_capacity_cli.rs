@@ -77,7 +77,16 @@ fn malformed_and_missing_arguments_fail_closed_without_success_receipts() {
 
 #[test]
 fn noncanonical_unsigned_decimal_inputs_are_rejected_at_process_boundary() {
-    for wrong in ["-1", "+1", " 2", "2 ", "1.0", "0x10", "", "18446744073709551616"] {
+    for wrong in [
+        "-1",
+        "+1",
+        " 2",
+        "2 ",
+        "1.0",
+        "0x10",
+        "",
+        "18446744073709551616",
+    ] {
         let out = run(&["2500", wrong, "8", "2"]);
         assert_eq!(out.status.code(), Some(2), "observed={wrong:?}");
         assert!(stdout(&out).is_empty(), "observed={wrong:?}");
@@ -95,8 +104,7 @@ fn increasing_reserve_never_recovers_success_after_rollover_threshold() {
         assert!(!out.status.success(), "reserve={reserve}");
         assert!(stdout(&out).is_empty(), "reserve={reserve}");
         assert!(
-            stderr(&out).contains("ROLLOVER_REQUIRED")
-                || stderr(&out).contains("CAPACITY_UNKNOWN"),
+            stderr(&out).contains("ROLLOVER_REQUIRED") || stderr(&out).contains("CAPACITY_UNKNOWN"),
             "reserve={reserve}: {}",
             stderr(&out)
         );
