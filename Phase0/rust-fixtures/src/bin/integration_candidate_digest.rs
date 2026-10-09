@@ -283,7 +283,9 @@ fn admit_candidate_envelope(
             .iter()
             .any(|parent| !parent.as_str().is_some_and(git_object_id))
     {
-        return Err(format!("{name}: malformed ordered parent Git object identity"));
+        return Err(format!(
+            "{name}: malformed ordered parent Git object identity"
+        ));
     }
     if candidate["parent_count"].as_u64() != Some(parents.len() as u64) {
         return Err(format!("{name}: parent_count does not match parents"));
@@ -555,7 +557,12 @@ mod tests {
         let baseline = candidate_ids(HISTORICAL).unwrap();
 
         for field in ["target_commit", "source_commit", "tree"] {
-            for invalid in ["".to_owned(), "abc".to_owned(), "A".repeat(40), "g".repeat(40)] {
+            for invalid in [
+                "".to_owned(),
+                "abc".to_owned(),
+                "A".repeat(40),
+                "g".repeat(40),
+            ] {
                 let mut fixture = original.clone();
                 fixture["cases"][0]["candidate"][field] = Value::String(invalid.clone());
                 assert!(
@@ -565,7 +572,12 @@ mod tests {
             }
         }
 
-        for invalid in ["".to_owned(), "abc".to_owned(), "A".repeat(40), "g".repeat(40)] {
+        for invalid in [
+            "".to_owned(),
+            "abc".to_owned(),
+            "A".repeat(40),
+            "g".repeat(40),
+        ] {
             let mut fixture = original.clone();
             fixture["cases"][0]["candidate"]["parents"][0] = Value::String(invalid.clone());
             assert!(
@@ -592,5 +604,4 @@ mod tests {
         assert_ne!(baseline[0].1, baseline[1].1);
         assert_ne!(baseline[0].1, baseline[2].1);
     }
-
 }
