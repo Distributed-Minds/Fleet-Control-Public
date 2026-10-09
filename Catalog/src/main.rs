@@ -30,7 +30,10 @@ fn reject_symlinked_ancestors(path: &Path) -> io::Result<()> {
         if metadata.file_type().is_symlink() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("symlinked ancestor prohibited: {}", diagnostic_path(&prefix)),
+                format!(
+                    "symlinked ancestor prohibited: {}",
+                    diagnostic_path(&prefix)
+                ),
             ));
         }
     }
