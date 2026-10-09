@@ -351,4 +351,5 @@ mod tests {
             "transcript exceeds the 16 MiB model limit"
         );
         fs::remove_dir_all(&scratch).expect("remove scratch directory");
-    }}
+     }
+}
