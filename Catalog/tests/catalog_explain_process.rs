@@ -54,6 +54,51 @@ fn stderr(output: &Output) -> String {
 }
 
 #[test]
+fn exact_one_mib_valid_input_and_ordinary_pilot_are_admitted() {
+    let root = Scratch::new();
+    let valid = root.file("small.json", LUANTI);
+    let baseline = invoke(&[&valid]);
+    assert!(baseline.status.success(), "{}", stderr(&baseline));
+
+    // JSON may contain insignificant trailing whitespace. The declared exact
+    // byte limit must remain admissible, not accidentally off by one.
+    let exact = format!("{LUANTI}{}", " ".repeat(1024 * 1024 - LUANTI.len()));
+    let padded = root.file("exact.json", &exact);
+    let output = invoke(&[&padded]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(output.stderr.is_empty(), "{}", stderr(&output));
+    let projects: Value = serde_json::from_slice(&output.stdout).expect("valid explanation JSON");
+    assert_eq!(projects[0]["project_id"], "engine/luanti");
+}
+
+#[test]
+fn oversized_manifest_suppresses_success_for_entire_explain_batch() {
+    let root = Scratch::new();
+    let valid = root.file("valid.json", OPENRA);
+    let huge = root.0.join("oversized.json");
+    let file = fs::File::create(&huge).expect("create sparse fixture");
+    file.set_len(1024 * 1024 + 1).expect("set oversized length");
+    drop(file);
+
+    let output = invoke(&[&valid, &huge]);
+    assert!(!output.status.success(), "oversized file accepted: {output:?}");
+    assert!(output.stdout.is_empty(), "oversized tail leaked a success record");
+    assert!(stderr(&output).contains("manifest exceeds 1 MiB input limit"));
+}
+
+#[test]
+fn invalid_utf8_manifest_does_not_leak_partial_batch_explanation() {
+    let root = Scratch::new();
+    let valid = root.file("valid.json", VELOREN);
+    let invalid = root.0.join("invalid-utf8.json");
+    fs::write(&invalid, [0xff, 0xfe, 0x00]).expect("write invalid UTF-8 fixture");
+    let output = invoke(&[&valid, &invalid]);
+    assert!(!output.status.success(), "invalid UTF-8 accepted");
+    assert!(output.stdout.is_empty(), "invalid UTF-8 tail leaked positive output");
+    assert!(stderr(&output).contains("invalid utf-8 sequence"));
+}
+
+#[test]
 fn accepted_batch_is_order_independent_and_does_not_upgrade_rights() {
     let root = Scratch::new();
     let luanti = root.file("luanti.json", LUANTI);
