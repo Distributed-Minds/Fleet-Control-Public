@@ -66,9 +66,13 @@ impl Scope {
     }
 
     /// Same issue alone does not collide when concrete seams differ.
-    /// Sharing a branch, PR or explicit seam always does.
+    /// GitHub PRs are also issues: issue #N and PR #N identify the same
+    /// provider object, even when separately encoded with different seams.
+    /// Sharing a branch, PR or explicit seam also collides.
     fn overlaps(&self, other: &Self) -> bool {
-        (self.pr.is_some() && self.pr == other.pr)
+        (self.pr.is_some()
+            && (self.pr == other.pr || self.pr == other.issue))
+            || (self.issue.is_some() && self.issue == other.pr)
             || (self.branch.is_some() && self.branch == other.branch)
             || self.seam == other.seam
     }
@@ -363,6 +367,58 @@ mod tests {
             record.scope.seam = "travail-β".to_owned();
         }
         assert_eq!(reduce_model_only(&legitimate).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn issue_and_pr_same_number_collide_across_distinct_scope_fields() {
+        // GitHub represents PR #98 through the issue #98 API as well. Treat
+        // those two spellings as ONE mutation surface even with different
+        // seams; do not impose issue-wide locks on unrelated concrete seams.
+        let issue_scope = Scope {
+            issue: Some(98),
+            pr: None,
+            branch: None,
+            seam: "issue-body-edit".into(),
+        };
+        let pr_scope = Scope {
+            issue: None,
+            pr: Some(98),
+            branch: None,
+            seam: "pr-metadata-edit".into(),
+        };
+        assert!(issue_scope.overlaps(&pr_scope));
+        assert!(pr_scope.overlaps(&issue_scope));
+        assert!(!issue_scope.overlaps(&Scope {
+            issue: Some(98),
+            pr: None,
+            branch: None,
+            seam: "independent-issue-seam".into(),
+        }));
+        assert!(!issue_scope.overlaps(&Scope {
+            issue: None,
+            pr: Some(99),
+            branch: None,
+            seam: "independent-pr-seam".into(),
+        }));
+
+        let mut events = [
+            event(1, 101, "issue-owner", 1, State::Intent, None, "unused"),
+            event(2, 102, "pr-owner", 1, State::Intent, None, "unused"),
+            event(3, 103, "issue-owner", 2, State::Owned, Some(101), "unused"),
+            event(4, 104, "pr-owner", 2, State::Owned, Some(102), "unused"),
+        ];
+        for (index, record) in events.iter_mut().enumerate() {
+            record.scope = if index % 2 == 0 {
+                issue_scope.clone()
+            } else {
+                pr_scope.clone()
+            };
+        }
+        assert_eq!(
+            reduce_model_only(&events),
+            Err(ReductionFailure::OverlappingOwner),
+            "a PR cannot be independently owned through its issue alias"
+        );
     }
 
     #[test]
