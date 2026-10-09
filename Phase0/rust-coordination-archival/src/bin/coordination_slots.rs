@@ -223,12 +223,14 @@ fn read_body(path: &str) -> Result<String, String> {
     // leaf itself is a real file. Do not admit such advisory input paths.
     // This is a preflight guard, not an atomic directory-handle sandbox.
     let mut examined = std::path::PathBuf::new();
-    for component in std::path::Path::new(path).components() {
-        examined.push(component.as_os_str());
-        let kind = fs::symlink_metadata(&examined)
-            .map_err(|error| format!("cannot inspect {examined:?}: {error}"))?;
-        if kind.file_type().is_symlink() {
-            return Err("coordination body path contains symlink component".to_owned());
+    if let Some(parent) = std::path::Path::new(path).parent() {
+        for component in parent.components() {
+            examined.push(component.as_os_str());
+            let kind = fs::symlink_metadata(&examined)
+                .map_err(|error| format!("cannot inspect {examined:?}: {error}"))?;
+            if kind.file_type().is_symlink() {
+                return Err("coordination body path contains symlink component".to_owned());
+            }
         }
     }
     let observed = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
