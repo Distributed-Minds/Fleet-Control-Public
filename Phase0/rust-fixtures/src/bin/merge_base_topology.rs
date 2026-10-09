@@ -5,6 +5,7 @@
 //! establish complete best-base discovery under its effective Git history view.
 
 use serde::Deserialize;
+use std::io::Read;
 use std::collections::{BTreeMap, BTreeSet};
 
 const HISTORICAL_CASE_COUNT: usize = 12;
@@ -342,6 +343,45 @@ fn check(cases: &[Case]) -> Result<usize, Vec<String>> {
     }
 }
 
+// Caller-provided fixture files are developer inputs, not trusted authority.
+// Refuse special files and symbolic links before opening, then check the opened
+// descriptor and cap the bytes actually read. Pre-open path checks alone do not
+// establish immutable inode identity against concurrent path replacement.
+const MAX_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
+
+fn read_bounded_fixture(path: &std::path::Path) -> Result<String, String> {
+    let pre = std::fs::symlink_metadata(path)
+        .map_err(|error| format!("cannot inspect merge-base fixture {path:?}: {error}"))?;
+    if !pre.file_type().is_file() {
+        return Err(format!("merge-base fixture {path:?} must be a regular file (no symlinks)"));
+    }
+    if pre.len() > MAX_FIXTURE_BYTES {
+        return Err(format!("merge-base fixture {path:?} exceeds {MAX_FIXTURE_BYTES} bytes"));
+    }
+
+    let opened = std::fs::File::open(path)
+        .map_err(|error| format!("cannot read merge-base fixture {path:?}: {error}"))?;
+    let actual = opened
+        .metadata()
+        .map_err(|error| format!("cannot inspect opened merge-base fixture {path:?}: {error}"))?;
+    if !actual.is_file() {
+        return Err(format!("opened merge-base fixture {path:?} is not a regular file"));
+    }
+    if actual.len() > MAX_FIXTURE_BYTES {
+        return Err(format!("merge-base fixture {path:?} exceeds {MAX_FIXTURE_BYTES} bytes"));
+    }
+
+    let mut bytes = String::new();
+    opened
+        .take(MAX_FIXTURE_BYTES + 1)
+        .read_to_string(&mut bytes)
+        .map_err(|error| format!("cannot read merge-base fixture {path:?}: {error}"))?;
+    if (bytes.len() as u64) > MAX_FIXTURE_BYTES {
+        return Err(format!("merge-base fixture {path:?} exceeds {MAX_FIXTURE_BYTES} bytes"));
+    }
+    Ok(bytes)
+}
+
 // Preserve a zero-argument checked-in baseline, but also admit caller-owned
 // fixtures for actual process-level semantic regression and input-boundary
 // tests. This oracle remains read-only and grants no Git mutation authority.
@@ -352,12 +392,7 @@ fn run() -> Result<usize, String> {
         return Err("usage: merge_base_topology [fixture.json]".to_owned());
     }
     let content = match input {
-        Some(path) => std::fs::read_to_string(&path).map_err(|error| {
-            format!(
-                "cannot read merge-base fixture {}: {error}",
-                std::path::Path::new(&path).display()
-            )
-        })?,
+        Some(path) => read_bounded_fixture(std::path::Path::new(&path))?,
         None => FIXTURES.to_owned(),
     };
     let cases: Vec<Case> = serde_json::from_str(&content)
