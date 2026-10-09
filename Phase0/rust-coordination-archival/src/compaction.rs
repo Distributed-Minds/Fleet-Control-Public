@@ -182,9 +182,8 @@ pub fn plan_compaction(
     })
 }
 
-
-//// This wrapper is model-only: `preserve_newest_live` must come from an
-//// independently authenticated/current retention policy before any real effect.
+/// This wrapper is model-only: `preserve_newest_live` must come from an
+/// independently authenticated/current retention policy before any real effect.
 /// Apply the caller-supplied newest-live retention bound to a coherent model
 /// compaction plan. A source page's retrieval order never defines "newest":
 /// only the cut's certified reducer sequence does.
@@ -780,7 +779,9 @@ mod tests {
                 "one protected candidate invalidates the whole model batch"
             );
         }
-        assert_eq!(live, original_live, "denial may not mutate the caller's live history");
+        assert_eq!(
+            live, original_live,
+            "denial may not mutate the caller's live history"
+        );
     }
-
 }
