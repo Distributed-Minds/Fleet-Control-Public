@@ -13,6 +13,7 @@ use serde_json::{json, Value};
 use std::{
     collections::HashSet,
     env, fs,
+    io::Read,
     path::{Path, PathBuf},
     process::ExitCode,
 };
@@ -187,6 +188,10 @@ where
         .collect())
 }
 
+// Match the 1 MiB per-manifest input budget of the catalog validate/render CLI.
+// This limits an individual explain input, not aggregate memory across a batch.
+const MAX_EXPLAIN_MANIFEST_BYTES: u64 = 1024 * 1024;
+
 /// Reject symlinks and directories before reading. This does not pretend to
 /// defend against a privileged concurrent replacement of the same pathname.
 fn read_file(path: &Path) -> Result<String, String> {
@@ -211,7 +216,32 @@ fn read_file(path: &Path) -> Result<String, String> {
             "{path:?}: expected a regular non-symlink JSON file"
         ));
     }
-    fs::read_to_string(path).map_err(|error| format!("{path:?}: {error}"))
+    if metadata.len() > MAX_EXPLAIN_MANIFEST_BYTES {
+        return Err(format!("{path:?}: manifest exceeds 1 MiB input limit"));
+    }
+    let file = fs::File::open(path).map_err(|error| format!("{path:?}: {error}"))?;
+    let opened = file.metadata().map_err(|error| format!("{path:?}: {error}"))?;
+    if !opened.file_type().is_file() {
+        return Err(format!("{path:?}: opened manifest is not a regular file"));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if metadata.dev() != opened.dev() || metadata.ino() != opened.ino() {
+            return Err(format!("{path:?}: manifest changed between preflight and open"));
+        }
+    }
+    if opened.len() > MAX_EXPLAIN_MANIFEST_BYTES {
+        return Err(format!("{path:?}: manifest exceeds 1 MiB input limit"));
+    }
+    let mut bytes = Vec::new();
+    file.take(MAX_EXPLAIN_MANIFEST_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("{path:?}: {error}"))?;
+    if bytes.len() as u64 > MAX_EXPLAIN_MANIFEST_BYTES {
+        return Err(format!("{path:?}: manifest exceeds 1 MiB input limit"));
+    }
+    String::from_utf8(bytes).map_err(|error| format!("{path:?}: {error}"))
 }
 
 fn execute(args: Vec<PathBuf>) -> Result<String, Vec<String>> {
