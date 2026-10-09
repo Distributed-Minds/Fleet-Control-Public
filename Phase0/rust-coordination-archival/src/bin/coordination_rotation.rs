@@ -77,8 +77,7 @@ fn assess(o: Observation) -> Result<Decision, &'static str> {
 
     // Never advertise a rotation while the other issue is still DRAINING
     // or has not been compacted within its configured standby headroom.
-    let standby_ready =
-        o.other_state == OtherState::Standby && o.other_count <= o.standby_max;
+    let standby_ready = o.other_state == OtherState::Standby && o.other_count <= o.standby_max;
     if !standby_ready {
         return Ok(Decision::MaintenanceRequired { remaining });
     }
@@ -119,9 +118,7 @@ fn preflight(args: &[String]) -> Result<Decision, String> {
         "STANDBY" => OtherState::Standby,
         "DRAINING" => OtherState::Draining,
         "ACTIVE" => {
-            return Err(
-                "two ACTIVE slots require trusted highest-epoch election first".to_owned()
-            );
+            return Err("two ACTIVE slots require trusted highest-epoch election first".to_owned());
         }
         _ => return Err("invalid other slot state".to_owned()),
     };
