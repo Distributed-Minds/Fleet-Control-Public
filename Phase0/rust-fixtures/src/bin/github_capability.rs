@@ -8,9 +8,9 @@
 
 use serde::de::{self, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer};
-use std::fmt;
 use std::collections::HashSet;
 use std::env;
+use std::fmt;
 use std::fs;
 use std::path::PathBuf;
 use std::process;
@@ -432,8 +432,8 @@ fn run() -> Result<(), String> {
     }
     let json =
         fs::read_to_string(&input).map_err(|e| format!("cannot read {}: {e}", input.display()))?;
-    let fixture: Fixture = parse_fixture(&json)
-        .map_err(|e| format!("invalid fixture {}: {e}", input.display()))?;
+    let fixture: Fixture =
+        parse_fixture(&json).map_err(|e| format!("invalid fixture {}: {e}", input.display()))?;
     match validate(&fixture) {
         Ok(count) => {
             println!("GitHub capability invariant fixtures (Rust): {count} checked");
