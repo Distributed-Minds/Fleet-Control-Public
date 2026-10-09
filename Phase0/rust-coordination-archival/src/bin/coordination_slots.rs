@@ -59,8 +59,28 @@ fn decimal(value: &str) -> Result<u64, &'static str> {
     value.parse::<u64>().map_err(|_| "integer overflow")
 }
 
+// The installed COORDINATION_TRUSTED_AUTHORS setting is a comma-separated
+// list of GitHub logins, not a single login. Reject malformed list entries
+// in their entirety instead of accepting a valid prefix from bad policy.
+fn author_is_trusted(author: &str, configured: &str) -> bool {
+    let mut matched = false;
+    for login in configured.split(',') {
+        if login.is_empty()
+            || !login
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+        {
+            return false;
+        }
+        if login.eq_ignore_ascii_case(author) {
+            matched = true;
+        }
+    }
+    matched
+}
+
 fn parse_record(observation: Observation<'_>, trusted_author: &str) -> Result<SlotRecord, String> {
-    if trusted_author.is_empty() || observation.author != trusted_author {
+    if !author_is_trusted(observation.author, trusted_author) {
         return Err("coordination issue author is not trusted".to_owned());
     }
     if observation.title != TITLE {
@@ -284,6 +304,43 @@ mod tests {
         let repeated =
             "FLEET_COORDINATION_V1\nCOORDINATION_SLOT=B\nCOORDINATION_STATE=STANDBY\nCOORDINATION_EPOCH=0\nCOORDINATION_STATE=ACTIVE\n";
         assert!(select_active(observed(A, repeated), "geromet").is_err());
+    }
+
+    #[test]
+    fn configured_trusted_author_list_accepts_either_author() {
+        let mut entries = observed(A, B);
+        entries[1].author = "alice";
+        assert_eq!(
+            select_active(entries, "geromet,alice").unwrap().slot,
+            Slot::A
+        );
+        entries[0].author = "ALICE";
+        assert_eq!(
+            select_active(entries, "geromet,alice").unwrap().slot,
+            Slot::A
+        );
+        assert!(select_active(entries, "geromet").is_err());
+    }
+
+    #[test]
+    fn malformed_trusted_author_lists_and_substrings_fail_closed() {
+        for policy in [
+            "",
+            "geromet,",
+            ",geromet",
+            "geromet,,alice",
+            "geromet, alice",
+            "geromet,alice\\n",
+            "geromet|alice",
+        ] {
+            assert!(
+                select_active(observed(A, B), policy).is_err(),
+                "malformed trusted-author configuration accepted: {policy:?}"
+            );
+        }
+        let mut entries = observed(A, B);
+        entries[1].author = "alice-malicious";
+        assert!(select_active(entries, "geromet,alice").is_err());
     }
 
     #[test]
