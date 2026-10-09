@@ -219,7 +219,38 @@ fn check_case(c: &Case) -> Vec<String> {
         reject("ambiguous resource incarnation is not cleanup success");
     }
 
+    // Historical labels must also have their necessary *input witnesses*.
+    // Guarding only a changed expected label misses forged source facts that
+    // retain the original case ID, name, and hardcoded expected disposition.
     match expected {
+        ActionPaused => {
+            if c.action != ScheduledWrite
+                || c.lineage != Lineage::Current
+                || c.authority != Authority::Current
+                || c.resource != Resource::Exact
+                || c.approval != Some(Approval::Required)
+            {
+                reject("ACTION_PAUSED requires the original approval-required scheduled write");
+            }
+        }
+        AuthorityStale => {
+            if c.action != ScheduledWrite
+                || c.lineage != Lineage::Current
+                || c.authority != Authority::Stale
+                || c.resource != Resource::Exact
+            {
+                reject("AUTHORITY_STALE requires a scheduled write with stale authority");
+            }
+        }
+        AuthorityUnavailable => {
+            if c.action != ScheduledWrite
+                || c.lineage != Lineage::Current
+                || !matches!(c.authority, Authority::Forged | Authority::Incompatible)
+                || c.resource != Resource::Exact
+            {
+                reject("AUTHORITY_UNAVAILABLE requires forged or incompatible write authority");
+            }
+        }
         AllowFenced => {
             if c.action != ScheduledWrite
                 || c.lineage != Lineage::Current
@@ -361,6 +392,27 @@ mod tests {
             .expect("case ID");
         case[field] = value;
         f
+    }
+
+    #[test]
+    fn failure_labels_require_their_original_semantic_witnesses() {
+        // A label/name-pinned fixture previously accepted these changed facts:
+        // the hardcoded verdict never had to explain the changed inputs.
+        for (id, field, changed) in [
+            (3, "approval", Value::Null),
+            (3, "action", json!("reconcile")),
+            (17, "authority", json!("current")),
+            (17, "resource", json!("none")),
+            (23, "authority", json!("current")),
+            (20, "authority", json!("current")),
+            (22, "authority", json!("current")),
+            (22, "action", json!("reconcile")),
+        ] {
+            assert!(
+                checked(mutate(id, field, changed)).is_err(),
+                "case {id}: changed {field} retained an unsupported historical verdict"
+            );
+        }
     }
 
     #[test]
