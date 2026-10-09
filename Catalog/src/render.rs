@@ -53,7 +53,7 @@ fn play_label(status: &PlayStatus) -> &'static str {
         // never turn that unproved value into a public positive play claim.
         PlayStatus::FreeEnergyVerified => {
             "Verification withheld — no accepted artifact-verification contract"
-        },
+        }
         PlayStatus::Unavailable => "Unavailable according to this draft record",
         PlayStatus::Unknown => "Play status not verified",
     }
@@ -244,9 +244,7 @@ mod tests {
         project.play.status = PlayStatus::FreeEnergyVerified;
         project.play.local_test_evidence_id = Some("untrusted-test-id".to_owned());
         let html = render_catalog(&[project]);
-        assert!(html.contains(
-            "Verification withheld — no accepted artifact-verification contract"
-        ));
+        assert!(html.contains("Verification withheld — no accepted artifact-verification contract"));
         assert!(!html.contains("<strong>Play:</strong> FREE ENERGY verified"));
         assert!(html.contains("No game is verified or hosted by FREE ENERGY"));
     }
