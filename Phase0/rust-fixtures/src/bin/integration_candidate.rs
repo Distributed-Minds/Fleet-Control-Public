@@ -11,10 +11,10 @@ use std::collections::HashSet;
 use std::env;
 use std::fs;
 use std::io::{Read, Write};
-#[cfg(target_os = "linux")]
-use std::os::unix::fs::OpenOptionsExt;
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
+#[cfg(target_os = "linux")]
+use std::os::unix::fs::OpenOptionsExt;
 use std::process;
 
 #[cfg(test)]
