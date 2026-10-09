@@ -111,10 +111,9 @@ fn rejects_oversized_sparse_symlink_and_nonregular_fixtures() {
     #[cfg(unix)]
     {
         let symlink = scratch.join("symlink.json");
-        let historical = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../fixtures/authority-closure-spec2.json");
-        std::os::unix::fs::symlink(&historical, &symlink)
-            .expect("create symlink fixture");
+        let historical =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../fixtures/authority-closure-spec2.json");
+        std::os::unix::fs::symlink(&historical, &symlink).expect("create symlink fixture");
         assert_denied(&run_path(&symlink));
     }
     fs::remove_dir_all(&scratch).expect("remove isolated fixture directory");
@@ -126,8 +125,14 @@ fn exactly_eight_mib_of_valid_json_with_trailing_whitespace_is_admitted() {
     assert!(HISTORICAL.len() < bound);
     let padded = format!("{HISTORICAL}{}", " ".repeat(bound - HISTORICAL.len()));
     let result = run_source(&padded);
-    assert!(result.status.success(), "exact-limit fixture rejected: {result:?}");
-    assert!(result.stderr.is_empty(), "unexpected diagnostics: {result:?}");
+    assert!(
+        result.status.success(),
+        "exact-limit fixture rejected: {result:?}"
+    );
+    assert!(
+        result.stderr.is_empty(),
+        "unexpected diagnostics: {result:?}"
+    );
     assert_eq!(
         String::from_utf8_lossy(&result.stdout),
         "authority closure Rust semantic fixtures: 26 cases passed\n"
