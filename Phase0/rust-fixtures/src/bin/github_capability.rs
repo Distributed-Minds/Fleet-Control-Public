@@ -278,15 +278,21 @@ fn check_case(c: &Case) -> Vec<String> {
         PassedClean => {
             if c.action != Cleanup
                 || c.lineage != Lineage::Current
+                || c.authority != Authority::Current
                 || c.resource != Resource::AbsentWithReceipt
                 || c.approval.is_some()
             {
-                reject("PASSED_CLEAN requires authoritative receipt for this exact cleanup");
+                reject("PASSED_CLEAN requires current authority and an exact cleanup receipt");
             }
         }
         ReuseLineage => {
-            if c.action != Reconcile || c.lineage != Lineage::Current || !c.successor_evidence {
-                reject("REUSE_LINEAGE requires explicit successor continuity evidence");
+            if c.action != Reconcile
+                || c.lineage != Lineage::Current
+                || c.authority != Authority::Current
+                || c.resource != Resource::Exact
+                || !c.successor_evidence
+            {
+                reject("REUSE_LINEAGE requires current authority, exact resource and successor evidence");
             }
         }
         _ => {}
@@ -413,6 +419,29 @@ mod tests {
                 "case {id}: changed {field} retained an unsupported historical verdict"
             );
         }
+    }
+
+    #[test]
+    fn positive_receipt_and_lineage_reuse_need_current_authority_and_identity() {
+        // Previously these mutated witnesses kept canonical names and expected
+        // labels, so the invariant checker accepted forged "success" evidence.
+        for (id, field, changed) in [
+            (14, "authority", json!("none")),
+            (14, "authority", json!("forged")),
+            (14, "authority", json!("incompatible")),
+            (24, "authority", json!("none")),
+            (24, "authority", json!("forged")),
+            (24, "authority", json!("incompatible")),
+            (24, "resource", json!("none")),
+            (24, "resource", json!("ambiguous")),
+        ] {
+            assert!(
+                checked(mutate(id, field, changed)).is_err(),
+                "case {id}: changed {field} kept a success-like verdict without its witness"
+            );
+        }
+        // Both unchanged historical positives remain admitted.
+        assert_eq!(checked(fixture()), Ok(28));
     }
 
     #[test]
