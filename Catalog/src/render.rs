@@ -4,6 +4,36 @@
 //! hosted play, or proof that upstream links/redirects remain safe.
 use free_energy_catalog::{is_public_https_url, PermissionStatus, PlayStatus, Project};
 
+// JSON admission rejects these formatting controls, but Project fields are
+// public and may be mutated by a caller after admission. HTML entity escaping
+// alone does not stop bidi reordering or invisible identity/rights spoofing.
+// Render a visible marker rather than emitting the unsafe control at the sink.
+fn is_unsafe_visual_format(value: char) -> bool {
+    matches!(
+        value,
+        '\u{00ad}'
+            | '\u{034f}'
+            | '\u{061c}'
+            | '\u{180e}'
+            | '\u{200b}'
+            | '\u{200c}'
+            | '\u{200d}'
+            | '\u{200e}'
+            | '\u{200f}'
+            | '\u{2060}'
+            | '\u{202a}'
+            | '\u{202b}'
+            | '\u{202c}'
+            | '\u{202d}'
+            | '\u{202e}'
+            | '\u{2066}'
+            | '\u{2067}'
+            | '\u{2068}'
+            | '\u{2069}'
+            | '\u{feff}'
+    )
+}
+
 fn escape(value: &str) -> String {
     let mut out = String::new();
     for c in value.chars() {
@@ -13,6 +43,9 @@ fn escape(value: &str) -> String {
             '>' => out.push_str("&gt;"),
             '"' => out.push_str("&quot;"),
             '\'' => out.push_str("&#39;"),
+            c if is_unsafe_visual_format(c) => {
+                out.push_str(&format!("[U+{:04X} withheld]", c as u32));
+            }
             _ => out.push(c),
         }
     }
@@ -255,6 +288,42 @@ mod tests {
         let html = render_catalog(&[project]);
         assert!(html.contains("<a href=\"https://"));
         assert!(!html.contains("link withheld:"));
+    }
+
+    #[test]
+    fn mutated_typed_records_cannot_render_directional_or_invisible_claim_spoofing() {
+        let mut project = validate_manifest(LUANTI).expect("valid pilot");
+        // These characters are rejected by JSON admission, yet publicly mutable
+        // typed records still reach render_catalog without that reader.
+        for control in [
+            '\u{00ad}', '\u{034f}', '\u{061c}', '\u{180e}', '\u{200b}', '\u{200c}', '\u{200d}',
+            '\u{200e}', '\u{200f}', '\u{202a}', '\u{202b}', '\u{202c}', '\u{202d}', '\u{202e}',
+            '\u{2060}', '\u{2066}', '\u{2067}', '\u{2068}', '\u{2069}', '\u{feff}',
+        ] {
+            let forged = format!("review{control}CLEARED");
+            project.display_name = forged.clone();
+            project.rights_claims[0].statement = forged.clone();
+            project.rights_claims[0].scope = forged.clone();
+            project.play.content_requirements = vec![forged.clone()];
+            project.evidence[0].currentness = forged.clone();
+            project.review.reviewed_at = forged;
+
+            let html = render_catalog(std::slice::from_ref(&project));
+            let marker = format!("[U+{:04X} withheld]", control as u32);
+            assert!(
+                !html.contains(control),
+                "unsafe Unicode formatting control U+{:04X} reached HTML",
+                control as u32
+            );
+            assert_eq!(
+                html.matches(marker.as_str()).count(),
+                6,
+                "every human-visible mutated field needs a final sink guard: {marker}"
+            );
+        }
+        project.display_name = "Français 日本語 مرحبا".to_owned();
+        let html = render_catalog(std::slice::from_ref(&project));
+        assert!(html.contains("<h2>Français 日本語 مرحبا</h2>"));
     }
 
     #[test]
