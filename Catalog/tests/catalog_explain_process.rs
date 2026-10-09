@@ -67,14 +67,22 @@ fn accepted_batch_is_order_independent_and_does_not_upgrade_rights() {
     assert!(first.stderr.is_empty(), "{}", stderr(&first));
     assert_eq!(first.stdout, second.stdout, "manifest order changed JSON");
     let projects: Value = serde_json::from_slice(&first.stdout).expect("one JSON array");
-    let array = projects.as_array().expect("JSON array, not per-line fragments");
+    let array = projects
+        .as_array()
+        .expect("JSON array, not per-line fragments");
     assert_eq!(array.len(), 3);
     assert_eq!(array[0]["project_id"], "engine/luanti");
     assert_eq!(array[1]["project_id"], "engine/openra");
     assert_eq!(array[2]["project_id"], "game/veloren");
     for project in array {
-        assert_eq!(project["explanation_schema"], "free-energy.catalog-explanation/v1");
-        assert_eq!(project["rights"]["free_energy_redistribution_authorized"], false);
+        assert_eq!(
+            project["explanation_schema"],
+            "free-energy.catalog-explanation/v1"
+        );
+        assert_eq!(
+            project["rights"]["free_energy_redistribution_authorized"],
+            false
+        );
         assert_eq!(project["play"]["free_energy_hosted_download"], false);
         assert_eq!(project["record_review"]["status"], "DRAFT");
     }
@@ -86,7 +94,11 @@ fn later_invalid_manifest_suppresses_every_success_record() {
     let valid = root.file("good.json", LUANTI);
     let invalid = root.file("bad.json", "{}");
     let baseline = invoke(&[&valid]);
-    assert!(baseline.status.success(), "positive control: {}", stderr(&baseline));
+    assert!(
+        baseline.status.success(),
+        "positive control: {}",
+        stderr(&baseline)
+    );
     assert!(!baseline.stdout.is_empty());
 
     let result = invoke(&[&valid, &invalid]);
@@ -102,18 +114,27 @@ fn duplicate_identity_and_unreadable_tail_both_fail_atomically() {
     let copy = root.file("duplicate.json", OPENRA);
     let duplicate = invoke(&[&first, &copy]);
     assert!(!duplicate.status.success());
-    assert!(duplicate.stdout.is_empty(), "duplicate emitted partial JSON");
+    assert!(
+        duplicate.stdout.is_empty(),
+        "duplicate emitted partial JSON"
+    );
     assert!(stderr(&duplicate).contains("duplicate project ID"));
 
     let absent = root.0.join("missing.json");
     let missing = invoke(&[&first, &absent]);
     assert!(!missing.status.success());
-    assert!(missing.stdout.is_empty(), "missing tail emitted partial JSON");
+    assert!(
+        missing.stdout.is_empty(),
+        "missing tail emitted partial JSON"
+    );
     assert!(!stderr(&missing).is_empty());
 
     let directory = invoke(&[&first, &root.0]);
     assert!(!directory.status.success());
-    assert!(directory.stdout.is_empty(), "directory tail emitted partial JSON");
+    assert!(
+        directory.stdout.is_empty(),
+        "directory tail emitted partial JSON"
+    );
     assert!(stderr(&directory).contains("expected a regular non-symlink JSON file"));
 }
 
@@ -127,6 +148,9 @@ fn symlinked_manifest_does_not_bypass_atomic_failure() {
     symlink(&valid, &link).expect("create input symlink");
     let result = invoke(&[&valid, &link]);
     assert!(!result.status.success());
-    assert!(result.stdout.is_empty(), "symlinked tail emitted partial JSON");
+    assert!(
+        result.stdout.is_empty(),
+        "symlinked tail emitted partial JSON"
+    );
     assert!(stderr(&result).contains("expected a regular non-symlink JSON file"));
 }
