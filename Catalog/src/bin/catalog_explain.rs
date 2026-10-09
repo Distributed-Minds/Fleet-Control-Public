@@ -190,6 +190,21 @@ where
 /// Reject symlinks and directories before reading. This does not pretend to
 /// defend against a privileged concurrent replacement of the same pathname.
 fn read_file(path: &Path) -> Result<String, String> {
+    // Inspect every component before opening the leaf. symlink_metadata on
+    // only the final file silently follows a symlinked parent directory.
+    // This is a best-effort input boundary, not a defence against a
+    // privileged concurrent pathname replacement.
+    let mut component_path = PathBuf::new();
+    for component in path.components() {
+        component_path.push(component.as_os_str());
+        let kind = fs::symlink_metadata(&component_path)
+            .map_err(|error| format!("{path:?}: {error}"))?;
+        if kind.file_type().is_symlink() {
+            return Err(format!(
+                "{path:?}: symlink path component {component_path:?} prohibited"
+            ));
+        }
+    }
     let metadata = fs::symlink_metadata(path).map_err(|error| format!("{path:?}: {error}"))?;
     if !metadata.file_type().is_file() {
         return Err(format!(
@@ -329,6 +344,37 @@ mod tests {
         assert!(!encoded.contains("<h2>"));
         let decoded: Value = serde_json::from_str(&encoded).unwrap();
         assert_eq!(decoded["display_name"], "<img src=x onerror=alert(1)>");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_ancestor_of_regular_manifest_rejects_entire_batch() {
+        use std::os::unix::fs::symlink;
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("monotonic relative to epoch")
+            .as_nanos();
+        let scratch = env::temp_dir().join(format!(
+            "free-energy-catalog-explain-ancestor-{}-{nonce}",
+            std::process::id()
+        ));
+        let real_dir = scratch.join("real");
+        fs::create_dir_all(&real_dir).expect("create isolated manifest directory");
+        let good = real_dir.join("luanti.json");
+        fs::write(&good, LUANTI).expect("write valid manifest");
+        symlink(&real_dir, scratch.join("alias")).expect("create directory symlink");
+        let aliased = scratch.join("alias/luanti.json");
+
+        assert!(read_file(&good).is_ok(), "real regular file must still work");
+        let failure = read_file(&aliased).expect_err("symlinked ancestor must fail closed");
+        assert!(failure.contains("symlink"), "{failure}");
+        assert!(
+            execute(vec![good, aliased]).is_err(),
+            "valid prefix + aliased tail must never produce partial JSON success"
+        );
+        fs::remove_dir_all(&scratch).expect("clean isolated fixture");
     }
 
     #[test]
