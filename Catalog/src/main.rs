@@ -824,7 +824,7 @@ mod atomic_render_tests {
         assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
         assert!(error.to_string().contains("symlinked ancestor"));
         assert!(
-            read_regular_generated_page(&target).is_err(),
+            read_regular_generated_page(&target, 64).is_err(),
             "matching external HTML must not pass render --check"
         );
         assert_eq!(
@@ -839,18 +839,18 @@ mod atomic_render_tests {
         let dir = sandbox();
         let target = dir.join("index.html");
         assert_eq!(
-            read_regular_generated_page(&target).unwrap_err().kind(),
+            read_regular_generated_page(&target, 64).unwrap_err().kind(),
             io::ErrorKind::NotFound
         );
         fs::create_dir(&target).expect("seed invalid directory output");
         assert_eq!(
-            read_regular_generated_page(&target).unwrap_err().kind(),
+            read_regular_generated_page(&target, 64).unwrap_err().kind(),
             io::ErrorKind::InvalidInput
         );
         fs::remove_dir(&target).expect("remove invalid directory output");
         fs::write(&target, "<html>expected</html>").expect("seed real generated page");
         assert_eq!(
-            read_regular_generated_page(&target).unwrap(),
+            read_regular_generated_page(&target, 64).unwrap(),
             "<html>expected</html>"
         );
         fs::remove_dir_all(&dir).expect("clean isolated sandbox");
@@ -866,7 +866,7 @@ mod atomic_render_tests {
         let target = dir.join("index.html");
         fs::write(&outside, "<html>expected</html>").expect("seed unrelated HTML");
         symlink(&outside, &target).expect("replace checked page with symlink");
-        let error = read_regular_generated_page(&target)
+        let error = read_regular_generated_page(&target, 64)
             .expect_err("symlink to matching HTML must never pass regeneration check");
         assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
         assert!(error.to_string().contains("symlink prohibited"));
