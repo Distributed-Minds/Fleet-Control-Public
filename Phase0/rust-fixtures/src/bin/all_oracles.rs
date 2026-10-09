@@ -142,22 +142,30 @@ fn has_verification_output(oracle: &Oracle, stdout: &[u8]) -> bool {
     }
     match oracle.name {
         "ad_hoc_research" => positive_count(line, "ad-hoc research fixtures (Rust): ", " passed"),
-        "adaptive_stress" => {
-            positive_count(line, "adaptive-stress semantic fixtures (Rust): ", " passed")
-        }
-        "authority_closure" => {
-            positive_count(line, "authority closure Rust semantic fixtures: ", " cases passed")
-        }
+        "adaptive_stress" => positive_count(
+            line,
+            "adaptive-stress semantic fixtures (Rust): ",
+            " passed",
+        ),
+        "authority_closure" => positive_count(
+            line,
+            "authority closure Rust semantic fixtures: ",
+            " cases passed",
+        ),
         "containment" => positive_count(line, "containment fixtures (Rust): ", " passed"),
         "containment_capacity" => {
             positive_count(line, "containment-capacity fixtures (Rust): ", " passed")
         }
-        "coordination_history" => {
-            positive_count(line, "PASS: ", " independently evaluated coordination-history cases")
-        }
-        "github_capability" => {
-            positive_count(line, "GitHub capability invariant fixtures (Rust): ", " checked")
-        }
+        "coordination_history" => positive_count(
+            line,
+            "PASS: ",
+            " independently evaluated coordination-history cases",
+        ),
+        "github_capability" => positive_count(
+            line,
+            "GitHub capability invariant fixtures (Rust): ",
+            " checked",
+        ),
         "integration_candidate" => positive_count(
             line,
             "integration candidate fixture envelope: ",
@@ -174,9 +182,11 @@ fn has_verification_output(oracle: &Oracle, stdout: &[u8]) -> bool {
                     .bytes()
                     .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
         }),
-        "merge_base_topology" => {
-            positive_count(line, "merge-base-topology: ", " read-only model fixtures PASS")
-        }
+        "merge_base_topology" => positive_count(
+            line,
+            "merge-base-topology: ",
+            " read-only model fixtures PASS",
+        ),
         _ => false,
     }
 }
@@ -221,7 +231,9 @@ fn run_oracles(selection: Selection, root: &Path) -> Result<(), String> {
             command.arg(root.join(fixture));
         }
         match command.output() {
-            Ok(output) if output.status.success() && has_verification_output(&oracle, &output.stdout) => {
+            Ok(output)
+                if output.status.success() && has_verification_output(&oracle, &output.stdout) =>
+            {
                 passed.push(oracle.name);
             }
             Ok(output) if output.status.success() => failed.push(format!(
