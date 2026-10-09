@@ -810,6 +810,9 @@ mod tests {
         let scenario: Workload = serde_json::from_value(case.clone()).unwrap();
         assert!(simulate(&scenario).is_err());
 
+        // Restore the deliberately-invalid capacity before testing the
+        // legitimate shared mode. Even inactive evidence is now validated.
+        case["adjudication_capacity"] = json!([1, 1]);
         case["capacity_mode"] = json!("shared");
         case["service_capacity"] = json!([1, 1]);
         let scenario: Workload = serde_json::from_value(case).unwrap();
