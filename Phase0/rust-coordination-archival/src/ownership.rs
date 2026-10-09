@@ -133,6 +133,10 @@ pub fn reduce_model_only(transitions: &[Transition]) -> Result<Vec<ActiveLease>,
     let mut seen_ids = HashSet::new();
     let mut previous_position = None;
     let mut last_by_run: HashMap<&str, Last> = HashMap::new();
+    // Only unresolved INTENTs participate in the election. Scanning every
+    // historical run for every OWNED transition becomes quadratic across a
+    // long-lived coordination log even when thousands of runs have released.
+    let mut pending_intents: BTreeMap<u64, (&str, &Scope)> = BTreeMap::new();
     let mut active: BTreeMap<&str, ActiveLease> = BTreeMap::new();
 
     for event in transitions {
@@ -192,6 +196,7 @@ pub fn reduce_model_only(transitions: &[Transition]) -> Result<Vec<ActiveLease>,
                 if previous.is_some_and(|old| matches!(old.state, Intent | Owned | Working)) {
                     return Err(InvalidTransition);
                 }
+                pending_intents.insert(event.comment_id, (event.run.as_str(), &event.scope));
             }
             Recovered => {
                 // Recovery is an initial evidence record for a fresh run,
@@ -206,11 +211,9 @@ pub fn reduce_model_only(transitions: &[Transition]) -> Result<Vec<ActiveLease>,
                 }
                 // GitHub's configured election compares actual comment IDs
                 // among qualified, conflicting intents, not reducer positions.
-                if last_by_run.iter().any(|(run, old)| {
-                    *run != event.run
-                        && old.state == Intent
-                        && old.id < previous.expect("checked").id
-                        && old.scope.overlaps(&event.scope)
+                let intent_id = previous.expect("checked").id;
+                if pending_intents.range(..intent_id).any(|(_, (run, scope))| {
+                    *run != event.run.as_str() && scope.overlaps(&event.scope)
                 }) {
                     return Err(EarlierCompetingIntent);
                 }
@@ -220,6 +223,7 @@ pub fn reduce_model_only(transitions: &[Transition]) -> Result<Vec<ActiveLease>,
                 {
                     return Err(OverlappingOwner);
                 }
+                pending_intents.remove(&intent_id);
                 active.insert(
                     event.run.as_str(),
                     ActiveLease {
@@ -250,6 +254,9 @@ pub fn reduce_model_only(transitions: &[Transition]) -> Result<Vec<ActiveLease>,
             Yield => {
                 if !previous.is_some_and(|old| matches!(old.state, Intent | Owned | Working)) {
                     return Err(InvalidTransition);
+                }
+                if previous.is_some_and(|old| old.state == Intent) {
+                    pending_intents.remove(&previous.expect("checked").id);
                 }
                 active.remove(event.run.as_str());
             }
@@ -624,6 +631,77 @@ mod tests {
         assert_eq!(leases.len(), 1);
         assert_eq!(leases[0].run, "new-run");
         assert_eq!(leases[0].scope.branch.as_deref(), Some("ref-a"));
+    }
+
+    #[test]
+    fn released_historical_intents_do_not_accumulate_in_election_work() {
+        // Every completed run held this same branch. Only the single final
+        // unresolved intent should need consideration; historical releases
+        // must not grow the election's candidate set indefinitely.
+        let mut records = Vec::new();
+        for i in 0..2_048u64 {
+            let position = i * 3 + 1;
+            let id = position + 100;
+            let run = format!("old-{i}");
+            records.push(event(position, id, &run, 1, State::Intent, None, "shared"));
+            records.push(event(
+                position + 1,
+                id + 1,
+                &run,
+                2,
+                State::Owned,
+                Some(id),
+                "shared",
+            ));
+            records.push(event(
+                position + 2,
+                id + 2,
+                &run,
+                3,
+                State::Release,
+                Some(id + 1),
+                "shared",
+            ));
+        }
+        let position = records.len() as u64 + 1;
+        let id = position + 100;
+        records.push(event(
+            position,
+            id,
+            "current",
+            1,
+            State::Intent,
+            None,
+            "shared",
+        ));
+        records.push(event(
+            position + 1,
+            id + 1,
+            "current",
+            2,
+            State::Owned,
+            Some(id),
+            "shared",
+        ));
+        let leases = reduce_model_only(&records).unwrap();
+        assert_eq!(leases.len(), 1);
+        assert_eq!(leases[0].run, "current");
+    }
+
+    #[test]
+    fn earlier_unresolved_intent_still_wins_after_independent_work_finishes() {
+        let records = [
+            event(1, 101, "earlier", 1, State::Intent, None, "shared"),
+            event(2, 102, "unrelated", 1, State::Intent, None, "other"),
+            event(3, 103, "unrelated", 2, State::Owned, Some(102), "other"),
+            event(4, 104, "unrelated", 3, State::Handoff, Some(103), "other"),
+            event(5, 105, "later", 1, State::Intent, None, "shared"),
+            event(6, 106, "later", 2, State::Owned, Some(105), "shared"),
+        ];
+        assert_eq!(
+            reduce_model_only(&records),
+            Err(ReductionFailure::EarlierCompetingIntent)
+        );
     }
 
     #[test]
