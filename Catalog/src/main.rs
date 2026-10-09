@@ -4,7 +4,7 @@ mod render;
 use std::{
     collections::HashSet,
     env, fs,
-    io::{self, Write},
+    io::{self, Read, Write},
     path::Path,
     process::ExitCode,
 };
@@ -142,6 +142,101 @@ where
     }
 }
 
+/// Limit every manifest read before parsing untrusted JSON. A large sparse file
+/// must not allocate its declared size; a growing file cannot bypass the cap.
+/// The inode check on Unix detects replacement of the preflighted regular
+/// file with a different open file. This is not a race-free filesystem sandbox.
+const MAX_MANIFEST_BYTES: u64 = 1024 * 1024;
+const MAX_BATCH_MANIFESTS: usize = 256;
+const MAX_BATCH_BYTES: usize = 16 * 1024 * 1024;
+
+/// Keep bounded reads bounded as a batch too. Both render and validate
+/// must fail before emitting a partial accepted catalog.
+#[derive(Default)]
+struct ManifestBatchBudget {
+    files: usize,
+    bytes: usize,
+}
+
+impl ManifestBatchBudget {
+    fn note_file(&mut self) -> io::Result<()> {
+        if self.files >= MAX_BATCH_MANIFESTS {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "catalog batch exceeds 256 manifests",
+            ));
+        }
+        self.files += 1;
+        Ok(())
+    }
+
+    fn note_bytes(&mut self, next: usize) -> io::Result<()> {
+        let total = self.bytes.checked_add(next).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "catalog batch size overflow")
+        })?;
+        if total > MAX_BATCH_BYTES {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "catalog batch exceeds 16 MiB total manifest input",
+            ));
+        }
+        self.bytes = total;
+        Ok(())
+    }
+}
+
+fn read_bounded_manifest(path: &Path) -> io::Result<String> {
+    let before = fs::symlink_metadata(path)?;
+    if !before.file_type().is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "manifest must be a regular file (symlinks prohibited)",
+        ));
+    }
+    if before.len() > MAX_MANIFEST_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "manifest exceeds 1 MiB input limit",
+        ));
+    }
+
+    let file = fs::File::open(path)?;
+    let opened = file.metadata()?;
+    if !opened.file_type().is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "opened manifest is not a regular file",
+        ));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if before.dev() != opened.dev() || before.ino() != opened.ino() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "manifest changed between preflight and open",
+            ));
+        }
+    }
+    if opened.len() > MAX_MANIFEST_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "manifest exceeds 1 MiB input limit",
+        ));
+    }
+
+    let mut text = String::new();
+    file.take(MAX_MANIFEST_BYTES + 1)
+        .read_to_string(&mut text)?;
+    if text.len() as u64 > MAX_MANIFEST_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "manifest exceeds 1 MiB input limit",
+        ));
+    }
+    Ok(text)
+}
+
 /// Reject symlinked or non-regular JSON inputs for the deterministic render path.
 /// The explicit validate CLI accepts caller-chosen paths, but generating the
 /// checked-in page must not follow an untracked filesystem symlink out of the
@@ -157,7 +252,7 @@ fn read_render_manifest(path: &Path) -> Result<String, String> {
             diagnostic_path(path)
         ));
     }
-    fs::read_to_string(path).map_err(|error| format!("{}: {error}", diagnostic_path(path)))
+    read_bounded_manifest(path).map_err(|error| format!("{}: {error}", diagnostic_path(path)))
 }
 
 /// Collect the complete manifest set only from a real project directory.
@@ -169,10 +264,12 @@ fn collect_render_manifests(project_dir: &Path) -> Result<Vec<std::path::PathBuf
     let entries = fs::read_dir(project_dir)
         .map_err(|error| format!("{}: {error}", diagnostic_path(project_dir)))?;
     let mut paths = Vec::new();
+    let mut budget = ManifestBatchBudget::default();
     for entry in entries {
         let entry = entry.map_err(|error| format!("project directory entry: {error}"))?;
         let path = entry.path();
         if path.extension().and_then(|extension| extension.to_str()) == Some("json") {
+            budget.note_file().map_err(|error| error.to_string())?;
             paths.push(path);
         }
     }
@@ -203,26 +300,33 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
     let mut records = Vec::new();
     let mut ids = HashSet::new();
     let mut problems = Vec::new();
+    let mut byte_budget = ManifestBatchBudget::default();
     for path in paths {
         match read_render_manifest(&path) {
-            Ok(text) => match free_energy_catalog::validate_manifest(&text) {
-                Ok(record) => {
-                    if !ids.insert(record.id.clone()) {
-                        problems.push(format!(
-                            "{}: duplicate project ID: {}",
-                            diagnostic_path(&path),
-                            record.id
-                        ));
-                    } else {
-                        records.push(record);
+            Ok(text) => {
+                if let Err(error) = byte_budget.note_bytes(text.len()) {
+                    problems.push(format!("{}: {error}", diagnostic_path(&path)));
+                    break;
+                }
+                match free_energy_catalog::validate_manifest(&text) {
+                    Ok(record) => {
+                        if !ids.insert(record.id.clone()) {
+                            problems.push(format!(
+                                "{}: duplicate project ID: {}",
+                                diagnostic_path(&path),
+                                record.id
+                            ));
+                        } else {
+                            records.push(record);
+                        }
+                    }
+                    Err(errors) => {
+                        for error in errors {
+                            problems.push(format!("{}: {error}", diagnostic_path(&path)));
+                        }
                     }
                 }
-                Err(errors) => {
-                    for error in errors {
-                        problems.push(format!("{}: {error}", diagnostic_path(&path)));
-                    }
-                }
-            },
+            }
             Err(error) => problems.push(format!("{}: {error}", diagnostic_path(&path))),
         }
     }
@@ -304,6 +408,8 @@ fn main() -> ExitCode {
     // success records and diagnostics independent of filesystem order.
     let mut manifest_paths = Vec::new();
     let mut errors = Vec::new();
+    let mut path_budget = ManifestBatchBudget::default();
+    let mut over_limit = false;
     for input in paths {
         let path = std::path::PathBuf::from(input);
         if let Err(error) = reject_symlinked_ancestors(&path) {
@@ -328,6 +434,12 @@ fn main() -> ExitCode {
                             Ok(entry) => {
                                 let child = entry.path();
                                 if child.extension().and_then(|ext| ext.to_str()) == Some("json") {
+                                    if let Err(error) = path_budget.note_file() {
+                                        errors
+                                            .push(format!("{}: {error}", diagnostic_path(&child)));
+                                        over_limit = true;
+                                        break;
+                                    }
                                     manifest_paths.push(child);
                                     count += 1;
                                 }
@@ -338,7 +450,7 @@ fn main() -> ExitCode {
                             )),
                         }
                     }
-                    if count == 0 {
+                    if count == 0 && !over_limit {
                         errors.push(format!(
                             "{}: no JSON manifests found",
                             diagnostic_path(&path)
@@ -347,13 +459,27 @@ fn main() -> ExitCode {
                 }
                 Err(error) => errors.push(format!("{}: {error}", diagnostic_path(&path))),
             }
+        } else if let Err(error) = path_budget.note_file() {
+            errors.push(format!("{}: {error}", diagnostic_path(&path)));
+            over_limit = true;
         } else {
             manifest_paths.push(path);
         }
+        if over_limit {
+            break;
+        }
+    }
+    if over_limit {
+        errors.sort();
+        for error in errors {
+            eprintln!("{error}");
+        }
+        return ExitCode::FAILURE;
     }
     manifest_paths.sort();
 
     let mut loaded = Vec::new();
+    let mut byte_budget = ManifestBatchBudget::default();
     for path in manifest_paths {
         if let Err(error) = reject_symlinked_ancestors(&path) {
             errors.push(format!("{}: {error}", diagnostic_path(&path)));
@@ -382,8 +508,14 @@ fn main() -> ExitCode {
             }
             Ok(_) => {}
         }
-        match fs::read_to_string(&path) {
-            Ok(text) => loaded.push((path.to_string_lossy().into_owned(), text)),
+        match read_bounded_manifest(&path) {
+            Ok(text) => {
+                if let Err(error) = byte_budget.note_bytes(text.len()) {
+                    errors.push(format!("{}: {error}", diagnostic_path(&path)));
+                    break;
+                }
+                loaded.push((path.to_string_lossy().into_owned(), text));
+            }
             Err(error) => errors.push(format!("{}: {error}", diagnostic_path(&path))),
         }
     }
@@ -428,6 +560,88 @@ mod tests {
 
     const LUANTI: &str = include_str!("../projects/luanti.json");
     const OPENRA: &str = include_str!("../projects/openra.json");
+
+    #[test]
+    fn bounded_manifest_reader_admits_regular_input_through_exact_byte_limit() {
+        let file = env::temp_dir().join(format!(
+            "free-energy-catalog-bounded-positive-{}.json",
+            std::process::id()
+        ));
+        fs::write(&file, LUANTI).expect("create real pilot input");
+        assert_eq!(
+            read_bounded_manifest(&file).expect("read regular pilot"),
+            LUANTI
+        );
+        let padded = format!(
+            "{LUANTI}{}",
+            " ".repeat(MAX_MANIFEST_BYTES as usize - LUANTI.len())
+        );
+        fs::write(&file, &padded).expect("create exact-limit UTF-8 manifest");
+        assert_eq!(
+            read_bounded_manifest(&file).expect("exact limit must be admitted"),
+            padded
+        );
+        fs::remove_file(file).expect("remove test file");
+    }
+
+    #[test]
+    fn oversized_sparse_manifest_is_rejected_before_parser_or_allocation() {
+        let file = env::temp_dir().join(format!(
+            "free-energy-catalog-bounded-negative-{}.json",
+            std::process::id()
+        ));
+        let sparse = fs::File::create(&file).expect("create sparse input");
+        sparse
+            .set_len(MAX_MANIFEST_BYTES + 1)
+            .expect("set oversized declared length");
+        drop(sparse);
+        let error = read_bounded_manifest(&file).expect_err("oversized input must fail");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("1 MiB input limit"));
+        fs::remove_file(file).expect("remove test file");
+    }
+
+    #[test]
+    fn batch_budget_admits_boundary_and_rejects_count_overflow() {
+        let mut budget = ManifestBatchBudget::default();
+        for _ in 0..MAX_BATCH_MANIFESTS {
+            budget.note_file().expect("bounded manifest");
+        }
+        assert!(budget
+            .note_file()
+            .unwrap_err()
+            .to_string()
+            .contains("256 manifests"));
+
+        budget.note_bytes(MAX_BATCH_BYTES).expect("exactly 16 MiB");
+        assert!(budget
+            .note_bytes(1)
+            .unwrap_err()
+            .to_string()
+            .contains("16 MiB"));
+        assert_eq!(budget.bytes, MAX_BATCH_BYTES);
+        assert!(budget.note_bytes(0).is_ok());
+    }
+
+    #[test]
+    fn render_collection_rejects_more_than_256_json_paths() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock after epoch")
+            .as_nanos();
+        let dir = env::temp_dir().join(format!(
+            "free-energy-catalog-render-count-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir(&dir).expect("create disposable render project directory");
+        for index in 0..=MAX_BATCH_MANIFESTS {
+            fs::write(dir.join(format!("{index:03}.json")), "{}")
+                .expect("create disposable manifest path");
+        }
+        let error = collect_render_manifests(&dir).expect_err("257 render paths must fail");
+        assert!(error.contains("256 manifests"), "{error}");
+        fs::remove_dir_all(&dir).expect("remove disposable render project directory");
+    }
 
     #[test]
     fn distinct_manifest_ids_are_admitted_as_one_batch() {
