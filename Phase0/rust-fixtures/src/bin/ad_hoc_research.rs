@@ -709,10 +709,9 @@ mod cli_semantic_tests {
 
     #[test]
     fn raw_and_escaped_duplicate_members_fail_before_semantic_evaluation() {
-        let canonical = serde_json::to_string(
-            &parse_fixture_json(BASELINE).expect("strict original fixture"),
-        )
-        .expect("serialize canonical fixture");
+        let canonical =
+            serde_json::to_string(&parse_fixture_json(BASELINE).expect("strict original fixture"))
+                .expect("serialize canonical fixture");
 
         // Exercise the actual input decoder at the shell, nested packet,
         // nested expected verdict, and escaped-key alias boundaries.
