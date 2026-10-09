@@ -64,7 +64,10 @@ fn validate_rejects_257th_manifest_without_any_partial_success_stdout() {
     }
     let output = dir.validate();
     assert!(!output.status.success(), "257 manifests must fail");
-    assert!(output.stdout.is_empty(), "invalid batch emitted success rows");
+    assert!(
+        output.stdout.is_empty(),
+        "invalid batch emitted success rows"
+    );
     assert!(
         String::from_utf8_lossy(&output.stderr).contains("256 manifests"),
         "missing count-limit diagnostic: {}",
@@ -84,12 +87,22 @@ fn validate_admits_16_mib_then_rejects_17_mib_without_partial_success() {
         "exact 16 MiB should pass: {}",
         String::from_utf8_lossy(&accepted.stderr)
     );
-    assert_eq!(accepted.stdout.iter().filter(|byte| **byte == b'\n').count(), 16);
+    assert_eq!(
+        accepted
+            .stdout
+            .iter()
+            .filter(|byte| **byte == b'\n')
+            .count(),
+        16
+    );
 
     dir.add(16, true);
     let rejected = dir.validate();
     assert!(!rejected.status.success(), "17 MiB must fail");
-    assert!(rejected.stdout.is_empty(), "invalid batch emitted success rows");
+    assert!(
+        rejected.stdout.is_empty(),
+        "invalid batch emitted success rows"
+    );
     assert!(
         String::from_utf8_lossy(&rejected.stderr).contains("16 MiB"),
         "missing total-input diagnostic: {}",
