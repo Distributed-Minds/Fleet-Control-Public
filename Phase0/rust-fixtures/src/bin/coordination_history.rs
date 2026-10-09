@@ -9,7 +9,8 @@ use serde::Deserialize;
 use std::collections::HashSet;
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::process;
 
 #[cfg(test)]
@@ -223,6 +224,72 @@ fn validate(suite: &Suite) -> Result<usize, Vec<String>> {
     }
 }
 
+const MAX_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
+
+/// Advisory fixture input only. The on-disk path and its contents remain
+/// caller-controlled and cannot establish provider history or mutation rights.
+/// A bounded read must not hang on a substituted FIFO or trust a prior stat
+/// after the pathname has been replaced.
+fn read_fixture_with_observed_metadata(
+    path: &Path,
+    observed: &fs::Metadata,
+) -> Result<String, String> {
+    if !observed.file_type().is_file() {
+        return Err("fixture must be a regular, non-symlink file".to_owned());
+    }
+    if observed.len() > MAX_FIXTURE_BYTES {
+        return Err("fixture exceeds the 8 MiB input limit".to_owned());
+    }
+
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // Prevent an open-time symlink substitution and avoid blocking on a
+        // FIFO that replaces the regular file after the initial stat.
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let file = options
+        .open(path)
+        .map_err(|error| format!("cannot open fixture: {error}"))?;
+    let opened = file
+        .metadata()
+        .map_err(|error| format!("cannot stat opened fixture: {error}"))?;
+    if !opened.file_type().is_file() {
+        return Err("opened fixture is not a regular file".to_owned());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if opened.dev() != observed.dev() || opened.ino() != observed.ino() {
+            return Err("fixture replaced between metadata check and open".to_owned());
+        }
+    }
+    if opened.len() > MAX_FIXTURE_BYTES {
+        return Err("opened fixture exceeds the 8 MiB input limit".to_owned());
+    }
+
+    // Check bytes actually read, not just pre-open metadata: a concurrent
+    // writer could extend the file after both stat observations.
+    let mut bytes = Vec::new();
+    file.take(MAX_FIXTURE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("cannot read opened fixture: {error}"))?;
+    if bytes.len() as u64 > MAX_FIXTURE_BYTES {
+        return Err("fixture exceeds the 8 MiB input limit".to_owned());
+    }
+    String::from_utf8(bytes).map_err(|_| "fixture must be UTF-8".to_owned())
+}
+
+fn read_fixture_bounded(path: &Path) -> Result<String, String> {
+    let observed = fs::symlink_metadata(path)
+        .map_err(|error| format!("cannot stat fixture: {error}"))?;
+    read_fixture_with_observed_metadata(path, &observed)
+}
+
 fn execute() -> Result<(), String> {
     let mut args = env::args_os().skip(1);
     let path = args
@@ -232,8 +299,7 @@ fn execute() -> Result<(), String> {
     if args.next().is_some() {
         return Err("usage: coordination_history [fixtures.json]".to_owned());
     }
-    let input =
-        fs::read_to_string(&path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    let input = read_fixture_bounded(&path)?;
     let suite: Suite = serde_json::from_str(&input)
         .map_err(|e| format!("malformed coordination-history fixture: {e}"))?;
     match validate(&suite) {
@@ -372,4 +438,62 @@ mod tests {
             .join(" ")
             .contains("unsupported"));
     }
+
+    #[test]
+    fn fixture_reader_rejects_nonregular_oversized_and_non_utf8_inputs() {
+        let root = env::temp_dir().join(format!(
+            "free-energy-history-reader-{}",
+            process::id()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let valid = root.join("valid.json");
+        fs::write(&valid, BASELINE).unwrap();
+        assert_eq!(read_fixture_bounded(&valid).unwrap(), BASELINE);
+        assert!(read_fixture_bounded(&root).is_err());
+
+        let oversized = root.join("oversized.json");
+        fs::File::create(&oversized)
+            .unwrap()
+            .set_len(MAX_FIXTURE_BYTES + 1)
+            .unwrap();
+        assert!(read_fixture_bounded(&oversized)
+            .unwrap_err()
+            .contains("8 MiB"));
+        let non_utf8 = root.join("non-utf8.json");
+        fs::write(&non_utf8, [0xff, 0xfe]).unwrap();
+        assert!(read_fixture_bounded(&non_utf8)
+            .unwrap_err()
+            .contains("UTF-8"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn fixture_reader_rejects_same_path_inode_swap_and_symlink_replacement() {
+        let root = env::temp_dir().join(format!(
+            "free-energy-history-inode-{}",
+            process::id()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("history.json");
+        let next = root.join("next.json");
+        fs::write(&path, BASELINE).unwrap();
+        fs::write(&next, BASELINE).unwrap();
+        let observed = fs::symlink_metadata(&path).unwrap();
+        fs::rename(&next, &path).unwrap();
+        assert_eq!(
+            read_fixture_with_observed_metadata(&path, &observed).unwrap_err(),
+            "fixture replaced between metadata check and open"
+        );
+
+        let current = fs::symlink_metadata(&path).unwrap();
+        let target = root.join("target.json");
+        fs::write(&target, BASELINE).unwrap();
+        fs::remove_file(&path).unwrap();
+        std::os::unix::fs::symlink(&target, &path).unwrap();
+        assert!(read_fixture_with_observed_metadata(&path, &current).is_err());
+        assert!(read_fixture_bounded(&path).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
 }
