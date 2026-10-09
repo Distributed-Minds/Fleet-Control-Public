@@ -108,6 +108,43 @@ fn invalid_utf8_manifest_does_not_leak_partial_batch_explanation() {
 }
 
 #[test]
+fn cumulative_input_limit_rejects_many_individually_valid_manifests_atomically() {
+    let root = Scratch::new();
+    // Every invocation entry is individually valid and exactly 1 MiB.
+    // An unbounded collector formerly retained all entries before validating
+    // duplicate IDs. The 17th input must instead trip the cumulative budget.
+    let padded = format!("{LUANTI}{}", " ".repeat(1024 * 1024 - LUANTI.len()));
+    let manifest = root.file("padded.json", &padded);
+    let args: Vec<&Path> = std::iter::repeat(manifest.as_path()).take(17).collect();
+    let output = invoke(&args);
+    assert!(!output.status.success(), "oversized batch was accepted");
+    assert!(
+        output.stdout.is_empty(),
+        "oversized batch leaked an explanation prefix"
+    );
+    assert!(
+        stderr(&output).contains("manifest batch exceeds 16 MiB cumulative input limit"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn excessive_manifest_argument_count_is_rejected_before_parsing() {
+    let root = Scratch::new();
+    let manifest = root.file("pilot.json", OPENRA);
+    let args: Vec<&Path> = std::iter::repeat(manifest.as_path()).take(257).collect();
+    let output = invoke(&args);
+    assert!(!output.status.success(), "excessive fan-out was accepted");
+    assert!(output.stdout.is_empty(), "argument overflow leaked output");
+    assert!(
+        stderr(&output).contains("maximum 256"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
 fn accepted_batch_is_order_independent_and_does_not_upgrade_rights() {
     let root = Scratch::new();
     let luanti = root.file("luanti.json", LUANTI);
