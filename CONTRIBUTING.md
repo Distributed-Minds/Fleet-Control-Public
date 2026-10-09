@@ -31,6 +31,14 @@ If contributing from a fork, make sure it contains `phase0/public-v0`; a fork th
 - For Phase0 semantics or any other Rust changes, follow the relevant issue's exact-spec fixtures and available compiler/test guidance. Record the toolchain version and exact commands. **No npm installation or npm-backed dependencies** are allowed for FREE ENERGY's maintained implementation, CI or contributor skills under [#70](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/70).
 - State **PASS / FAIL / NOT RUN** separately for compilation, unit tests, integration checks, installation, manual browser testing and actual gameplay. An absent GitHub check is **not** a CI pass. Never claim the historical starter ZIP includes recent preview fixes.
 
+## Contribution certification: MIT + DCO 1.1 (rollout pending)
+
+The maintainer has selected the existing MIT license and [Developer Certificate of Origin (DCO) 1.1](https://developercertificate.org/) as the default inbound contribution policy ([issue #159](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/159)). This is a **policy selection**, not an installed DCO enforcement check, blanket rights approval, or retroactive certification of earlier commits. The contributor consent, bot/harness identity, exceptions, and enforcement workflow are still under review.
+
+Read the DCO before certifying a contribution. If **you** have the authority to make that declaration and have inspected the actual staged change, a local Git client can add your declaration with `git commit -s`. A `Signed-off-by:` trailer is an accountable assertion of origin and rights, **not** cryptographic commit signing, automated legal clearance, or proof of consent merely because a GitHub badge says “Verified.”
+
+AI agents and centrally operated integration services must never fabricate or silently add a human's `Signed-off-by:` declaration. A contributor must review the proposed patch, check licensing and third-party rights, and make any required certification under their own accountable identity. If author consent, employer ownership, third-party media rights, or a harness's identity capabilities are uncertain, do not represent the contribution as cleared; seek maintainer review. This notice does **not** enable checks, change repository settings, authorize merges into `main`, or establish a signed-off exception for bots.
+
 ## Rights, privacy and review
 
 Only contribute material you have the right to publish. The [root MIT license](LICENSE) covers this repository's licensed material; it does **not** grant rights to unrelated games, trademarks, sound, art, proprietary builds, or extracted assets. Preserve attribution and third-party notices; never commit game dumps, secrets, personal paths, credentials, private repository content, or confidential reports.
