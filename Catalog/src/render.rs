@@ -214,10 +214,10 @@ mod tests {
             "every mutated outbound URL must become non-clickable"
         );
         for forbidden in [
-            "href=\\"javascript:",
-            "href=\\"https://127.0.0.1",
-            "href=\\"https://valid.org/%2f",
-            "href=\\"https://localhost",
+            "href=\"javascript:",
+            "href=\"https://127.0.0.1",
+            "href=\"https://valid.org/%2f",
+            "href=\"https://localhost",
         ] {
             assert!(!html.contains(forbidden), "unsafe rendered link: {forbidden}");
         }
@@ -229,7 +229,7 @@ mod tests {
     fn admitted_pilot_urls_remain_clickable_in_the_static_renderer() {
         let project = validate_manifest(LUANTI).expect("valid pilot");
         let html = render_catalog(&[project]);
-        assert!(html.contains("<a href=\\"https://"));
+        assert!(html.contains("<a href=\"https://"));
         assert!(!html.contains("link withheld:"));
     }
 
