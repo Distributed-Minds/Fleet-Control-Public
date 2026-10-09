@@ -352,6 +352,13 @@ const MAX_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
 fn read_bounded_fixture(path: &std::path::Path) -> Result<String, String> {
     let pre = std::fs::symlink_metadata(path)
         .map_err(|error| format!("cannot inspect merge-base fixture {path:?}: {error}"))?;
+    read_bounded_fixture_with_metadata(path, &pre)
+}
+
+fn read_bounded_fixture_with_metadata(
+    path: &std::path::Path,
+    pre: &std::fs::Metadata,
+) -> Result<String, String> {
     if !pre.file_type().is_file() {
         return Err(format!(
             "merge-base fixture {path:?} must be a regular file (no symlinks)"
@@ -363,7 +370,19 @@ fn read_bounded_fixture(path: &std::path::Path) -> Result<String, String> {
         ));
     }
 
-    let opened = std::fs::File::open(path)
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // A path swapped for a FIFO after the metadata check must not block
+        // the runner; a final-component symlink replacement must not follow.
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let opened = options
+        .open(path)
         .map_err(|error| format!("cannot read merge-base fixture {path:?}: {error}"))?;
     let actual = opened
         .metadata()
@@ -372,6 +391,15 @@ fn read_bounded_fixture(path: &std::path::Path) -> Result<String, String> {
         return Err(format!(
             "opened merge-base fixture {path:?} is not a regular file"
         ));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if pre.dev() != actual.dev() || pre.ino() != actual.ino() {
+            return Err(format!(
+                "merge-base fixture {path:?} changed between metadata check and open"
+            ));
+        }
     }
     if actual.len() > MAX_FIXTURE_BYTES {
         return Err(format!(
@@ -517,6 +545,44 @@ mod tests {
             .clone();
         readable.history_view = "café-λ".to_owned();
         assert!(compute(&readable).is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn fixture_open_rejects_identical_bytes_from_replaced_inode_and_symlink_swap() {
+        let scratch = std::env::temp_dir().join(format!(
+            "free-energy-merge-base-open-fence-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&scratch).unwrap();
+        let path = scratch.join("fixture.json");
+        let replacement = scratch.join("replacement.json");
+        std::fs::write(&path, FIXTURES).unwrap();
+        std::fs::write(&replacement, FIXTURES).unwrap();
+        let before = std::fs::symlink_metadata(&path).unwrap();
+        std::fs::rename(&replacement, &path).unwrap();
+        assert!(
+            read_bounded_fixture_with_metadata(&path, &before)
+                .unwrap_err()
+                .contains("changed between metadata check and open"),
+            "byte-identical replacement must not hide changed file identity"
+        );
+
+        let before_link = std::fs::symlink_metadata(&path).unwrap();
+        let target = scratch.join("target.json");
+        std::fs::write(&target, FIXTURES).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        std::os::unix::fs::symlink(&target, &path).unwrap();
+        assert!(
+            read_bounded_fixture_with_metadata(&path, &before_link).is_err(),
+            "symlink substitution after inspection must be rejected"
+        );
+        assert!(read_bounded_fixture(&path).is_err());
+        std::fs::remove_dir_all(&scratch).unwrap();
     }
 
     #[test]
