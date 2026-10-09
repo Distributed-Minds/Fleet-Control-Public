@@ -410,7 +410,9 @@ mod tests {
         let (archived, live) = histories();
         let first = witness(&live[0]);
         let second = witness(&live[1]);
-        assert!(plan_compaction(&archived, &live, &cut(), &[first.clone(), second.clone()]).is_ok());
+        assert!(
+            plan_compaction(&archived, &live, &cut(), &[first.clone(), second.clone()]).is_ok()
+        );
 
         let mut stale_generation = cut();
         stale_generation.manifest.generation += 1;

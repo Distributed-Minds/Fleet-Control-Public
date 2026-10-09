@@ -211,8 +211,15 @@ fn replay_cut_manifest_must_match_a_self_consistent_compaction_batch() {
         Err(PlanFailure::InconsistentWitness)
     );
     assert_eq!(
-        plan_compaction(&archived, &live, &cut(), &[witness(&live[0]), witness(&live[1])])
-            .expect("same manifest is coherent").model_removals.len(),
+        plan_compaction(
+            &archived,
+            &live,
+            &cut(),
+            &[witness(&live[0]), witness(&live[1])]
+        )
+        .expect("same manifest is coherent")
+        .model_removals
+        .len(),
         2
     );
 }
