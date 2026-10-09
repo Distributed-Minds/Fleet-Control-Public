@@ -395,6 +395,23 @@ fn read_fixture_with_metadata(path: &Path, before: &fs::Metadata) -> Result<Stri
 }
 
 fn read_fixture_bounded(path: &Path) -> Result<String, String> {
+    // On Linux, a symlink in an ancestor is otherwise followed even when
+    // symlink_metadata rejects a symlink at the final component. This is a
+    // static path-admission check, not an atomic defense against parent swaps.
+    #[cfg(target_os = "linux")]
+    for ancestor in path.ancestors().skip(1) {
+        if ancestor.as_os_str().is_empty() {
+            break;
+        }
+        let meta = fs::symlink_metadata(ancestor)
+            .map_err(|err| format!("cannot stat fixture ancestor {ancestor:?}: {err}"))?;
+        if meta.file_type().is_symlink() {
+            return Err(format!(
+                "adaptive-stress fixture ancestor {ancestor:?} must not be a symlink"
+            ));
+        }
+    }
+
     let before =
         fs::symlink_metadata(path).map_err(|err| format!("cannot stat {path:?}: {err}"))?;
     read_fixture_with_metadata(path, &before)
@@ -482,6 +499,22 @@ mod tests {
             let link = scratch.join("shortcut.json");
             std::os::unix::fs::symlink(&input, &link).unwrap();
             assert!(read_fixture_bounded(&link).is_err());
+
+            #[cfg(target_os = "linux")]
+            {
+                let ancestor_link = scratch.with_extension("alias");
+                std::os::unix::fs::symlink(&scratch, &ancestor_link).unwrap();
+                let through_ancestor = ancestor_link.join("adaptive.json");
+                let failure = read_fixture_bounded(&through_ancestor)
+                    .expect_err("symlinked parent must not bypass leaf-file admission");
+                assert!(
+                    failure.contains("ancestor") && failure.contains("symlink"),
+                    "{failure}"
+                );
+                fs::remove_file(ancestor_link).unwrap();
+                // The canonical path to the same regular file remains valid.
+                assert_eq!(read_fixture_bounded(&input).unwrap(), HISTORICAL);
+            }
 
             let observed = fs::symlink_metadata(&input).unwrap();
             let replacement = scratch.join("replacement.json");
