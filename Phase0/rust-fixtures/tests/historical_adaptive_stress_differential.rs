@@ -172,6 +172,17 @@ fn computed_outcomes_follow_changed_facts_not_historical_expected_labels() {
         case_mut(&mut mutated, name)[*verdict] = new_verdict.clone();
         if *name == "evaluation-budget-exhaustion" || *name == "family-budget-exhaustion" {
             case_mut(&mut mutated, name)["fresh_workload"] = json!(true);
+
+            // A positive observation for only one dimension must NOT mint
+            // a missing independent budget. Adding an expected verdict is not
+            // evidence that the other budget was actually observed.
+            check_rust(&mutated, false, "positive budget with missing counterpart");
+            let other_budget = if *name == "evaluation-budget-exhaustion" {
+                "family_budget_remaining"
+            } else {
+                "evaluation_budget_remaining"
+            };
+            case_mut(&mut mutated, name)[other_budget] = json!(1);
         }
         if *name == "ack-loss-reconciles-first" {
             case_mut(&mut mutated, name)["rerun"] = json!(true);
