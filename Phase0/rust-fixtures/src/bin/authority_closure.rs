@@ -824,7 +824,9 @@ mod tests {
 
         // The unmodified tracked 26-case fixture remains accepted.
         assert_eq!(
-            validate_fixture(include_str!("../../../fixtures/authority-closure-spec2.json")),
+            validate_fixture(include_str!(
+                "../../../fixtures/authority-closure-spec2.json"
+            )),
             Ok(26)
         );
     }
