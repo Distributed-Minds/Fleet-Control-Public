@@ -407,7 +407,7 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
 
     for c in &f.decision_cases {
         if !valid_case_id(&c.id) || !ids.insert(c.id.as_str()) {
-            failures.push(format!("invalid or duplicate case id: {:?}", c.id));
+            failures.push(format!("duplicate or empty case id: {:?}", c.id));
         }
         match decide(c) {
             Ok(actual) if actual == c.expected => {}
@@ -420,7 +420,7 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
     }
     for c in &f.recovery_cases {
         if !valid_case_id(&c.id) || !ids.insert(c.id.as_str()) {
-            failures.push(format!("invalid or duplicate case id: {:?}", c.id));
+            failures.push(format!("duplicate or empty case id: {:?}", c.id));
         }
         let actual = recover(c);
         if actual != c.expected {
@@ -432,7 +432,7 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
     }
     for c in &f.trace_cases {
         if !valid_case_id(&c.id) || !ids.insert(c.id.as_str()) {
-            failures.push(format!("invalid or duplicate case id: {:?}", c.id));
+            failures.push(format!("duplicate or empty case id: {:?}", c.id));
         }
         match trace(c) {
             Ok(actual) if actual == c.expected => {}
@@ -513,7 +513,7 @@ mod tests {
                 assert!(
                     errors
                         .iter()
-                        .any(|error| error.contains("invalid or duplicate case id")),
+                        .any(|error| error.contains("duplicate or empty case id")),
                     "{family}: missing explicit identity denial: {errors:?}"
                 );
                 assert!(
