@@ -361,7 +361,10 @@ mod tests {
         let mut cases = baseline();
         case_mut(&mut cases, "unique-complete").name = "invented-equivalent-case".to_owned();
         assert_eq!(cases.len(), HISTORICAL_CASE_COUNT);
-        assert!(check(&cases).is_err(), "same count must not permit replaced historical case");
+        assert!(
+            check(&cases).is_err(),
+            "same count must not permit replaced historical case"
+        );
     }
 
     #[test]
