@@ -529,8 +529,8 @@ fn run() -> Result<(), String> {
     if args.next().is_some() {
         return Err("usage: containment_capacity [fixture.json]".to_owned());
     }
-    let source = fs::read_to_string(&path)
-        .map_err(|error| format!("cannot read {path:?}: {error}"))?;
+    let source =
+        fs::read_to_string(&path).map_err(|error| format!("cannot read {path:?}: {error}"))?;
     let fixture: Fixture = serde_json::from_str(&source)
         .map_err(|error| format!("invalid fixture {path:?}: {error}"))?;
     match validate(&fixture) {

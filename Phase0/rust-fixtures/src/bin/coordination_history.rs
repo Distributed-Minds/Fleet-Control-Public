@@ -232,8 +232,7 @@ fn execute() -> Result<(), String> {
     if args.next().is_some() {
         return Err("usage: coordination_history [fixtures.json]".to_owned());
     }
-    let input =
-        fs::read_to_string(&path).map_err(|e| format!("cannot read {path:?}: {e}"))?;
+    let input = fs::read_to_string(&path).map_err(|e| format!("cannot read {path:?}: {e}"))?;
     let suite: Suite = serde_json::from_str(&input)
         .map_err(|e| format!("malformed coordination-history fixture: {e}"))?;
     match validate(&suite) {

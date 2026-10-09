@@ -353,10 +353,9 @@ fn run() -> Result<(), String> {
     if args.next().is_some() {
         return Err("usage: github_capability [fixture.json]".to_owned());
     }
-    let json =
-        fs::read_to_string(&input).map_err(|e| format!("cannot read {input:?}: {e}"))?;
-    let fixture: Fixture = serde_json::from_str(&json)
-        .map_err(|e| format!("invalid fixture {input:?}: {e}"))?;
+    let json = fs::read_to_string(&input).map_err(|e| format!("cannot read {input:?}: {e}"))?;
+    let fixture: Fixture =
+        serde_json::from_str(&json).map_err(|e| format!("invalid fixture {input:?}: {e}"))?;
     match validate(&fixture) {
         Ok(count) => {
             println!("GitHub capability invariant fixtures (Rust): {count} checked");

@@ -352,9 +352,8 @@ fn run() -> Result<usize, String> {
         return Err("usage: merge_base_topology [fixture.json]".to_owned());
     }
     let content = match input {
-        Some(path) => std::fs::read_to_string(&path).map_err(|error| {
-            format!("cannot read merge-base fixture {path:?}: {error}")
-        })?,
+        Some(path) => std::fs::read_to_string(&path)
+            .map_err(|error| format!("cannot read merge-base fixture {path:?}: {error}"))?,
         None => FIXTURES.to_owned(),
     };
     let cases: Vec<Case> = serde_json::from_str(&content)
