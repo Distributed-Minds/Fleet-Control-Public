@@ -111,6 +111,29 @@ fn read_render_manifest(path: &Path) -> Result<String, String> {
     fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))
 }
 
+/// Collect the complete manifest set only from a real project directory.
+/// A symlink at the directory boundary could otherwise redirect the preview
+/// renderer to unrelated JSON files before per-file admission takes place.
+fn collect_render_manifests(project_dir: &Path) -> Result<Vec<std::path::PathBuf>, String> {
+    validate_output_directory(project_dir)
+        .map_err(|error| format!("{}: {error}", project_dir.display()))?;
+    let entries =
+        fs::read_dir(project_dir).map_err(|error| format!("{}: {error}", project_dir.display()))?;
+    let mut paths = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|error| format!("project directory entry: {error}"))?;
+        let path = entry.path();
+        if path.extension().and_then(|extension| extension.to_str()) == Some("json") {
+            paths.push(path);
+        }
+    }
+    paths.sort();
+    if paths.is_empty() {
+        return Err("No project JSON manifests found".to_owned());
+    }
+    Ok(paths)
+}
+
 /// Render only after every local pilot manifest passes typed admission.
 /// This does not claim complete Draft 2020-12 schema or upstream rights clearance.
 fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
@@ -121,33 +144,13 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
     let check = !args.is_empty();
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let project_dir = root.join("projects");
-    let entries = match fs::read_dir(&project_dir) {
-        Ok(entries) => entries,
+    let paths = match collect_render_manifests(&project_dir) {
+        Ok(paths) => paths,
         Err(error) => {
-            eprintln!("{}: {error}", project_dir.display());
+            eprintln!("{error}");
             return ExitCode::FAILURE;
         }
     };
-    let mut paths = Vec::new();
-    for entry in entries {
-        match entry {
-            Ok(entry) => {
-                let path = entry.path();
-                if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                    paths.push(path);
-                }
-            }
-            Err(error) => {
-                eprintln!("project directory entry: {error}");
-                return ExitCode::FAILURE;
-            }
-        }
-    }
-    paths.sort();
-    if paths.is_empty() {
-        eprintln!("No project JSON manifests found");
-        return ExitCode::FAILURE;
-    }
     let mut records = Vec::new();
     let mut ids = HashSet::new();
     let mut problems = Vec::new();
@@ -485,6 +488,56 @@ mod render_manifest_file_admission_tests {
         fn drop(&mut self) {
             fs::remove_dir_all(&self.0).expect("remove isolated fixture");
         }
+    }
+
+    #[test]
+    fn only_json_children_of_a_real_project_directory_are_sorted() {
+        let sandbox = Sandbox::new();
+        let projects = sandbox.0.join("projects");
+        fs::create_dir(&projects).expect("create project source");
+        fs::write(projects.join("z.json"), PILOT).expect("write last manifest");
+        fs::write(projects.join("a.json"), PILOT).expect("write first manifest");
+        fs::write(projects.join("notes.txt"), "not a manifest").expect("write unrelated file");
+        let files = super::collect_render_manifests(&projects).expect("admit real directory");
+        assert_eq!(
+            files,
+            vec![projects.join("a.json"), projects.join("z.json")]
+        );
+    }
+
+    #[test]
+    fn missing_empty_or_nondirectory_project_sources_fail_closed() {
+        let sandbox = Sandbox::new();
+        let missing = sandbox.0.join("missing");
+        assert!(super::collect_render_manifests(&missing).is_err());
+        let regular_file = sandbox.0.join("projects");
+        fs::write(&regular_file, PILOT).expect("create file instead of directory");
+        assert!(super::collect_render_manifests(&regular_file).is_err());
+        fs::remove_file(&regular_file).expect("remove file");
+        fs::create_dir(&regular_file).expect("create empty directory");
+        assert!(super::collect_render_manifests(&regular_file).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn project_directory_symlink_cannot_redirect_render_inputs() {
+        use std::os::unix::fs::symlink;
+
+        let sandbox = Sandbox::new();
+        let external = sandbox.0.join("unrelated-projects");
+        fs::create_dir(&external).expect("create outside source directory");
+        fs::write(external.join("project.json"), PILOT).expect("seed outside data");
+        let project_alias = sandbox.0.join("projects");
+        symlink(&external, &project_alias).expect("redirect project directory");
+
+        let error = super::collect_render_manifests(&project_alias)
+            .expect_err("symlinked directory must never supply rendered projects");
+        assert!(error.contains("symlink prohibited"), "{error}");
+        assert_eq!(
+            fs::read_to_string(external.join("project.json")).unwrap(),
+            PILOT,
+            "rejected input must remain unchanged"
+        );
     }
 
     #[test]
