@@ -217,7 +217,7 @@ fn parse_destination(raw: &str) -> Result<Option<String>, String> {
             .iter()
             .enumerate()
             .any(|(index, byte)| {
-                matches!(byte, b'(' | b')') && !preceded_by_escape(path.as_bytes(), index)
+                matches!(*byte, b'(' | b')') && !preceded_by_escape(path.as_bytes(), index)
             });
         if has_unescaped_paren || path.contains('<') || path.contains('>') {
             return Err("unsupported nested/angle destination syntax".into());
