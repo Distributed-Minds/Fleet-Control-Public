@@ -18,7 +18,10 @@ const MAX_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
 
 /// File admission is bounded independently of typed fixture validation.
 /// This offline tool is not a provider authority or a live revocation path.
-fn read_fixture_with_observed_metadata(path: &Path, observed: &fs::Metadata) -> Result<String, String> {
+fn read_fixture_with_observed_metadata(
+    path: &Path,
+    observed: &fs::Metadata,
+) -> Result<String, String> {
     if !observed.file_type().is_file() {
         return Err("fixture must be a regular, non-symlink file".to_owned());
     }
@@ -36,7 +39,9 @@ fn read_fixture_with_observed_metadata(path: &Path, observed: &fs::Metadata) -> 
         const O_NOFOLLOW: i32 = 0o400000;
         options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
     }
-    let file = options.open(path).map_err(|error| format!("cannot open {path:?}: {error}"))?;
+    let file = options
+        .open(path)
+        .map_err(|error| format!("cannot open {path:?}: {error}"))?;
     let opened = file.metadata().map_err(|error| error.to_string())?;
     if !opened.file_type().is_file() {
         return Err("opened fixture is not a regular file".to_owned());
@@ -62,7 +67,8 @@ fn read_fixture_with_observed_metadata(path: &Path, observed: &fs::Metadata) -> 
 }
 
 fn read_fixture(path: &Path) -> Result<String, String> {
-    let observed = fs::symlink_metadata(path).map_err(|error| format!("cannot inspect {path:?}: {error}"))?;
+    let observed =
+        fs::symlink_metadata(path).map_err(|error| format!("cannot inspect {path:?}: {error}"))?;
     read_fixture_with_observed_metadata(path, &observed)
 }
 
@@ -447,8 +453,7 @@ fn main() {
         eprintln!("Usage: authority_closure <Phase0/fixtures/authority-closure-spec2.json>");
         process::exit(2);
     }
-    let outcome = read_fixture(Path::new(&args[1]))
-        .and_then(|source| validate_fixture(&source));
+    let outcome = read_fixture(Path::new(&args[1])).and_then(|source| validate_fixture(&source));
     match outcome {
         Ok(count) => println!("authority closure Rust semantic fixtures: {count} cases passed"),
         Err(reason) => {
