@@ -315,7 +315,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn rotation_requires_successor_epoch_and_budget_safe_standby() {
         let mut o = snapshot(1990);
