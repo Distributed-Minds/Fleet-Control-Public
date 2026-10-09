@@ -170,6 +170,25 @@ fn select_active(records: [Observation<'_>; 2], trusted: &str) -> Result<SlotRec
     }
 }
 
+// Comparing path metadata alone cannot protect the metadata-to-open race.
+// On Unix, dev+ino identify the opened file even when a replacement has
+// identical bytes and length. This remains input hygiene, not attestation
+// of the GitHub issue or a trusted provider snapshot.
+fn verify_opened_identity(expected: &fs::Metadata, opened: &fs::File) -> Result<(), String> {
+    let actual = opened.metadata().map_err(|e| e.to_string())?;
+    if !actual.file_type().is_file() {
+        return Err("coordination body opened as non-regular file".to_owned());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if expected.dev() != actual.dev() || expected.ino() != actual.ino() {
+            return Err("coordination body changed between metadata check and open".to_owned());
+        }
+    }
+    Ok(())
+}
+
 fn read_body(path: &str) -> Result<String, String> {
     let metadata = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
     // A FIFO/device could block indefinitely; a symlink could point outside
@@ -183,6 +202,9 @@ fn read_body(path: &str) -> Result<String, String> {
     // Metadata checks alone are racy: cap the actual read too, so an appended
     // or swapped file cannot make this advisory parser allocate without bound.
     let file = fs::File::open(path).map_err(|e| e.to_string())?;
+    // The path may have been swapped after symlink_metadata. Bind the open
+    // descriptor to the original regular-file identity before reading.
+    verify_opened_identity(&metadata, &file)?;
     let mut body = String::new();
     file.take(MAX_BODY_BYTES + 1)
         .read_to_string(&mut body)
@@ -418,6 +440,33 @@ mod tests {
                 .unwrap_err()
                 .contains("regular, non-symlink"));
         }
+        fs::remove_dir_all(&scratch).expect("remove isolated test directory");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn changed_file_identity_is_rejected_even_if_bytes_and_length_match() {
+        let scratch = std::env::temp_dir().join(format!(
+            "free-energy-slot-open-identity-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&scratch).expect("create isolated test directory");
+        let path = scratch.join("slot");
+        let replacement = scratch.join("replacement");
+        fs::write(&path, A).expect("write initial issue body");
+        fs::write(&replacement, A).expect("write byte-identical replacement");
+        let snapshot = fs::symlink_metadata(&path).expect("initial metadata");
+        let original = fs::File::open(&path).expect("open initial body");
+        assert!(verify_opened_identity(&snapshot, &original).is_ok());
+
+        // Deterministically simulate replacement between symlink_metadata and
+        // File::open; size checks and content comparisons cannot catch this.
+        fs::rename(&replacement, &path).expect("replace body file");
+        let swapped = fs::File::open(&path).expect("open replaced body");
+        assert_eq!(
+            verify_opened_identity(&snapshot, &swapped).unwrap_err(),
+            "coordination body changed between metadata check and open"
+        );
         fs::remove_dir_all(&scratch).expect("remove isolated test directory");
     }
 
