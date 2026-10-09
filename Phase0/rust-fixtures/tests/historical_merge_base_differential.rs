@@ -97,7 +97,13 @@ fn case<'a>(root: &'a mut Value, name: &str) -> &'a mut Value {
         .expect("historical case")
 }
 
-fn assert_exit(label: &str, name: &str, result: &Output, expected_success: bool) {
+fn assert_exit(
+    label: &str,
+    name: &str,
+    result: &Output,
+    expected_success: bool,
+    expected_count: usize,
+) {
     let stdout = String::from_utf8_lossy(&result.stdout);
     let stderr = String::from_utf8_lossy(&result.stderr);
     assert_eq!(
@@ -106,12 +112,12 @@ fn assert_exit(label: &str, name: &str, result: &Output, expected_success: bool)
         "{label}: {name} unexpected exit: stdout={stdout} stderr={stderr}"
     );
     let marker = if name == "Python" {
-        "PASS: 12 modeled cases + 4 real Git topology probes"
+        format!("PASS: {expected_count} modeled cases + 4 real Git topology probes")
     } else {
-        "merge-base-topology: 12 read-only model fixtures PASS"
+        "merge-base-topology: 12 read-only model fixtures PASS".to_owned()
     };
     assert_eq!(
-        stdout.contains(marker),
+        stdout.contains(&marker),
         expected_success,
         "{label}: {name} success marker does not match status: {stdout}"
     );
@@ -119,13 +125,15 @@ fn assert_exit(label: &str, name: &str, result: &Output, expected_success: bool)
 
 fn check_rust(label: &str, value: &Value, accepted: bool) {
     let input = FixtureFile::new(value);
-    assert_exit(label, "Rust", &run_rust(&input.0), accepted);
+    let count = value.as_array().expect("cases").len();
+    assert_exit(label, "Rust", &run_rust(&input.0), accepted, count);
 }
 
 fn check_both(label: &str, value: &Value, python_accept: bool, rust_accept: bool) {
     let input = FixtureFile::new(value);
-    assert_exit(label, "Python", &run_python(&input.0), python_accept);
-    assert_exit(label, "Rust", &run_rust(&input.0), rust_accept);
+    let count = value.as_array().expect("cases").len();
+    assert_exit(label, "Python", &run_python(&input.0), python_accept, count);
+    assert_exit(label, "Rust", &run_rust(&input.0), rust_accept, count);
 }
 
 #[test]
