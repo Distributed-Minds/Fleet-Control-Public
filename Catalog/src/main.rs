@@ -346,7 +346,7 @@ mod tests {
         assert!(
             failures
                 .iter()
-                .any(|error| error.contains("\\"two.json\\": duplicate project ID:")),
+                .any(|error| error.contains("\"two.json\": duplicate project ID:")),
             "{failures:?}"
         );
     }
