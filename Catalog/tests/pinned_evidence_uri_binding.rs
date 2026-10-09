@@ -87,3 +87,14 @@ fn supported_gitlab_permalink_layout_is_checked_without_remote_trust() {
     // Structural equality, not a claim that this GitLab revision exists.
     validate_manifest(&manifest).expect("canonical GitLab structural permalink admitted");
 }
+
+#[test]
+fn pinned_file_paths_with_ordinary_interior_spaces_use_encoded_permalinks() {
+    let input = mutate_evidence(LUANTI, "license-snapshot", |item| {
+        item["path"] = json!("docs/license documents/LICENSE notice.txt");
+        item["url"] = json!(
+            "https://github.com/luanti-org/luanti/blob/9a1b92d0d4d2c47fced18e6077722c6301eb04f5/docs/license%20documents/LICENSE%20notice.txt"
+        );
+    });
+    validate_manifest(&input).expect("safe spaces are canonicalized as %20 in pinned URL");
+}
