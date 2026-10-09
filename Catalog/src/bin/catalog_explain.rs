@@ -1,0 +1,331 @@
+//! Offline, machine-readable inspection of draft FREE ENERGY project records.
+//!
+//! This command is a READ-ONLY view of the typed v0 admission boundary, not a
+//! complete JSON Schema validator, human rights approval, a playtest, or a
+//! remotely verified upstream-currentness check. It does not contact providers.
+//! Usage: catalog_explain <manifest.json> [manifest.json ...]
+//!
+//! On any invalid file, duplicate project ID, or unsafe input path, stdout
+//! remains empty and the command fails: callers never receive partial success.
+
+use free_energy_catalog::{AdapterStatus, PermissionStatus, PlayStatus, Project};
+use serde_json::{json, Value};
+use std::{
+    collections::HashSet,
+    env, fs,
+    path::{Path, PathBuf},
+    process::ExitCode,
+};
+
+fn play_status(status: &PlayStatus) -> &'static str {
+    match status {
+        PlayStatus::EngineOnly => "ENGINE_ONLY",
+        PlayStatus::UpstreamLinkOnly => "UPSTREAM_LINK_ONLY",
+        PlayStatus::FreeEnergyVerified => "FREE_ENERGY_VERIFIED",
+        PlayStatus::Unavailable => "UNAVAILABLE_EVIDENCED",
+        PlayStatus::Unknown => "UNKNOWN",
+    }
+}
+
+fn adapter_status(status: &AdapterStatus) -> &'static str {
+    match status {
+        AdapterStatus::None => "NONE",
+        AdapterStatus::Proposed => "PROPOSED",
+        AdapterStatus::Tested => "TESTED",
+    }
+}
+
+fn permission_status(status: &PermissionStatus) -> &'static str {
+    match status {
+        PermissionStatus::ReviewRequired => "REVIEW_REQUIRED",
+        PermissionStatus::NotAuthorized => "NOT_AUTHORIZED",
+    }
+}
+
+/// A JSON object is used as a transport envelope; only admitted typed values
+/// are emitted. An ordinary claim, reviewer string, or license expression
+/// cannot be promoted into FREE ENERGY redistribution authorization.
+fn explain(project: &Project, source_file: &str) -> Value {
+    let mut permissions: Vec<_> = project.permission_decisions.iter().collect();
+    permissions.sort_by(|a, b| {
+        (&a.component, &a.scope, &a.use_kind).cmp(&(&b.component, &b.scope, &b.use_kind))
+    });
+    let permissions: Vec<_> = permissions
+        .into_iter()
+        .map(|decision| {
+            json!({
+                "component": &decision.component,
+                "scope": &decision.scope,
+                "use": &decision.use_kind,
+                "decision": permission_status(&decision.decision),
+                "reason": &decision.decision_reason,
+                "evidence_ids": &decision.review_evidence_ids
+            })
+        })
+        .collect();
+
+    let mut claims: Vec<_> = project.rights_claims.iter().collect();
+    claims.sort_by(|a, b| a.claim_id.cmp(&b.claim_id));
+    let claims: Vec<_> = claims
+        .into_iter()
+        .map(|claim| {
+            json!({
+                "id": &claim.claim_id,
+                "component": &claim.component,
+                "scope": &claim.scope,
+                "scope_kind": &claim.scope_kind,
+                "license_id": &claim.license_id,
+                "statement": &claim.statement,
+                "status": &claim.status,
+                "evidence_ids": &claim.evidence_ids,
+                "restrictions": &claim.exceptions_or_restrictions
+            })
+        })
+        .collect();
+
+    let mut evidence: Vec<_> = project.evidence.iter().collect();
+    evidence.sort_by(|a, b| a.evidence_id.cmp(&b.evidence_id));
+    let evidence: Vec<_> = evidence
+        .into_iter()
+        .map(|item| {
+            json!({
+                "id": &item.evidence_id,
+                "kind": &item.evidence_kind,
+                "subject_scope": &item.subject_scope,
+                "url": &item.url,
+                "observed_at": &item.observed_at,
+                "currentness": &item.currentness,
+                "repository": &item.repository,
+                "commit": &item.commit,
+                "path": &item.path
+            })
+        })
+        .collect();
+
+    json!({
+        "explanation_schema": "free-energy.catalog-explanation/v1",
+        "project_id": &project.id,
+        "display_name": &project.display_name,
+        "kind": &project.kind,
+        "input_manifest": source_file,
+        "source": {
+            "canonical_url": &project.upstream.canonical_source_url,
+            "revision": &project.upstream.source_revision,
+            "revision_unpinned_reason": &project.upstream.source_revision_reason,
+            "contribution_url": &project.upstream.contribution_url,
+            "issues_url": &project.upstream.issue_url,
+            "mirror_urls_read_only": &project.upstream.read_only_mirror_urls
+        },
+        "play": {
+            "status": play_status(&project.play.status),
+            "download_url_upstream_only": &project.play.upstream_download_url,
+            "content_requirements": &project.play.content_requirements,
+            "local_test_evidence_id": &project.play.local_test_evidence_id,
+            "free_energy_hosted_download": false
+        },
+        "adapter": {
+            "status": adapter_status(&project.adapter.status),
+            "target_id": &project.adapter.target_id,
+            "test_evidence_id": &project.adapter.test_evidence_id
+        },
+        "rights": {
+            "free_energy_redistribution_authorized": false,
+            "permission_decisions": permissions,
+            "upstream_claims_not_clearance": claims
+        },
+        "evidence": evidence,
+        "record_review": {
+            "status": &project.review.record_status,
+            "observed_at": &project.review.reviewed_at,
+            "reviewer_string_not_authenticated": &project.review.reviewer
+        },
+        "limitations": [
+            "Typed admission is not complete Draft 2020-12 validation.",
+            "Publisher claims and contributor review metadata do not grant redistribution rights.",
+            "Upstream links, build, local play and adapter conformance are not verified by this command."
+        ]
+    })
+}
+
+/// Validate the complete batch before returning even one explanation. This
+/// protects consumers from accepting a prefix before a later input fails.
+fn explain_sources<'a, I>(sources: I) -> Result<Vec<Value>, Vec<String>>
+where
+    I: IntoIterator<Item = (&'a str, &'a str)>,
+{
+    let mut seen = HashSet::new();
+    let mut accepted = Vec::new();
+    let mut errors = Vec::new();
+
+    for (filename, source) in sources {
+        match free_energy_catalog::validate_manifest(source) {
+            Ok(project) => {
+                if !seen.insert(project.id.clone()) {
+                    errors.push(format!("{filename:?}: duplicate project ID {:?}", project.id));
+                } else {
+                    accepted.push((project.id.clone(), explain(&project, filename)));
+                }
+            }
+            Err(problems) => errors.extend(
+                problems
+                    .into_iter()
+                    .map(|problem| format!("{filename:?}: {problem}")),
+            ),
+        }
+    }
+    if !errors.is_empty() {
+        errors.sort();
+        return Err(errors);
+    }
+    accepted.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok(accepted.into_iter().map(|(_, explanation)| explanation).collect())
+}
+
+/// Reject symlinks and directories before reading. This does not pretend to
+/// defend against a privileged concurrent replacement of the same pathname.
+fn read_file(path: &Path) -> Result<String, String> {
+    let metadata = fs::symlink_metadata(path).map_err(|error| format!("{path:?}: {error}"))?;
+    if !metadata.file_type().is_file() {
+        return Err(format!("{path:?}: expected a regular non-symlink JSON file"));
+    }
+    fs::read_to_string(path).map_err(|error| format!("{path:?}: {error}"))
+}
+
+fn execute(args: Vec<PathBuf>) -> Result<String, Vec<String>> {
+    if args.is_empty() {
+        return Err(vec![
+            "Usage: catalog_explain <manifest.json> [manifest.json ...]".to_owned(),
+        ]);
+    }
+
+    let mut files = Vec::new();
+    let mut errors = Vec::new();
+    for path in args {
+        let filename = path.to_string_lossy().into_owned();
+        match read_file(&path) {
+            Ok(text) => files.push((filename, text)),
+            Err(error) => errors.push(error),
+        }
+    }
+    let inspected = explain_sources(
+        files
+            .iter()
+            .map(|(filename, contents)| (filename.as_str(), contents.as_str())),
+    );
+    match inspected {
+        Ok(items) if errors.is_empty() => serde_json::to_string_pretty(&items)
+            .map_err(|error| vec![format!("JSON encoding failed: {error}")]),
+        Ok(_) => {
+            errors.sort();
+            Err(errors)
+        }
+        Err(mut problems) => {
+            errors.append(&mut problems);
+            errors.sort();
+            Err(errors)
+        }
+    }
+}
+
+fn main() -> ExitCode {
+    let args = env::args_os().skip(1).map(PathBuf::from).collect();
+    match execute(args) {
+        Ok(output) => {
+            println!("{output}");
+            ExitCode::SUCCESS
+        }
+        Err(errors) => {
+            for error in errors {
+                eprintln!("{error}");
+            }
+            ExitCode::FAILURE
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const LUANTI: &str = include_str!("../../projects/luanti.json");
+    const OPENRA: &str = include_str!("../../projects/openra.json");
+    const VELOREN: &str = include_str!("../../projects/veloren.json");
+
+    #[test]
+    fn all_three_pilots_produce_deterministic_separate_explanations() {
+        let first = explain_sources([
+            ("veloren.json", VELOREN),
+            ("openra.json", OPENRA),
+            ("luanti.json", LUANTI),
+        ])
+        .expect("all original typed pilot manifests admitted");
+        let second = explain_sources([
+            ("luanti.json", LUANTI),
+            ("veloren.json", VELOREN),
+            ("openra.json", OPENRA),
+        ])
+        .expect("input ordering cannot change transport output");
+        assert_eq!(first, second);
+        assert_eq!(first.len(), 3);
+        assert_eq!(first[0]["project_id"], "engine/luanti");
+        assert_eq!(first[1]["project_id"], "engine/openra");
+        assert_eq!(first[2]["project_id"], "game/veloren");
+        for project in first {
+            assert_eq!(project["rights"]["free_energy_redistribution_authorized"], false);
+            assert_eq!(project["play"]["free_energy_hosted_download"], false);
+            assert_eq!(project["record_review"]["status"], "DRAFT");
+            assert!(
+                project["rights"]["permission_decisions"]
+                    .as_array()
+                    .is_some_and(|decisions| !decisions.is_empty())
+            );
+        }
+    }
+
+    #[test]
+    fn known_engine_does_not_become_claimed_playable_or_reusable() {
+        let result = explain_sources([("luanti.json", LUANTI)]).unwrap();
+        assert_eq!(result[0]["play"]["status"], "ENGINE_ONLY");
+        assert_eq!(
+            result[0]["rights"]["permission_decisions"][0]["decision"],
+            "REVIEW_REQUIRED"
+        );
+        assert_eq!(
+            result[0]["source"]["contribution_url"],
+            "https://github.com/luanti-org/luanti/pulls"
+        );
+    }
+
+    #[test]
+    fn invalid_tail_and_duplicate_identity_reject_entire_batch() {
+        let invalid = explain_sources([
+            ("valid.json", LUANTI),
+            ("malformed.json", r#"{"schema":"free-energy.project/v0"}"#),
+        ]);
+        assert!(invalid.is_err(), "no successful prefix can be returned");
+        let duplicate = explain_sources([
+            ("one.json", OPENRA),
+            ("two.json", OPENRA),
+        ])
+        .unwrap_err();
+        assert!(duplicate.iter().any(|error| error.contains("duplicate project ID")));
+        assert!(duplicate.iter().any(|error| error.contains("\"two.json\"")));
+    }
+
+    #[test]
+    fn untrusted_metadata_is_json_escaped_not_rendered_as_markup() {
+        let mut project = free_energy_catalog::validate_manifest(LUANTI).unwrap();
+        project.display_name = "<img src=x onerror=alert(1)>".to_owned();
+        let encoded = serde_json::to_string(&explain(&project, "bad\nsource.json")).unwrap();
+        assert!(encoded.contains(r#"\nsource.json"#));
+        assert!(encoded.contains("<img src=x onerror=alert(1)>"));
+        assert!(!encoded.contains("<h2>"));
+        let decoded: Value = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(decoded["display_name"], "<img src=x onerror=alert(1)>");
+    }
+
+    #[test]
+    fn empty_invocation_fails_without_false_success() {
+        assert!(execute(Vec::new()).is_err());
+    }
+}
