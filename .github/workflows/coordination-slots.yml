@@ -1,0 +1,188 @@
+name: Coordination slots maintenance
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coordination-slots-maintenance
+  cancel-in-progress: false
+
+jobs:
+  status:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ vars.COORDINATION_SOURCE_REF || 'phase0/public-v0' }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Report slot status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COORDINATION_TRUSTED_AUTHORS: ${{ vars.COORDINATION_TRUSTED_AUTHORS || 'geromet' }}
+          COORDINATION_SWITCH_AT: ${{ vars.COORDINATION_SWITCH_AT || '2000' }}
+          COORDINATION_COMPACT_ABOVE: ${{ vars.COORDINATION_COMPACT_ABOVE || '1500' }}
+          COORDINATION_STANDBY_MAX: ${{ vars.COORDINATION_STANDBY_MAX || '500' }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python3 scripts/coordination_archive.py status --repo "$REPOSITORY" --config Phase0/05-FLEET-CONFIG.md --trusted-authors "$COORDINATION_TRUSTED_AUTHORS"
+
+  archive:
+    if: github.event_name != 'workflow_dispatch' && (github.event_name != 'issue_comment' || (github.event.issue.pull_request == null && contains(format(',{0},', vars.COORDINATION_TRUSTED_AUTHORS || 'geromet'), format(',{0},', github.event.comment.user.login)) && github.event.issue.comments >= 1000))
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      issues: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ vars.COORDINATION_SOURCE_REF || 'phase0/public-v0' }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Check whether the archive branch exists
+        id: archive-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          set +e
+          git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $auth" ls-remote --exit-code "https://github.com/$REPOSITORY.git" refs/heads/coordination-archive >/dev/null
+          result=$?
+          set -e
+          if [ "$result" -eq 0 ]; then echo "exists=true" >> "$GITHUB_OUTPUT"
+          elif [ "$result" -eq 2 ]; then echo "exists=false" >> "$GITHUB_OUTPUT"
+          else exit "$result"; fi
+      - name: Check out the existing archive branch
+        if: steps.archive-ref.outputs.exists == 'true'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: coordination-archive
+          path: archive-state
+          persist-credentials: false
+          fetch-depth: 0
+          token: ${{ github.token }}
+      - name: Prepare and append archive segments
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COORDINATION_TRUSTED_AUTHORS: ${{ vars.COORDINATION_TRUSTED_AUTHORS || 'geromet' }}
+          COORDINATION_SWITCH_AT: ${{ vars.COORDINATION_SWITCH_AT || '2000' }}
+          REPOSITORY: ${{ github.repository }}
+          ARCHIVE_BRANCH_EXISTS: ${{ steps.archive-ref.outputs.exists }}
+        run: |
+          set -euo pipefail
+          if [ "$ARCHIVE_BRANCH_EXISTS" = "false" ]; then
+            mkdir -p archive-state
+            git -C archive-state init -b coordination-archive
+            git -C archive-state remote add origin "https://github.com/$REPOSITORY.git"
+            source_archive=Phase0/archives/coordination/issue-52
+            if [ -d "$source_archive" ]; then
+              while IFS= read -r -d '' source_file; do
+                relative=${source_file#Phase0/archives/coordination/}
+                target="archive-state/Phase0/archives/coordination/$relative"
+                mkdir -p "$(dirname "$target")"
+                if [ -e "$target" ]; then
+                  cmp -s "$source_file" "$target" || { echo "refusing to overwrite differing archive seed: $target" >&2; exit 1; }
+                else
+                  cp -a "$source_file" "$target"
+                fi
+              done < <(find "$source_archive" -type f -print0)
+            fi
+          fi
+          cd archive-state
+          python3 ../scripts/coordination_archive.py prepare-slots --repo "$REPOSITORY" \
+            --config ../Phase0/05-FLEET-CONFIG.md --trusted-authors "$COORDINATION_TRUSTED_AUTHORS"
+          mkdir -p Phase0/archives/coordination
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Phase0/archives/coordination
+          verify_args=(verify-archive-append --archive-dir Phase0/archives/coordination)
+          if [ "$ARCHIVE_BRANCH_EXISTS" = "false" ]; then verify_args+=(--allow-empty); fi
+          python3 ../scripts/coordination_archive.py "${verify_args[@]}"
+          if ! git diff --cached --quiet; then
+            git commit -m "Update coordination issue archives"
+            auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+            git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $auth" push origin HEAD:coordination-archive
+          fi
+
+  compact:
+    needs: archive
+    if: github.event_name != 'workflow_dispatch' && (github.event_name != 'issue_comment' || (github.event.issue.pull_request == null && contains(format(',{0},', vars.COORDINATION_TRUSTED_AUTHORS || 'geromet'), format(',{0},', github.event.comment.user.login)) && github.event.issue.comments >= 1000))
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ vars.COORDINATION_SOURCE_REF || 'phase0/public-v0' }}
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: coordination-archive
+          path: archive-state
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Compact eligible issues with verified archive-branch read-back
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COORDINATION_TRUSTED_AUTHORS: ${{ vars.COORDINATION_TRUSTED_AUTHORS || 'geromet' }}
+          COORDINATION_SWITCH_AT: ${{ vars.COORDINATION_SWITCH_AT || '2000' }}
+          COORDINATION_COMPACT_ABOVE: ${{ vars.COORDINATION_COMPACT_ABOVE || '1500' }}
+          COORDINATION_STANDBY_MAX: ${{ vars.COORDINATION_STANDBY_MAX || '500' }}
+          ARCHIVE_DELETE_ENABLED: ${{ vars.ARCHIVE_DELETE_ENABLED || 'false' }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cd archive-state
+          args=(maintain --repo "$REPOSITORY" --config ../Phase0/05-FLEET-CONFIG.md --archive-ref coordination-archive)
+          if [ "$ARCHIVE_DELETE_ENABLED" = "true" ]; then args+=(--confirm-delete); fi
+          python3 ../scripts/coordination_archive.py "${args[@]}"
+
+  rotate:
+    needs: [archive, compact]
+    if: ${{ !cancelled() && needs.archive.result == 'success' && (github.event_name != 'issue_comment' || (github.event.issue.pull_request == null && contains(format(',{0},', vars.COORDINATION_TRUSTED_AUTHORS || 'geromet'), format(',{0},', github.event.comment.user.login)) && github.event.issue.comments >= 1000)) }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ vars.COORDINATION_SOURCE_REF || 'phase0/public-v0' }}
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: coordination-archive
+          path: archive-state
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Rotate only after archive read-back is available
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COORDINATION_TRUSTED_AUTHORS: ${{ vars.COORDINATION_TRUSTED_AUTHORS || 'geromet' }}
+          COORDINATION_SWITCH_AT: ${{ vars.COORDINATION_SWITCH_AT || '2000' }}
+          COORDINATION_STANDBY_MAX: ${{ vars.COORDINATION_STANDBY_MAX || '500' }}
+          ARCHIVE_DELETE_ENABLED: ${{ vars.ARCHIVE_DELETE_ENABLED || 'false' }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cd archive-state
+          args=(rotate --repo "$REPOSITORY" --config ../Phase0/05-FLEET-CONFIG.md --archive-ref coordination-archive)
+          if [ "$ARCHIVE_DELETE_ENABLED" = "true" ]; then args+=(--confirm-delete); fi
+          python3 ../scripts/coordination_archive.py "${args[@]}"
