@@ -180,7 +180,26 @@ fn parse_native(input: &str) -> Result<Vec<Transition>, String> {
     Ok(parsed)
 }
 
+// Leaf-only lstat and O_NOFOLLOW do not reject symlinked parent directories.
+// This bounded advisory preflight follows the existing coordination_slots model;
+// it is NOT an atomic directory-handle sandbox against concurrent renames.
+fn reject_symlinked_ancestors(path: &Path) -> Result<(), String> {
+    let mut inspected = std::path::PathBuf::new();
+    if let Some(parent) = path.parent() {
+        for component in parent.components() {
+            inspected.push(component.as_os_str());
+            let metadata = fs::symlink_metadata(&inspected)
+                .map_err(|error| format!("cannot inspect {inspected:?}: {error}"))?;
+            if metadata.file_type().is_symlink() {
+                return Err("source path contains symlink component".to_owned());
+            }
+        }
+    }
+    Ok(())
+}
+
 fn read_bounded(path: &Path) -> Result<String, String> {
+    reject_symlinked_ancestors(path)?;
     let before =
         fs::symlink_metadata(path).map_err(|error| format!("cannot stat {path:?}: {error}"))?;
     if !before.file_type().is_file() {
@@ -321,5 +340,40 @@ mod tests {
             std::process::id()
         ));
         assert!(read_bounded(&missing).is_err());
+    }
+    #[cfg(unix)]
+    #[test]
+    fn native_coordination_reader_rejects_symlinked_parent_and_leaf_paths() {
+        use std::os::unix::fs::symlink;
+
+        let scratch = std::env::temp_dir().join(format!(
+            "free-energy-native-records-ancestor-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&scratch).expect("create isolated scratch root");
+        let real = scratch.join("real");
+        fs::create_dir(&real).expect("create real input parent");
+        let input = real.join("records.tsv");
+        fs::write(&input, sample()).expect("write legitimate records");
+        assert_eq!(read_bounded(&input).unwrap(), sample());
+
+        let alias = scratch.join("linked-parent");
+        symlink(&real, &alias).expect("create symlink ancestor");
+        let unsafe_path = alias.join("records.tsv");
+        assert!(
+            read_bounded(&unsafe_path)
+                .unwrap_err()
+                .contains("symlink component"),
+            "a symlinked parent must not supply an apparently valid history"
+        );
+
+        let leaf_alias = scratch.join("linked-leaf.tsv");
+        symlink(&input, &leaf_alias).expect("create symlink leaf");
+        assert!(
+            read_bounded(&leaf_alias).is_err(),
+            "existing leaf protection must stay fail-closed"
+        );
+
+        fs::remove_dir_all(&scratch).expect("remove isolated scratch root");
     }
 }
