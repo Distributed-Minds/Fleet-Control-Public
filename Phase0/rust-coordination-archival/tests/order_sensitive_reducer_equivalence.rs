@@ -41,6 +41,7 @@ fn coherent_cut() -> ReplayCut {
     ReplayCut {
         ordering: order_basis(),
         source_incarnation: "live-provider-incarnation-4".to_owned(),
+        manifest: order_basis(),
         first_sequence: 100,
         last_sequence: 105,
         authoritative_order: true,

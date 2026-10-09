@@ -35,6 +35,7 @@ fn cut() -> ReplayCut {
     ReplayCut {
         ordering: basis("certified-order"),
         source_incarnation: "live-incarnation-7".into(),
+        manifest: basis("selected-manifest"),
         first_sequence: FIRST,
         last_sequence: FIRST + OVERLAP as u64 + 1,
         authoritative_order: true,

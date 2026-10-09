@@ -120,6 +120,7 @@ pub fn plan_compaction(
             || witness.snapshot.ordering != cut.ordering
             || witness.snapshot.source_incarnation != cut.source_incarnation
             || witness.snapshot.manifest != witness.manifest.basis
+            || witness.manifest.basis != cut.manifest
         {
             return Err(PlanFailure::InconsistentWitness);
         }
@@ -209,6 +210,7 @@ mod tests {
         ReplayCut {
             ordering: basis("provider-order"),
             source_incarnation: "live-v2".into(),
+            manifest: basis("manifest-current"),
             first_sequence: 10,
             last_sequence: 13,
             authoritative_order: true,
@@ -400,6 +402,44 @@ mod tests {
         assert_eq!(
             plan_compaction(&archived, &live, &cut(), &[retry]),
             Err(PlanFailure::ReconcilePriorEffect)
+        );
+    }
+
+    #[test]
+    fn replay_cut_manifest_basis_must_match_individually_valid_witnesses() {
+        let (archived, live) = histories();
+        let first = witness(&live[0]);
+        let second = witness(&live[1]);
+        assert!(
+            plan_compaction(&archived, &live, &cut(), &[first.clone(), second.clone()]).is_ok()
+        );
+
+        let mut stale_generation = cut();
+        stale_generation.manifest.generation += 1;
+        let mut wrong_identity = cut();
+        wrong_identity.manifest.identity = "other-manifest".into();
+        for stale_cut in [stale_generation, wrong_identity] {
+            assert_eq!(evaluate(&first), Verdict::EligibleModelOnly);
+            assert_eq!(evaluate(&second), Verdict::EligibleModelOnly);
+            assert_eq!(
+                plan_compaction(&archived, &live, &stale_cut, &[first.clone()]),
+                Err(PlanFailure::InconsistentWitness)
+            );
+            for candidates in [
+                [first.clone(), second.clone()],
+                [second.clone(), first.clone()],
+            ] {
+                assert_eq!(
+                    plan_compaction(&archived, &live, &stale_cut, &candidates),
+                    Err(PlanFailure::InconsistentWitness)
+                );
+            }
+        }
+        let mut missing = cut();
+        missing.manifest.identity.clear();
+        assert_eq!(
+            plan_compaction(&archived, &live, &missing, &[first]),
+            Err(PlanFailure::UntrustedHistory(ReplayFailure::UntrustedCut))
         );
     }
 

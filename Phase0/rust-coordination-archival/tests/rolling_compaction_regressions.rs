@@ -24,6 +24,10 @@ fn cut() -> ReplayCut {
             generation: 9,
         },
         source_incarnation: "live-store-incarnation-4".into(),
+        manifest: Basis {
+            identity: "replay-manifest".into(),
+            generation: 9,
+        },
         first_sequence: 1,
         last_sequence: 128,
         authoritative_order: true,

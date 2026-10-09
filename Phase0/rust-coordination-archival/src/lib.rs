@@ -274,6 +274,8 @@ pub struct ReplayRecord {
 #[derive(Debug, Clone)]
 pub struct ReplayCut {
     pub ordering: Basis,
+    /// Exactly the manifest lineage certified for this coherent replay cut.
+    pub manifest: Basis,
     pub source_incarnation: String,
     pub first_sequence: u64,
     pub last_sequence: u64,
@@ -306,6 +308,7 @@ pub fn replay(
         || !cut.complete_frontier
         || !cut.closing_fence_current
         || !named(&cut.ordering.identity)
+        || !named(&cut.manifest.identity)
         || !named(&cut.source_incarnation)
         || cut.first_sequence > cut.last_sequence
     {
@@ -1013,6 +1016,7 @@ mod tests {
         ReplayCut {
             ordering: basis("order-O1"),
             source_incarnation: "live-1".into(),
+            manifest: basis("manifest-M2"),
             first_sequence: 10,
             last_sequence: 12,
             authoritative_order: true,

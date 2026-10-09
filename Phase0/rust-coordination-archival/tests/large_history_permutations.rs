@@ -28,6 +28,7 @@ fn cut(first: u64, last: u64) -> ReplayCut {
     ReplayCut {
         ordering: basis(),
         source_incarnation: "live-incarnation-9".to_owned(),
+        manifest: basis(),
         first_sequence: first,
         last_sequence: last,
         authoritative_order: true,

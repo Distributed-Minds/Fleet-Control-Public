@@ -30,6 +30,7 @@ fn cut() -> ReplayCut {
     ReplayCut {
         ordering: basis("authoritative-order"),
         source_incarnation: "live-v9".to_owned(),
+        manifest: basis("current-manifest"),
         first_sequence: 0,
         last_sequence: 1999,
         authoritative_order: true,

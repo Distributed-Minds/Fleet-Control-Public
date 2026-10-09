@@ -33,6 +33,7 @@ fn cut() -> ReplayCut {
     ReplayCut {
         ordering: basis(),
         source_incarnation: "source-generation-9".to_owned(),
+        manifest: basis(),
         first_sequence: FIRST,
         last_sequence: FIRST + COUNT as u64 - 1,
         authoritative_order: true,

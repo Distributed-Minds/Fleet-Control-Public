@@ -27,6 +27,7 @@ fn cut() -> ReplayCut {
     ReplayCut {
         ordering: basis("authoritative-order"),
         source_incarnation: "live-generation-2".into(),
+        manifest: basis("unique-manifest"),
         first_sequence: 10,
         last_sequence: 13,
         authoritative_order: true,
@@ -192,6 +193,34 @@ fn operation_reuse_across_distinct_exact_sources_is_not_a_second_delete_grant() 
     assert_eq!(
         plan_compaction(&archived, &live, &cut(), &[first, other]),
         Err(PlanFailure::DuplicateCandidate)
+    );
+}
+
+#[test]
+fn replay_cut_manifest_must_match_a_self_consistent_compaction_batch() {
+    let (archived, live) = history();
+    let first = witness(&live[0]);
+    let second = witness(&live[1]);
+    assert_eq!(evaluate(&first), Verdict::EligibleModelOnly);
+    assert_eq!(evaluate(&second), Verdict::EligibleModelOnly);
+
+    let mut previous_cut = cut();
+    previous_cut.manifest.generation -= 1;
+    assert_eq!(
+        plan_compaction(&archived, &live, &previous_cut, &[first, second]),
+        Err(PlanFailure::InconsistentWitness)
+    );
+    assert_eq!(
+        plan_compaction(
+            &archived,
+            &live,
+            &cut(),
+            &[witness(&live[0]), witness(&live[1])]
+        )
+        .expect("same manifest is coherent")
+        .model_removals
+        .len(),
+        2
     );
 }
 
