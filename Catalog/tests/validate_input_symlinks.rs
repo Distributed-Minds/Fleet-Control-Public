@@ -73,10 +73,7 @@ fn valid_regular_file_and_directory_still_admit_existing_pilot() {
             output.stderr.is_empty(),
             "unexpected diagnostics: {output:?}"
         );
-        assert_eq!(
-            String::from_utf8_lossy(&output.stdout).lines().count(),
-            1
-        );
+        assert_eq!(String::from_utf8_lossy(&output.stdout).lines().count(), 1);
     }
 }
 
@@ -90,7 +87,10 @@ fn symlinked_manifest_cannot_pass_even_inside_otherwise_valid_batch() {
     symlink(&original, &alias).expect("create symlink to legitimate source");
 
     rejected_without_success(&run(&[&original, &alias]), "symlinked manifest prohibited");
-    assert!(original.exists(), "rejection must not mutate original manifest");
+    assert!(
+        original.exists(),
+        "rejection must not mutate original manifest"
+    );
 }
 
 #[test]
@@ -104,11 +104,11 @@ fn symlinked_project_directory_cannot_redirect_catalog_scan() {
         .expect("write valid external source manifest");
     symlink(&real, &alias).expect("create directory symlink");
 
-    rejected_without_success(
-        &run(&[&alias]),
-        "symlinked project directory prohibited",
+    rejected_without_success(&run(&[&alias]), "symlinked project directory prohibited");
+    assert!(
+        original.exists(),
+        "rejection must not delete source manifest"
     );
-    assert!(original.exists(), "rejection must not delete source manifest");
 }
 
 #[test]
