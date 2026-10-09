@@ -189,7 +189,8 @@ fn read_bounded_manifest(path: &Path) -> io::Result<String> {
     }
 
     let mut text = String::new();
-    file.take(MAX_MANIFEST_BYTES + 1).read_to_string(&mut text)?;
+    file.take(MAX_MANIFEST_BYTES + 1)
+        .read_to_string(&mut text)?;
     if text.len() as u64 > MAX_MANIFEST_BYTES {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
