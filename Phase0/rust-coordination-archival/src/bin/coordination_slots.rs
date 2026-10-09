@@ -102,9 +102,13 @@ fn parse_record(observation: Observation<'_>, trusted_author: &str) -> Result<Sl
     // Duplicating authority-bearing fields later in prose is ambiguous. The
     // installed format has exactly one line for each of the three keys.
     if lines.any(|line| {
-        ["COORDINATION_SLOT=", "COORDINATION_STATE=", "COORDINATION_EPOCH="]
-            .iter()
-            .any(|key| line.starts_with(key))
+        [
+            "COORDINATION_SLOT=",
+            "COORDINATION_STATE=",
+            "COORDINATION_EPOCH=",
+        ]
+        .iter()
+        .any(|key| line.starts_with(key))
     }) {
         return Err("duplicate coordination header field".to_owned());
     }
@@ -155,8 +159,8 @@ fn execute(args: &[String]) -> Result<SlotRecord, String> {
     }
     let first_id = decimal(&args[1]).map_err(str::to_owned)?;
     let second_id = decimal(&args[5]).map_err(str::to_owned)?;
-    let first_body = fs::read_to_string(&args[4])
-        .map_err(|error| format!("first body unavailable: {error}"))?;
+    let first_body =
+        fs::read_to_string(&args[4]).map_err(|error| format!("first body unavailable: {error}"))?;
     let second_body = fs::read_to_string(&args[8])
         .map_err(|error| format!("second body unavailable: {error}"))?;
     select_active(
@@ -236,7 +240,10 @@ mod tests {
         let entries = observed(A, new_active);
         let selected = select_active(entries, "geromet").unwrap();
         assert_eq!(selected.slot, Slot::B);
-        assert_eq!(select_active([entries[1], entries[0]], "geromet").unwrap(), selected);
+        assert_eq!(
+            select_active([entries[1], entries[0]], "geromet").unwrap(),
+            selected
+        );
     }
 
     #[test]
