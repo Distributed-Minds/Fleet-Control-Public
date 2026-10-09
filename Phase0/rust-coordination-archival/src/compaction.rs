@@ -182,6 +182,47 @@ pub fn plan_compaction(
     })
 }
 
+
+//// This wrapper is model-only: `preserve_newest_live` must come from an
+//// independently authenticated/current retention policy before any real effect.
+/// Apply the caller-supplied newest-live retention bound to a coherent model
+/// compaction plan. A source page's retrieval order never defines "newest":
+/// only the cut's certified reducer sequence does.
+///
+/// Unlike individual `witness.protections.live_tail` flags, this guard checks
+/// the entire observed live frontier as a batch. A candidate cannot displace
+/// one of the newest `preserve_newest_live` live records, even if its
+/// independently eligible witness omitted that protection flag.
+///
+/// Returning a plan is NOT provider authorization or proof that this
+/// caller-selected retention count is the current installed policy.
+pub fn plan_compaction_preserving_live_tail(
+    archived: &[ReplayRecord],
+    live: &[ReplayRecord],
+    cut: &ReplayCut,
+    witnesses: &[DeleteWitness],
+    preserve_newest_live: usize,
+) -> Result<CompactionPlan, PlanFailure> {
+    let plan = plan_compaction(archived, live, cut, witnesses)?;
+    if preserve_newest_live == 0 || plan.model_removals.is_empty() {
+        return Ok(plan);
+    }
+
+    let mut live_sequences: Vec<u64> = live.iter().map(|record| record.sequence).collect();
+    live_sequences.sort_unstable();
+    let start = live_sequences.len().saturating_sub(preserve_newest_live);
+    let protected = &live_sequences[start..];
+
+    if plan
+        .model_removals
+        .iter()
+        .any(|removal| protected.binary_search(&removal.sequence).is_ok())
+    {
+        return Err(PlanFailure::Ineligible(Denial::ProtectedRecord));
+    }
+    Ok(plan)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -681,4 +722,65 @@ mod tests {
             2
         );
     }
+
+    #[test]
+    fn certified_live_tail_is_preserved_even_if_individual_witness_flags_are_false() {
+        let (archived, live) = histories();
+        let first = witness(&live[0]); // sequence 11, outside the latest two
+        let second = witness(&live[1]); // sequence 12, inside the latest two
+
+        let accepted =
+            plan_compaction_preserving_live_tail(&archived, &live, &cut(), &[first.clone()], 2)
+                .expect("old overlapping record may be selected");
+        assert_eq!(accepted.model_removals.len(), 1);
+        assert_eq!(accepted.model_removals[0].sequence, 11);
+
+        assert_eq!(
+            plan_compaction_preserving_live_tail(&archived, &live, &cut(), &[second.clone()], 2),
+            Err(PlanFailure::Ineligible(Denial::ProtectedRecord))
+        );
+        assert_eq!(
+            plan_compaction_preserving_live_tail(&archived, &live, &cut(), &[first.clone()], 3),
+            Err(PlanFailure::Ineligible(Denial::ProtectedRecord))
+        );
+        assert_eq!(
+            plan_compaction_preserving_live_tail(&archived, &live, &cut(), &[first.clone()], 99),
+            Err(PlanFailure::Ineligible(Denial::ProtectedRecord))
+        );
+        assert_eq!(
+            plan_compaction_preserving_live_tail(&archived, &live, &cut(), &[first, second], 1)
+                .unwrap()
+                .model_removals
+                .len(),
+            2,
+            "latest live record 13 is never a candidate"
+        );
+    }
+
+    #[test]
+    fn live_tail_model_is_independent_of_provider_page_order_and_has_no_partial_plan() {
+        let (mut archived, mut live) = histories();
+        archived.reverse();
+        live.reverse();
+        let first = witness(&live[2]); // sequence 11
+        let protected = witness(&live[1]); // sequence 12
+        let original_live = live.clone();
+
+        let allowed =
+            plan_compaction_preserving_live_tail(&archived, &live, &cut(), &[first.clone()], 2)
+                .unwrap();
+        assert_eq!(allowed.model_removals[0].sequence, 11);
+        for candidates in [
+            vec![first.clone(), protected.clone()],
+            vec![protected, first],
+        ] {
+            assert_eq!(
+                plan_compaction_preserving_live_tail(&archived, &live, &cut(), &candidates, 2),
+                Err(PlanFailure::Ineligible(Denial::ProtectedRecord)),
+                "one protected candidate invalidates the whole model batch"
+            );
+        }
+        assert_eq!(live, original_live, "denial may not mutate the caller's live history");
+    }
+
 }
