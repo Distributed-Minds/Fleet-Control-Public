@@ -529,6 +529,50 @@ fn is_public_https_url(url: &str) -> bool {
     true
 }
 
+/// Check that a pinned repository file's human-facing permalink identifies
+/// exactly the repository, commit and path declared in the evidence record.
+/// This does not fetch bytes, authenticate a source, or grant any usage rights.
+/// For now only reviewed GitHub/GitLab permalink layouts are accepted.
+fn pinned_evidence_link_matches(repository: &str, commit: &str, path: &str, url: &str) -> bool {
+    if !is_public_https_url(repository)
+        || !is_public_https_url(url)
+        || !is_full_git_sha(commit)
+        || !is_relative_path(path)
+        || repository.ends_with('/')
+        || repository.chars().any(|ch| matches!(ch, '?' | '#' | '%'))
+        || url.chars().any(|ch| matches!(ch, '?' | '#' | '%'))
+    {
+        return false;
+    }
+
+    let Some(rest) = repository.strip_prefix("https://") else {
+        return false;
+    };
+    let mut components = rest.split('/');
+    let host = components.next().unwrap_or_default();
+    let segments: Vec<_> = components.collect();
+    if segments.len() < 2
+        || segments.iter().any(|segment| {
+            segment.is_empty()
+                || *segment == "."
+                || *segment == ".."
+                || !segment
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || b"-._".contains(&byte))
+        })
+    {
+        return false;
+    }
+    let marker = if host.eq_ignore_ascii_case("github.com") && segments.len() == 2 {
+        "/blob/"
+    } else if host.eq_ignore_ascii_case("gitlab.com") {
+        "/-/blob/"
+    } else {
+        return false;
+    };
+    url == format!("{repository}{marker}{commit}/{path}")
+}
+
 // These enum vocabularies are part of the checked-in v5 JSON Schema, but
 // serde String fields otherwise accept arbitrary values. Enforce the exact
 // closed sets at the typed admission boundary until full schema execution
@@ -993,6 +1037,20 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
                 "invalid pinned repository evidence: {}",
                 item.evidence_id
             ));
+        }
+        // A pinned-revision claim must not borrow a valid URL pointing at
+        // some other repository, commit, or file. Shape alone is insufficient.
+        if item.evidence_kind == "PINNED_REPOSITORY_FILE" {
+            if let (Some(repository), Some(commit), Some(path)) =
+                (&item.repository, &item.commit, &item.path)
+            {
+                if !pinned_evidence_link_matches(repository, commit, path, &item.url) {
+                    problems.push(format!(
+                        "pinned repository evidence URL does not match repository/commit/path: {}",
+                        item.evidence_id
+                    ));
+                }
+            }
         }
     }
 
