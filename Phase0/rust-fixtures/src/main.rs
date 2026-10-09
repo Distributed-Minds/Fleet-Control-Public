@@ -103,10 +103,16 @@ fn outcome(disposition: &str, level: Option<Level>) -> DecisionOutcome {
 // contradictory declaration. A fixture's expected disposition is not a
 // substitute for admitting its declared safety inputs.
 fn preflight_decision_proofs(c: &DecisionCase) -> Result<(), String> {
-    if c.required_independent_lineages.is_some_and(|required| required < 2) {
-        return Err("high-impact restriction requires at least two independent lineages".to_owned());
+    if c.required_independent_lineages
+        .is_some_and(|required| required < 2)
+    {
+        return Err(
+            "high-impact restriction requires at least two independent lineages".to_owned(),
+        );
     }
-    if c.max_level_with_contradiction.is_some_and(|maximum| maximum >= Level::Isolate) {
+    if c.max_level_with_contradiction
+        .is_some_and(|maximum| maximum >= Level::Isolate)
+    {
         return Err("contradictory evidence cannot preserve high-impact severity".to_owned());
     }
     Ok(())
@@ -553,8 +559,7 @@ mod tests {
         // AUTHORITY_MISSING without inspecting an explicitly unsafe threshold.
         for (index, threshold) in [(2, 0), (3, 1), (16, 1)] {
             let mut changed = original();
-            changed["decision_cases"][index]["required_independent_lineages"] =
-                json!(threshold);
+            changed["decision_cases"][index]["required_independent_lineages"] = json!(threshold);
             let typed = fixture(changed);
             assert!(
                 decide(&typed.decision_cases[index]).is_err(),
@@ -586,8 +591,7 @@ mod tests {
         assert_eq!(validate(&baseline), Ok(35));
 
         let mut changed = original();
-        changed["decision_cases"][12]["max_level_with_contradiction"] =
-            json!("SUSPEND_CAPABILITY");
+        changed["decision_cases"][12]["max_level_with_contradiction"] = json!("SUSPEND_CAPABILITY");
         let typed = fixture(changed);
         assert_eq!(
             decide(&typed.decision_cases[12]),
