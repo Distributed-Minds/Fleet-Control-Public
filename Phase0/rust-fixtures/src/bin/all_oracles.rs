@@ -118,16 +118,10 @@ fn parse_args(args: &[String]) -> Result<(Selection, PathBuf), String> {
 // A zero exit code or arbitrary nonempty stdout is not a verified oracle PASS.
 // Each fixed sibling has an explicit success-output contract. Preserve stderr:
 // some successful oracles intentionally print non-authority disclaimers there.
-fn positive_count(line: &str, prefix: &str, suffix: &str) -> bool {
-    let Some(digits) = line
-        .strip_prefix(prefix)
-        .and_then(|rest| rest.strip_suffix(suffix))
-    else {
-        return false;
-    };
-    !digits.is_empty()
-        && digits.bytes().all(|byte| byte.is_ascii_digit())
-        && digits.parse::<u64>().is_ok_and(|count| count > 0)
+// These oracles verify a fixed historical fixture corpus, not an arbitrary
+// positive number of cases. A child that skips cases must not mint PASS.
+fn exact_count(line: &str, prefix: &str, suffix: &str, expected: usize) -> bool {
+    line == format!("{prefix}{expected}{suffix}")
 }
 
 fn has_verification_output(oracle: &Oracle, stdout: &[u8]) -> bool {
@@ -141,35 +135,43 @@ fn has_verification_output(oracle: &Oracle, stdout: &[u8]) -> bool {
         return false;
     }
     match oracle.name {
-        "ad_hoc_research" => positive_count(line, "ad-hoc research fixtures (Rust): ", " passed"),
-        "adaptive_stress" => positive_count(
+        "ad_hoc_research" => exact_count(line, "ad-hoc research fixtures (Rust): ", " passed", 47),
+        "adaptive_stress" => exact_count(
             line,
             "adaptive-stress semantic fixtures (Rust): ",
             " passed",
+            23,
         ),
-        "authority_closure" => positive_count(
+        "authority_closure" => exact_count(
             line,
             "authority closure Rust semantic fixtures: ",
             " cases passed",
+            26,
         ),
-        "containment" => positive_count(line, "containment fixtures (Rust): ", " passed"),
-        "containment_capacity" => {
-            positive_count(line, "containment-capacity fixtures (Rust): ", " passed")
-        }
-        "coordination_history" => positive_count(
+        "containment" => exact_count(line, "containment fixtures (Rust): ", " passed", 35),
+        "containment_capacity" => exact_count(
+            line,
+            "containment-capacity fixtures (Rust): ",
+            " passed",
+            17,
+        ),
+        "coordination_history" => exact_count(
             line,
             "PASS: ",
             " independently evaluated coordination-history cases",
+            18,
         ),
-        "github_capability" => positive_count(
+        "github_capability" => exact_count(
             line,
             "GitHub capability invariant fixtures (Rust): ",
             " checked",
+            28,
         ),
-        "integration_candidate" => positive_count(
+        "integration_candidate" => exact_count(
             line,
             "integration candidate fixture envelope: ",
             " passed; SHA-256 identity parity NOT checked",
+            6,
         ),
         "integration_candidate_digest" => {
             // An arbitrary or truncated list of plausible SHA-256 strings is
@@ -195,10 +197,11 @@ fn has_verification_output(oracle: &Oracle, stdout: &[u8]) -> bool {
                             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
                 })
         }
-        "merge_base_topology" => positive_count(
+        "merge_base_topology" => exact_count(
             line,
             "merge-base-topology: ",
             " read-only model fixtures PASS",
+            12,
         ),
         _ => false,
     }
@@ -303,31 +306,31 @@ mod tests {
     #[test]
     fn only_family_specific_positive_output_qualifies_as_verification() {
         let expected = [
-            ("ad_hoc_research", "ad-hoc research fixtures (Rust): 3 passed\n"),
+            ("ad_hoc_research", "ad-hoc research fixtures (Rust): 47 passed\n"),
             (
                 "adaptive_stress",
                 "adaptive-stress semantic fixtures (Rust): 23 passed\n",
             ),
             (
                 "authority_closure",
-                "authority closure Rust semantic fixtures: 8 cases passed\n",
+                "authority closure Rust semantic fixtures: 26 cases passed\n",
             ),
             ("containment", "containment fixtures (Rust): 35 passed\n"),
             (
                 "containment_capacity",
-                "containment-capacity fixtures (Rust): 8 passed\n",
+                "containment-capacity fixtures (Rust): 17 passed\n",
             ),
             (
                 "coordination_history",
-                "PASS: 12 independently evaluated coordination-history cases\n",
+                "PASS: 18 independently evaluated coordination-history cases\n",
             ),
             (
                 "github_capability",
-                "GitHub capability invariant fixtures (Rust): 5 checked\n",
+                "GitHub capability invariant fixtures (Rust): 28 checked\n",
             ),
             (
                 "integration_candidate",
-                "integration candidate fixture envelope: 9 passed; SHA-256 identity parity NOT checked\n",
+                "integration candidate fixture envelope: 6 passed; SHA-256 identity parity NOT checked\n",
             ),
             (
                 "merge_base_topology",
@@ -409,6 +412,81 @@ mod tests {
             assert!(
                 !has_verification_output(digest_oracle, invalid.as_bytes()),
                 "accepted malformed or incomplete digest receipt: {invalid:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn partial_or_forged_nonzero_counts_never_qualify_as_completed_fixture_families() {
+        let expected = [
+            (
+                "ad_hoc_research",
+                "ad-hoc research fixtures (Rust): ",
+                " passed",
+                47,
+            ),
+            (
+                "adaptive_stress",
+                "adaptive-stress semantic fixtures (Rust): ",
+                " passed",
+                23,
+            ),
+            (
+                "authority_closure",
+                "authority closure Rust semantic fixtures: ",
+                " cases passed",
+                26,
+            ),
+            (
+                "containment",
+                "containment fixtures (Rust): ",
+                " passed",
+                35,
+            ),
+            (
+                "containment_capacity",
+                "containment-capacity fixtures (Rust): ",
+                " passed",
+                17,
+            ),
+            (
+                "coordination_history",
+                "PASS: ",
+                " independently evaluated coordination-history cases",
+                18,
+            ),
+            (
+                "github_capability",
+                "GitHub capability invariant fixtures (Rust): ",
+                " checked",
+                28,
+            ),
+            (
+                "integration_candidate",
+                "integration candidate fixture envelope: ",
+                " passed; SHA-256 identity parity NOT checked",
+                6,
+            ),
+            (
+                "merge_base_topology",
+                "merge-base-topology: ",
+                " read-only model fixtures PASS",
+                12,
+            ),
+        ];
+        for (name, prefix, suffix, count) in expected {
+            let oracle = ORACLES.iter().find(|oracle| oracle.name == name).unwrap();
+            for incomplete in [1, count - 1, count + 1] {
+                let output = format!("{prefix}{incomplete}{suffix}\n");
+                assert!(
+                    !has_verification_output(oracle, output.as_bytes()),
+                    "{name} accepted incorrect count {incomplete}"
+                );
+            }
+            let padded = format!("{prefix}0{count}{suffix}\n");
+            assert!(
+                !has_verification_output(oracle, padded.as_bytes()),
+                "{name}"
             );
         }
     }
