@@ -9,6 +9,8 @@
 //! position, comment_id, run, seq, state, prev, issue, pr, branch, seam.
 //! Use "-" for absent prev/issue/pr/branch. Positions are the certified
 //! reducer order and cannot be inferred from comment IDs or timestamps.
+//! Positions must be a complete, dense 1-based sequence (1, 2, 3, ...);
+//! a missing record fails closed rather than yielding a plausible lease.
 //!
 //! Usage: coordination_ownership_replay <transcript.tsv>
 //! Exit 0 means only that the supplied model is internally consistent.
@@ -85,11 +87,26 @@ fn parse_transition(line: &str, number: usize) -> Result<Transition, String> {
 
 fn parse_transcript(input: &str) -> Result<Vec<Transition>, String> {
     let mut transitions = Vec::new();
+    let mut expected_position = 1_u64;
     for (index, line) in input.split_terminator('\n').enumerate() {
         if line.is_empty() {
             return Err(format!("line {}: empty record", index + 1));
         }
-        transitions.push(parse_transition(line, index + 1)?);
+        let record = parse_transition(line, index + 1)?;
+        // A syntactically valid chain can still omit an independent earlier
+        // competing INTENT or terminal record. Certified *order* alone does
+        // not prove the transcript is complete; require an explicit dense
+        // position sequence before allowing the advisory reducer to run.
+        if record.position != expected_position {
+            return Err(format!(
+                "line {}: expected contiguous certified position {expected_position}",
+                index + 1
+            ));
+        }
+        transitions.push(record);
+        expected_position = expected_position
+            .checked_add(1)
+            .ok_or_else(|| "certified transcript position overflow".to_owned())?;
     }
     if transitions.is_empty() {
         return Err("empty transcript is not proof of a complete history".to_owned());
@@ -331,12 +348,57 @@ mod tests {
     }
 
     #[test]
+    fn missing_transcript_position_never_produces_a_model_active_lease() {
+        // The missing position could have contained a competing owner.
+        // Without the dense-position check the remaining run chain is
+        // internally valid and the reducer would report an active lease.
+        let missing_middle = concat!(
+            "1\t101\trun-a\t1\tINTENT\t-\t22\t-\tbranch-a\tseam-a\n",
+            "3\t103\trun-a\t2\tOWNED\t101\t22\t-\tbranch-a\tseam-a\n",
+            "4\t104\trun-a\t3\tWORKING\t103\t22\t-\tbranch-a\tseam-a\n",
+        );
+        let unchecked = missing_middle
+            .lines()
+            .enumerate()
+            .map(|(index, line)| parse_transition(line, index + 1).unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(reduce_model_only(&unchecked).unwrap().len(), 1);
+        assert!(parse_transcript(missing_middle)
+            .unwrap_err()
+            .contains("expected contiguous certified position 2"));
+
+        let shifted_first = TRANSCRIPT.replacen("1\t101", "2\t101", 1);
+        assert!(parse_transcript(&shifted_first).is_err());
+        let duplicate_position = TRANSCRIPT.replacen("2\t102", "1\t102", 1);
+        assert!(parse_transcript(&duplicate_position).is_err());
+        let reversed_position = TRANSCRIPT.replacen("3\t103", "2\t103", 1);
+        assert!(parse_transcript(&reversed_position).is_err());
+        assert_eq!(parse_transcript(TRANSCRIPT).unwrap().len(), 3);
+
+        // Provider comment IDs are opaque. Dense certified positions do not
+        // impose any monotonic requirement on those distinct comment IDs.
+        let nonmonotonic_ids = concat!(
+            "1\t500\trun-a\t1\tINTENT\t-\t22\t-\tbranch-a\tseam-a\n",
+            "2\t400\trun-a\t2\tOWNED\t500\t22\t-\tbranch-a\tseam-a\n",
+            "3\t999\trun-a\t3\tWORKING\t400\t22\t-\tbranch-a\tseam-a\n",
+        );
+        assert_eq!(
+            reduce_model_only(&parse_transcript(nonmonotonic_ids).unwrap())
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
     fn incomplete_order_or_duplicate_comment_is_not_authoritative() {
         let repeated_position =
             format!("{TRANSCRIPT}3\t104\trun-b\t1\tINTENT\t-\t22\t-\tbranch-b\tseam-b\n");
-        assert_eq!(
-            reduce_model_only(&parse_transcript(&repeated_position).unwrap()),
-            Err(ReductionFailure::UnorderedOrIncomplete)
+        assert!(
+            parse_transcript(&repeated_position)
+                .unwrap_err()
+                .contains("expected contiguous certified position 4"),
+            "missing or repeated transcript position must fail at the input boundary"
         );
         let repeated_id =
             format!("{TRANSCRIPT}4\t103\trun-b\t1\tINTENT\t-\t22\t-\tbranch-b\tseam-b\n");
