@@ -152,5 +152,5 @@ fn symlinked_manifest_does_not_bypass_atomic_failure() {
         result.stdout.is_empty(),
         "symlinked tail emitted partial JSON"
     );
-    assert!(stderr(&result).contains("expected a regular non-symlink JSON file"));
+    assert!(stderr(&result).contains("symlink path component"));
 }
