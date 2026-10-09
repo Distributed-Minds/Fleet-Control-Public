@@ -77,12 +77,30 @@ jobs:
             : > "$fixture/$doc"
           done
 
+          # The compiled CLI must accept one real copyable HELP prompt, not
+          # silently pass when the guide is empty or lacks safety guards.
+          cat > "$fixture/HELP-A-PROJECT.md" <<'HELP_CONTRACT'
+          **Not available yet:**
+          See [Phase0 installer](GETTING-STARTED.md).
+          ```text
+          I want to help [OFFICIAL PROJECT URL].
+          Join the EXISTING project; do not create a copy.
+          If the project prohibits AI-assisted contributions, stop.
+          If unknown, remain read-only until the proposed public submission is permitted.
+          Do not conceal AI involvement.
+          An unassigned issue may still be claimed.
+          Never commit proprietary game assets.
+          Ask for authorization before a push.
+          Never merge into default yourself.
+          ```
+          HELP_CONTRACT
+          cp "$fixture/HELP-A-PROJECT.md" "$fixture/valid-help-prompt.md"
           # Positive control: a real local file, an ignored external URI, and all
           # nine required inputs. This calls the compiled product CLI, not a mock.
           printf '%s\n' 'present' > "$fixture/target.md"
           printf '%s\n' '[valid](target.md)' '[external](https://example.org)' > "$fixture/README.md"
           "$binary" --root "$fixture" > "$fixture/cli-output.txt" 2>&1
-          grep -Fq 'Checked 1 local links across 9 documents; 0 errors' "$fixture/cli-output.txt"
+          grep -Fq 'Checked 2 local links across 9 documents; 0 errors' "$fixture/cli-output.txt"
 
           expect_rejected() {
             local label="$1" expected="$2" exit_code=0
@@ -94,6 +112,16 @@ jobs:
             fi
           }
 
+          # Exercise prompt-contract rejection through the compiled CLI.
+          sed '/Ask for authorization before a push/d' "$fixture/valid-help-prompt.md" > "$fixture/HELP-A-PROJECT.md"
+          expect_rejected missing-external-write-guard 'external-write permission missing'
+          cp "$fixture/valid-help-prompt.md" "$fixture/HELP-A-PROJECT.md"
+          sed '$d' "$fixture/valid-help-prompt.md" > "$fixture/HELP-A-PROJECT.md"
+          expect_rejected unterminated-help-prompt 'unclosed code fence'
+          cp "$fixture/valid-help-prompt.md" "$fixture/HELP-A-PROJECT.md"
+          printf '%s\n' '```text' 'I want to help [SECOND].' '```' >> "$fixture/HELP-A-PROJECT.md"
+          expect_rejected duplicated-help-prompt 'expected one copyable HELP prompt'
+          cp "$fixture/valid-help-prompt.md" "$fixture/HELP-A-PROJECT.md"
           # Missing links in the first-party contributor guide are real failures.
           printf '%s\n' '[broken-contributing](missing-contributing.md)' > "$fixture/CONTRIBUTING.md"
           expect_rejected missing-contributor-guide-target 'target missing'
