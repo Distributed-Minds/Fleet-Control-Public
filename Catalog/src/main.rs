@@ -268,9 +268,8 @@ fn main() -> ExitCode {
                                     count += 1;
                                 }
                             }
-                            Err(error) => {
-                                errors.push(format!("{}: directory entry: {error}", format!("{path:?}")))
-                            }
+                            Err(error) => errors
+                                .push(format!("{}: directory entry: {error}", format!("{path:?}")),
                         }
                     }
                     if count == 0 {
@@ -347,7 +346,7 @@ mod tests {
         assert!(
             failures
                 .iter()
-                .any(|error| error.contains("two.json: duplicate project ID:")),
+                .any(|error| error.contains("\\"two.json\\": duplicate project ID:")),
             "{failures:?}"
         );
     }
