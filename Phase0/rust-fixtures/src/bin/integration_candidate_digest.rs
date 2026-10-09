@@ -313,9 +313,7 @@ fn exact_fields(value: &Value, context: &str, fields: &[&str]) -> Result<(), Str
     let object = value
         .as_object()
         .ok_or_else(|| format!("{context}: expected object"))?;
-    if object.len() != fields.len()
-        || fields.iter().any(|field| !object.contains_key(*field))
-    {
+    if object.len() != fields.len() || fields.iter().any(|field| !object.contains_key(*field)) {
         return Err(format!("{context}: missing or undeclared field"));
     }
     Ok(())
