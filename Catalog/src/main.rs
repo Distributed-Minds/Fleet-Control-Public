@@ -4,7 +4,7 @@ mod render;
 use std::{
     collections::HashSet,
     env, fs,
-    io::{self, Write},
+    io::{self, Read, Write},
     path::Path,
     process::ExitCode,
 };
@@ -142,6 +142,63 @@ where
     }
 }
 
+/// Limit every manifest read before parsing untrusted JSON. A large sparse file
+/// must not allocate its declared size; a growing file cannot bypass the cap.
+/// The inode check on Unix detects replacement of the preflighted regular
+/// file with a different open file. This is not a race-free filesystem sandbox.
+const MAX_MANIFEST_BYTES: u64 = 1024 * 1024;
+
+fn read_bounded_manifest(path: &Path) -> io::Result<String> {
+    let before = fs::symlink_metadata(path)?;
+    if !before.file_type().is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "manifest must be a regular file (symlinks prohibited)",
+        ));
+    }
+    if before.len() > MAX_MANIFEST_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "manifest exceeds 1 MiB input limit",
+        ));
+    }
+
+    let file = fs::File::open(path)?;
+    let opened = file.metadata()?;
+    if !opened.file_type().is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "opened manifest is not a regular file",
+        ));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if before.dev() != opened.dev() || before.ino() != opened.ino() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "manifest changed between preflight and open",
+            ));
+        }
+    }
+    if opened.len() > MAX_MANIFEST_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "manifest exceeds 1 MiB input limit",
+        ));
+    }
+
+    let mut text = String::new();
+    file.take(MAX_MANIFEST_BYTES + 1).read_to_string(&mut text)?;
+    if text.len() as u64 > MAX_MANIFEST_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "manifest exceeds 1 MiB input limit",
+        ));
+    }
+    Ok(text)
+}
+
 /// Reject symlinked or non-regular JSON inputs for the deterministic render path.
 /// The explicit validate CLI accepts caller-chosen paths, but generating the
 /// checked-in page must not follow an untracked filesystem symlink out of the
@@ -157,7 +214,7 @@ fn read_render_manifest(path: &Path) -> Result<String, String> {
             diagnostic_path(path)
         ));
     }
-    fs::read_to_string(path).map_err(|error| format!("{}: {error}", diagnostic_path(path)))
+    read_bounded_manifest(path).map_err(|error| format!("{}: {error}", diagnostic_path(path)))
 }
 
 /// Collect the complete manifest set only from a real project directory.
@@ -382,7 +439,7 @@ fn main() -> ExitCode {
             }
             Ok(_) => {}
         }
-        match fs::read_to_string(&path) {
+        match read_bounded_manifest(&path) {
             Ok(text) => loaded.push((path.to_string_lossy().into_owned(), text)),
             Err(error) => errors.push(format!("{}: {error}", diagnostic_path(&path))),
         }
@@ -428,6 +485,46 @@ mod tests {
 
     const LUANTI: &str = include_str!("../projects/luanti.json");
     const OPENRA: &str = include_str!("../projects/openra.json");
+
+    #[test]
+    fn bounded_manifest_reader_admits_regular_input_through_exact_byte_limit() {
+        let file = env::temp_dir().join(format!(
+            "free-energy-catalog-bounded-positive-{}.json",
+            std::process::id()
+        ));
+        fs::write(&file, LUANTI).expect("create real pilot input");
+        assert_eq!(
+            read_bounded_manifest(&file).expect("read regular pilot"),
+            LUANTI
+        );
+        let padded = format!(
+            "{LUANTI}{}",
+            " ".repeat(MAX_MANIFEST_BYTES as usize - LUANTI.len())
+        );
+        fs::write(&file, &padded).expect("create exact-limit UTF-8 manifest");
+        assert_eq!(
+            read_bounded_manifest(&file).expect("exact limit must be admitted"),
+            padded
+        );
+        fs::remove_file(file).expect("remove test file");
+    }
+
+    #[test]
+    fn oversized_sparse_manifest_is_rejected_before_parser_or_allocation() {
+        let file = env::temp_dir().join(format!(
+            "free-energy-catalog-bounded-negative-{}.json",
+            std::process::id()
+        ));
+        let sparse = fs::File::create(&file).expect("create sparse input");
+        sparse
+            .set_len(MAX_MANIFEST_BYTES + 1)
+            .expect("set oversized declared length");
+        drop(sparse);
+        let error = read_bounded_manifest(&file).expect_err("oversized input must fail");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("1 MiB input limit"));
+        fs::remove_file(file).expect("remove test file");
+    }
 
     #[test]
     fn distinct_manifest_ids_are_admitted_as_one_batch() {
