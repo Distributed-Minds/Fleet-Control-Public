@@ -163,7 +163,13 @@ pub fn reduce_model_only(transitions: &[Transition]) -> Result<Vec<ActiveLease>,
                     return Err(InvalidTransition);
                 }
             }
-            Recovered => { /* Recovery is evidence only; it never transfers a lease. */ }
+            Recovered => {
+                // Recovery is an initial evidence record for a fresh run,
+                // never a mid-chain transition that can reset a live lease.
+                if previous.is_some() {
+                    return Err(InvalidTransition);
+                }
+            }
             Owned => {
                 if !previous.is_some_and(|old| old.state == Intent) {
                     return Err(InvalidTransition);
@@ -404,6 +410,67 @@ mod tests {
             event(5, 105, "b", 2, State::Owned, Some(104), "shared"),
         ];
         assert_eq!(reduce_model_only(&records).unwrap()[0].run, "b");
+    }
+
+    #[test]
+    fn recovered_cannot_reset_a_nonterminal_run_chain() {
+        let prefixes = [
+            vec![event(1, 101, "a", 1, State::Intent, None, "ref-a")],
+            vec![
+                event(1, 101, "a", 1, State::Intent, None, "ref-a"),
+                event(2, 102, "a", 2, State::Owned, Some(101), "ref-a"),
+            ],
+            vec![
+                event(1, 101, "a", 1, State::Intent, None, "ref-a"),
+                event(2, 102, "a", 2, State::Owned, Some(101), "ref-a"),
+                event(3, 103, "a", 3, State::Working, Some(102), "ref-a"),
+            ],
+        ];
+        for mut records in prefixes {
+            let last = records.last().expect("nonempty prefix");
+            let invalid = event(
+                last.position + 1,
+                last.comment_id + 1,
+                "a",
+                last.seq + 1,
+                State::Recovered,
+                Some(last.comment_id),
+                "ref-a",
+            );
+            records.push(invalid);
+            assert_eq!(
+                reduce_model_only(&records),
+                Err(ReductionFailure::InvalidTransition),
+                "recovery must not reset an active or pending run"
+            );
+        }
+
+        // The old reducer accepted this chain and silently replaced the
+        // still-owned ref-a scope with ref-b under the same run identity.
+        let illicit_second_package = [
+            event(1, 101, "a", 1, State::Intent, None, "ref-a"),
+            event(2, 102, "a", 2, State::Owned, Some(101), "ref-a"),
+            event(3, 103, "a", 3, State::Recovered, Some(102), "ref-a"),
+            event(4, 104, "a", 1, State::Intent, None, "ref-b"),
+            event(5, 105, "a", 2, State::Owned, Some(104), "ref-b"),
+        ];
+        assert_eq!(
+            reduce_model_only(&illicit_second_package),
+            Err(ReductionFailure::InvalidTransition)
+        );
+    }
+
+    #[test]
+    fn fresh_run_recovery_still_allows_intent_and_ownership() {
+        let records = [
+            event(1, 101, "new-run", 1, State::Recovered, None, "ref-a"),
+            event(2, 102, "new-run", 1, State::Intent, None, "ref-a"),
+            event(3, 103, "new-run", 2, State::Owned, Some(102), "ref-a"),
+        ];
+        let leases = reduce_model_only(&records).expect("valid recovery prefix");
+        assert_eq!(leases.len(), 1);
+        assert_eq!(leases[0].run, "new-run");
+        assert_eq!(leases[0].scope.branch.as_deref(), Some("ref-a"));
     }
 
     #[test]
