@@ -202,7 +202,7 @@ fn simulate(c: &Workload) -> Result<Value, String> {
     ] {
         match input {
             Some(Capacity::Constant(value)) if *value < 0 => {
-                return Err(format!("{field}: negative capacity"));
+                return Err(format!("negative service capacity ({field})"));
             }
             Some(Capacity::PerTick(values)) if values.len() != ticks => {
                 return Err(format!(
@@ -210,7 +210,7 @@ fn simulate(c: &Workload) -> Result<Value, String> {
                 ));
             }
             Some(Capacity::PerTick(values)) if values.iter().any(|value| *value < 0) => {
-                return Err(format!("{field}: negative capacity"));
+                return Err(format!("negative service capacity ({field})"));
             }
             _ => {}
         }
