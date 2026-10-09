@@ -133,7 +133,7 @@ fn every_candidate_subset_retains_exactly_the_unselected_live_records() {
         (FIRST..=FIRST + OVERLAP as u64 + 1).map(record).collect();
     for mask in 0..(1_usize << OVERLAP) {
         let selected: Vec<_> = (0..OVERLAP)
-            .filter(|index| mask & (1 << index) != 0)
+            .filter(|index| mask & (1_usize << *index) != 0)
             .map(|index| FIRST + index as u64 + 1)
             .collect();
         for reversed in [false, true] {
