@@ -1,6 +1,6 @@
 //! #71: compare the *existing historical* Python containment fixture checker
 //! against the compiled Rust oracle for bounded, semantically varied fixtures.
- //! No maintained Python implementation is introduced. Python here is an old
+//! No maintained Python implementation is introduced. Python here is an old
 //! baseline executable, not a product runtime or a source of mutation authority.
 //!
 //! Equal success on these controls is NOT full historical parity: unexercised
@@ -36,8 +36,11 @@ fn compare_with_historical(label: &str, value: &Value, expected_success: bool) {
         "free-energy-containment-differential-{}-{label}.json",
         std::process::id()
     ));
-    std::fs::write(&path, serde_json::to_vec(value).expect("serializable fixture"))
-        .expect("write independent, bounded fixture");
+    std::fs::write(
+        &path,
+        serde_json::to_vec(value).expect("serializable fixture"),
+    )
+    .expect("write independent, bounded fixture");
 
     let python = Command::new("python3")
         .arg(&historical)
@@ -107,7 +110,11 @@ fn baseline_and_decision_precedence_have_historical_parity() {
 #[test]
 fn recovery_ordering_and_error_controls_have_historical_parity() {
     let variants = [
-        ("recovery-subject-stale", "subject_current", "IDENTITY_STALE"),
+        (
+            "recovery-subject-stale",
+            "subject_current",
+            "IDENTITY_STALE",
+        ),
         (
             "recovery-authority-missing",
             "recovery_authority_current",
@@ -147,10 +154,7 @@ fn recovery_ordering_and_error_controls_have_historical_parity() {
 fn trace_effects_and_causal_equivalence_have_historical_parity() {
     let mut fixture = baseline();
     let mut changed = 0;
-    for case in fixture["trace_cases"]
-        .as_array_mut()
-        .expect("trace family")
-    {
+    for case in fixture["trace_cases"].as_array_mut().expect("trace family") {
         match case["kind"].as_str().expect("trace kind") {
             "closure" => {
                 case["closure_evidence_current"] = json!(false);
