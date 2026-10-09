@@ -410,10 +410,15 @@ fn duplicates_and_unreadable_case_identity_never_pass() {
     let document: Value = serde_json::from_str(source).unwrap();
     let cases = checked_cases(&document, group).unwrap();
     let mut changed = cases.to_vec();
-    let first_id = changed[0]["name"].clone();
-    changed[1]["name"] = first_id;
+    let first_id = case_id(&changed[0]).expect("first historical case identity");
+    let field = if changed[1].get("id").is_some() {
+        "id"
+    } else {
+        "name"
+    };
+    changed[1][field] = json!(first_id);
     let error = check_all_required_ids(&changed, originals).expect_err("duplicate must fail");
     assert!(error.contains("duplicate"));
-    changed[1]["name"] = json!(null);
+    changed[1][field] = json!(null);
     assert!(check_all_required_ids(&changed, originals).is_err());
 }
