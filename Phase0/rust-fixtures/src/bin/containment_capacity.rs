@@ -205,7 +205,9 @@ fn simulate(c: &Workload) -> Result<Value, String> {
                 return Err(format!("{field}: negative capacity"));
             }
             Some(Capacity::PerTick(values)) if values.len() != ticks => {
-                return Err(format!("{field}: capacity trace length does not match arrivals"));
+                return Err(format!(
+                    "{field}: capacity trace length does not match arrivals"
+                ));
             }
             Some(Capacity::PerTick(values)) if values.iter().any(|value| *value < 0) => {
                 return Err(format!("{field}: negative capacity"));
