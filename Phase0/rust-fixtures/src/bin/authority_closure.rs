@@ -468,6 +468,55 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    #[cfg(unix)]
+    #[test]
+    fn observed_regular_fixture_swap_rejects_same_size_inode_and_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let directory = std::env::temp_dir().join(format!(
+            "free-energy-authority-observed-swap-{}",
+            process::id()
+        ));
+        fs::create_dir(&directory).expect("create isolated fixture swap directory");
+
+        let path = directory.join("fixture.json");
+        let replacement = directory.join("replacement.json");
+        let target = directory.join("symlink-target.json");
+        let bytes = b"{\"spec\":2,\"cases\":[]}";
+
+        // An unchanged, regular opened inode is still accepted.
+        fs::write(&path, bytes).unwrap();
+        let observed = fs::symlink_metadata(&path).unwrap();
+        assert_eq!(
+            read_fixture_with_observed_metadata(&path, &observed).unwrap(),
+            std::str::from_utf8(bytes).unwrap()
+        );
+
+        // A different inode containing byte-identical, same-length input must
+        // not inherit preflight approval from the replaced regular file.
+        fs::write(&replacement, bytes).unwrap();
+        fs::rename(&replacement, &path).unwrap();
+        assert_eq!(
+            read_fixture_with_observed_metadata(&path, &observed).unwrap_err(),
+            "fixture changed between metadata check and open"
+        );
+
+        // Check a second post-preflight replacement. Linux O_NOFOLLOW
+        // rejects this during open; other Unix targets reject the inode swap.
+        let observed = fs::symlink_metadata(&path).unwrap();
+        fs::write(&target, bytes).unwrap();
+        fs::remove_file(&path).unwrap();
+        symlink(&target, &path).unwrap();
+        let error = read_fixture_with_observed_metadata(&path, &observed).unwrap_err();
+        assert!(
+            error.contains("cannot open")
+                || error.contains("fixture changed between metadata check and open"),
+            "{error}"
+        );
+
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
     fn input(value: Value) -> Map<String, Value> {
         value.as_object().unwrap().clone()
     }
