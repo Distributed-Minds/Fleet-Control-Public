@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::env;
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::process;
 
 #[cfg(test)]
@@ -70,6 +70,30 @@ struct Fixture {
     digest: String,
     cases: Vec<Case>,
     stale_head_cases: Vec<StaleCase>,
+}
+
+// Input is a caller-supplied fixture path, not a trusted provider snapshot.
+// Reject unbounded/special-file reads before parsing; cap the actual read too,
+// since a regular file can grow after the metadata observation.
+const MAX_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
+
+fn read_fixture_file(path: &str) -> Result<String, String> {
+    let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+    if !metadata.file_type().is_file() {
+        return Err("fixture must be a regular non-symlink file".to_owned());
+    }
+    if metadata.len() > MAX_FIXTURE_BYTES {
+        return Err("fixture exceeds maximum input size".to_owned());
+    }
+    let file = fs::File::open(path).map_err(|error| error.to_string())?;
+    let mut contents = String::new();
+    file.take(MAX_FIXTURE_BYTES + 1)
+        .read_to_string(&mut contents)
+        .map_err(|error| error.to_string())?;
+    if contents.len() as u64 > MAX_FIXTURE_BYTES {
+        return Err("fixture exceeds maximum input size".to_owned());
+    }
+    Ok(contents)
 }
 
 fn git_id(value: &str) -> bool {
@@ -265,7 +289,7 @@ fn main() {
     }
     .map(String::as_str)
     .unwrap_or("Phase0/fixtures/integration-candidate-v1.json");
-    let result = fs::read_to_string(path)
+    let result = read_fixture_file(path)
         .map_err(|e| e.to_string())
         .and_then(|contents| serde_json::from_str::<Fixture>(&contents).map_err(|e| e.to_string()))
         .and_then(|fixture| {
@@ -306,6 +330,54 @@ mod tests {
 
     fn sample() -> Fixture {
         serde_json::from_str(HISTORICAL_FIXTURE).expect("historical fixture must parse")
+    }
+
+    #[test]
+    fn bounded_input_accepts_original_fixture_and_rejects_unsafe_paths() {
+        let fixture_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../fixtures/integration-candidate-v1.json"
+        );
+        let original = read_fixture_file(fixture_path).expect("read original regular fixture");
+        assert_eq!(original, HISTORICAL_FIXTURE);
+        let parsed: Fixture = serde_json::from_str(&original).unwrap();
+        assert_eq!(validate(&parsed), Ok(6));
+
+        let scratch = std::env::temp_dir().join(format!(
+            "free-energy-integration-candidate-bounded-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&scratch).expect("create isolated fixture test directory");
+
+        let oversized = scratch.join("oversized-fixture.json");
+        let file = fs::File::create(&oversized).expect("create sparse oversized fixture");
+        file.set_len(MAX_FIXTURE_BYTES + 1)
+            .expect("size oversized fixture without allocating 8 MiB");
+        assert!(
+            read_fixture_file(oversized.to_str().unwrap())
+                .unwrap_err()
+                .contains("maximum input size")
+        );
+
+        assert!(
+            read_fixture_file(scratch.to_str().unwrap())
+                .unwrap_err()
+                .contains("regular non-symlink")
+        );
+
+        #[cfg(unix)]
+        {
+            let alias = scratch.join("alias-to-valid.json");
+            std::os::unix::fs::symlink(fixture_path, &alias)
+                .expect("create untrusted fixture path alias");
+            assert!(
+                read_fixture_file(alias.to_str().unwrap())
+                    .unwrap_err()
+                    .contains("regular non-symlink")
+            );
+        }
+
+        fs::remove_dir_all(&scratch).expect("remove isolated fixture test directory");
     }
 
     #[test]
