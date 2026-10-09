@@ -463,7 +463,7 @@ const MAX_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
 /// This is local CLI input hygiene, not a provider authorization primitive.
 fn read_fixture(path: &Path) -> Result<String, String> {
     let before = fs::symlink_metadata(path)
-        .map_err(|error| format!("cannot inspect fixture {path:?}: {error}"))?;
+        .map_err(|error| format!("cannot read fixture {path:?}: {error}"))?;
     if !before.file_type().is_file() {
         return Err(format!("fixture {path:?} is not a regular file"));
     }
