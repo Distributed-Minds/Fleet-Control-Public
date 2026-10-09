@@ -13,7 +13,10 @@ fn malicious_arguments_are_escaped_in_real_stderr() {
             .args(&args)
             .output()
             .expect("run compiled fixture aggregate");
-        assert!(!output.status.success(), "malicious CLI argument was accepted");
+        assert!(
+            !output.status.success(),
+            "malicious CLI argument was accepted"
+        );
         assert!(output.stdout.is_empty(), "failed CLI emitted PASS stdout");
         let diagnostic = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
         assert!(diagnostic.starts_with("FAIL: "), "{diagnostic:?}");
@@ -40,5 +43,9 @@ fn oversized_argument_does_not_leak_an_unbounded_diagnostic() {
     let diagnostic = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
     assert!(diagnostic.contains("unknown or repeated argument"));
     assert!(!diagnostic.contains("FORGED_SUCCESS"), "{diagnostic:?}");
-    assert!(diagnostic.len() < 1024, "unbounded stderr: {}", diagnostic.len());
+    assert!(
+        diagnostic.len() < 1024,
+        "unbounded stderr: {}",
+        diagnostic.len()
+    );
 }
