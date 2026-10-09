@@ -47,7 +47,13 @@ fn play_label(status: &PlayStatus) -> &'static str {
             "Engine only — install a separately rights-checked game/content pack"
         }
         PlayStatus::UpstreamLinkOnly => "Upstream download link only — not verified by FREE ENERGY",
-        PlayStatus::FreeEnergyVerified => "FREE ENERGY verified",
+        // The v0 typed reader explicitly rejects FREE_ENERGY_VERIFIED until a
+        // separate artifact-verification contract exists. Project is publicly
+        // mutable, so downstream callers can construct this enum directly:
+        // never turn that unproved value into a public positive play claim.
+        PlayStatus::FreeEnergyVerified => {
+            "Verification withheld — no accepted artifact-verification contract"
+        },
         PlayStatus::Unavailable => "Unavailable according to this draft record",
         PlayStatus::Unknown => "Play status not verified",
     }
@@ -227,6 +233,22 @@ mod tests {
         }
         assert!(html.contains("Source upstream (external) (link withheld:"));
         assert!(html.contains("Open upstream download (unverified by FREE ENERGY) (link withheld:"));
+    }
+
+    #[test]
+    fn mutated_typed_play_status_cannot_claim_free_energy_verification() {
+        let mut project = validate_manifest(LUANTI).expect("valid pilot");
+        // Manifest admission rejects this status, but the typed representation
+        // is public and can be changed after validation. The final HTML sink
+        // cannot assert an independently unproved artifact/playtest result.
+        project.play.status = PlayStatus::FreeEnergyVerified;
+        project.play.local_test_evidence_id = Some("untrusted-test-id".to_owned());
+        let html = render_catalog(&[project]);
+        assert!(html.contains(
+            "Verification withheld — no accepted artifact-verification contract"
+        ));
+        assert!(!html.contains("<strong>Play:</strong> FREE ENERGY verified"));
+        assert!(html.contains("No game is verified or hosted by FREE ENERGY"));
     }
 
     #[test]
