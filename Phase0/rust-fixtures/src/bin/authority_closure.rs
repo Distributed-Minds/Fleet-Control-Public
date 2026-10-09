@@ -6,7 +6,65 @@ use serde_json::{Map, Value};
 use std::collections::HashSet;
 use std::env;
 use std::fs;
+use std::io::Read;
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
+#[cfg(target_os = "linux")]
+use std::os::unix::fs::OpenOptionsExt;
+use std::path::Path;
 use std::process;
+
+const MAX_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
+
+/// File admission is bounded independently of typed fixture validation.
+/// This offline tool is not a provider authority or a live revocation path.
+fn read_fixture_with_observed_metadata(path: &Path, observed: &fs::Metadata) -> Result<String, String> {
+    if !observed.file_type().is_file() {
+        return Err("fixture must be a regular, non-symlink file".to_owned());
+    }
+    if observed.len() > MAX_FIXTURE_BYTES {
+        return Err("fixture exceeds the 8 MiB input limit".to_owned());
+    }
+
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        // On Linux, refuse a symlink swapped in at open and do not block on
+        // a FIFO swapped in between symlink_metadata and OpenOptions::open.
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let file = options.open(path).map_err(|error| format!("cannot open {path:?}: {error}"))?;
+    let opened = file.metadata().map_err(|error| error.to_string())?;
+    if !opened.file_type().is_file() {
+        return Err("opened fixture is not a regular file".to_owned());
+    }
+    #[cfg(unix)]
+    if observed.dev() != opened.dev() || observed.ino() != opened.ino() {
+        return Err("fixture changed between metadata check and open".to_owned());
+    }
+    if opened.len() > MAX_FIXTURE_BYTES {
+        return Err("fixture exceeds the 8 MiB input limit".to_owned());
+    }
+
+    // A concurrent writer may extend the opened inode after the size check.
+    // Read at most MAX + 1 bytes before parsing, never the entire growing file.
+    let mut bytes = Vec::new();
+    file.take(MAX_FIXTURE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| error.to_string())?;
+    if bytes.len() as u64 > MAX_FIXTURE_BYTES {
+        return Err("fixture exceeds the 8 MiB input limit".to_owned());
+    }
+    String::from_utf8(bytes).map_err(|_| "fixture input is not UTF-8".to_owned())
+}
+
+fn read_fixture(path: &Path) -> Result<String, String> {
+    let observed = fs::symlink_metadata(path).map_err(|error| format!("cannot inspect {path:?}: {error}"))?;
+    read_fixture_with_observed_metadata(path, &observed)
+}
 
 const REQUIRED: [&str; 26] = [
     "child-after-cutoff-denied",
@@ -389,8 +447,7 @@ fn main() {
         eprintln!("Usage: authority_closure <Phase0/fixtures/authority-closure-spec2.json>");
         process::exit(2);
     }
-    let outcome = fs::read_to_string(&args[1])
-        .map_err(|e| e.to_string())
+    let outcome = read_fixture(Path::new(&args[1]))
         .and_then(|source| validate_fixture(&source));
     match outcome {
         Ok(count) => println!("authority closure Rust semantic fixtures: {count} cases passed"),
