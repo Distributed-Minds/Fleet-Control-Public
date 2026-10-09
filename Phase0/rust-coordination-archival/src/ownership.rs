@@ -589,7 +589,15 @@ mod tests {
             let id = position + 100;
             let run = format!("old-{i}");
             records.push(event(position, id, &run, 1, State::Intent, None, "shared"));
-            records.push(event(position + 1, id + 1, &run, 2, State::Owned, Some(id), "shared"));
+            records.push(event(
+                position + 1,
+                id + 1,
+                &run,
+                2,
+                State::Owned,
+                Some(id),
+                "shared",
+            ));
             records.push(event(
                 position + 2,
                 id + 2,
@@ -602,7 +610,15 @@ mod tests {
         }
         let position = records.len() as u64 + 1;
         let id = position + 100;
-        records.push(event(position, id, "current", 1, State::Intent, None, "shared"));
+        records.push(event(
+            position,
+            id,
+            "current",
+            1,
+            State::Intent,
+            None,
+            "shared",
+        ));
         records.push(event(
             position + 1,
             id + 1,
