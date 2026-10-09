@@ -134,7 +134,10 @@ fn require_necessary_witnesses(case: &Map<String, Value>) -> Result<(), String> 
         ("ancestor_cutoff", "child_effect_after_cutoff"),
         ("shared_infrastructure", "authority_dependency"),
         ("runtime_minted", "initiator_stopped"),
-        ("declared_surfaces_complete", "undeclared_external_surfaces_unknown"),
+        (
+            "declared_surfaces_complete",
+            "undeclared_external_surfaces_unknown",
+        ),
     ];
     for (trigger, required) in REQUIRED_IF_TRUE {
         if case.get(*trigger).and_then(Value::as_bool) == Some(true)
@@ -143,7 +146,10 @@ fn require_necessary_witnesses(case: &Map<String, Value>) -> Result<(), String> 
             return Err(format!("{trigger} requires current witness: {required}"));
         }
     }
-    if case.get("lineage_protocol_compatible").and_then(Value::as_bool) == Some(false)
+    if case
+        .get("lineage_protocol_compatible")
+        .and_then(Value::as_bool)
+        == Some(false)
         && !case.contains_key("mutation_requested")
     {
         return Err("incompatible lineage requires current witness: mutation_requested".to_owned());
@@ -381,18 +387,48 @@ mod tests {
         let source = include_str!("../../../fixtures/authority-closure-spec2.json");
         let original: Value = serde_json::from_str(source).expect("historical fixture parses");
         let omissions = [
-            ("provider-valid-revoked-credential-denied-with-debt", "external_invalidation_complete"),
-            ("ack-loss-reconciles-before-retry", "authoritative_state_known"),
+            (
+                "provider-valid-revoked-credential-denied-with-debt",
+                "external_invalidation_complete",
+            ),
+            (
+                "ack-loss-reconciles-before-retry",
+                "authoritative_state_known",
+            ),
             ("locator-reuse-incarnation-safe", "same_incarnation"),
-            ("independent-handoff-survives-bounded", "retained_scope_exact"),
+            (
+                "independent-handoff-survives-bounded",
+                "retained_scope_exact",
+            ),
             ("cycle-with-independent-root", "external_root"),
-            ("delayed-job-requires-current-authority", "current_authority"),
-            ("unrelated-deletion-not-attributed", "closure_caused_deletion"),
-            ("fresh-cleanup-needs-recovery-authority", "recovery_authority"),
-            ("independent-sibling-not-over-revoked", "authority_dependency"),
-            ("lineage-version-disagreement-fails-closed", "mutation_requested"),
-            ("closure-complete-only-declared-surfaces", "undeclared_external_surfaces_unknown"),
-            ("runtime-minted-authority-is-descendant", "initiator_stopped"),
+            (
+                "delayed-job-requires-current-authority",
+                "current_authority",
+            ),
+            (
+                "unrelated-deletion-not-attributed",
+                "closure_caused_deletion",
+            ),
+            (
+                "fresh-cleanup-needs-recovery-authority",
+                "recovery_authority",
+            ),
+            (
+                "independent-sibling-not-over-revoked",
+                "authority_dependency",
+            ),
+            (
+                "lineage-version-disagreement-fails-closed",
+                "mutation_requested",
+            ),
+            (
+                "closure-complete-only-declared-surfaces",
+                "undeclared_external_surfaces_unknown",
+            ),
+            (
+                "runtime-minted-authority-is-descendant",
+                "initiator_stopped",
+            ),
             ("repeat-cancel-is-idempotent", "same_incarnation"),
             ("child-after-cutoff-denied", "child_effect_after_cutoff"),
         ];
@@ -411,7 +447,10 @@ mod tests {
                 semantic.remove(*key);
             }
             let error = evaluate(&semantic).expect_err("missing witness must not yield a verdict");
-            assert!(error.contains("requires current witness"), "{name}/{field}: {error}");
+            assert!(
+                error.contains("requires current witness"),
+                "{name}/{field}: {error}"
+            );
             assert!(
                 validate_fixture(&fixture.to_string()).is_err(),
                 "historical fixture {name} accepted omission of {field}"
