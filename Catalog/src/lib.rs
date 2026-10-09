@@ -385,7 +385,14 @@ fn is_portable_repository_segment(part: &str) -> bool {
 fn is_invisible_path_format(ch: char) -> bool {
     matches!(
         ch,
-        '\u{00ad}' | '\u{034f}' | '\u{180e}' | '\u{200b}'..='\u{200d}' | '\u{2060}' | '\u{feff}'
+        '\u{00ad}'
+            | '\u{034f}'
+            | '\u{180e}'
+            | '\u{200b}'..='\u{200d}'
+            | '\u{2060}'
+            | '\u{feff}'
+            | '\u{e0001}' // Plane 14 language tag
+            | '\u{e0020}'..='\u{e007f}' // Plane 14 tag text and terminator
     )
 }
 
@@ -1422,6 +1429,74 @@ mod tests {
             v["upstream"]["source_revision"] = json!("master");
         });
         assert!(validate_manifest(&attack).is_err());
+    }
+
+    #[test]
+    fn invisible_plane14_tags_fail_closed_in_paths_links_and_visible_metadata() {
+        use std::fmt::Write as _;
+
+        validate_manifest(VELOREN).expect("baseline manifest must remain valid");
+        for tag in [
+            '\u{e0001}',
+            '\u{e0020}',
+            '\u{e0061}',
+            '\u{e007e}',
+            '\u{e007f}',
+        ] {
+            let path = format!("assets/visible{tag}filename.png");
+            assert!(
+                !is_relative_path(&path),
+                "tagged rights path admitted: {path:?}"
+            );
+
+            let raw_url = format!("https://example.org/visible{tag}filename");
+            assert!(!is_public_https_url(&raw_url), "raw tag URL admitted");
+            let mut encoded_tag = String::new();
+            for byte in tag.to_string().bytes() {
+                write!(&mut encoded_tag, "%{byte:02X}").expect("format UTF-8 tag bytes");
+            }
+            let encoded_url = format!("https://example.org/visible{encoded_tag}filename");
+            assert!(
+                !is_public_https_url(&encoded_url),
+                "encoded tag URL admitted"
+            );
+
+            let displayed = changed(VELOREN, |record| {
+                record["display_name"] = json!(format!("Visible{tag}Game"));
+            });
+            let display_errors = validate_manifest(&displayed).unwrap_err();
+            assert!(
+                display_errors.iter().any(|error| error
+                    .contains("default-ignorable formatting control in visible metadata")),
+                "tagged visible metadata was not specifically rejected: {display_errors:?}"
+            );
+
+            let rights = changed(VELOREN, |record| {
+                record["rights_claims"][0]["scope_kind"] = json!("PATH");
+                record["rights_claims"][0]["scope"] = json!(path);
+            });
+            let rights_errors = validate_manifest(&rights).unwrap_err();
+            assert!(
+                rights_errors
+                    .iter()
+                    .any(|error| error.contains("unsafe rights path scope")),
+                "tagged rights scope was not specifically rejected: {rights_errors:?}"
+            );
+
+            let evidence = changed(VELOREN, |record| {
+                record["evidence"][0]["path"] = json!(path);
+            });
+            let evidence_errors = validate_manifest(&evidence).unwrap_err();
+            assert!(
+                evidence_errors
+                    .iter()
+                    .any(|error| error.contains("invalid pinned repository evidence")),
+                "tagged evidence path was not specifically rejected: {evidence_errors:?}"
+            );
+        }
+        assert!(is_relative_path("assets/música.png"));
+        assert!(is_public_https_url("https://example.org/visible/filename"));
+        validate_manifest(VELOREN).expect("Unicode tag checks must not corrupt baseline");
     }
 
     #[test]
