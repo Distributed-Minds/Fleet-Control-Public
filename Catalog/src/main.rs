@@ -623,10 +623,7 @@ mod tests {
         // O_NONBLOCK lets the opened-descriptor type check reject the FIFO.
         let error = read_bounded_manifest_observed(&path, &before)
             .expect_err("special file substitution must not be admitted");
-        assert!(
-            error.to_string().contains("not a regular file"),
-            "{error}"
-        );
+        assert!(error.to_string().contains("not a regular file"), "{error}");
         fs::remove_file(path).expect("remove test FIFO");
     }
 
