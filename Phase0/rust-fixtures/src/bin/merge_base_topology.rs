@@ -594,10 +594,10 @@ mod tests {
         // appear to bind the same basis. The compiled CLI must reject them.
         for (label, input) in [
             ("case field", r#"[{"name":"first","name":"second"}]"#),
-            ("escaped case field", r#"[{"name":"first","n\\u0061me":"second"}]"#),
+            ("escaped case field", r#"[{"name":"first","n\u0061me":"second"}]"#),
             ("virtual field", r#"[{"virtual":{"algorithm":"git","algorithm":"other"}}]"#),
             ("virtual option", r#"[{"virtual":{"options":{"x":"one","x":"two"}}}]"#),
-            ("escaped option", r#"[{"virtual":{"options":{"x":"one","\\u0078":"two"}}}]"#),
+            ("escaped option", r#"[{"virtual":{"options":{"x":"one","\u0078":"two"}}}]"#),
         ] {
             let error = parse_cases(input).expect_err("duplicate map key must fail");
             assert!(
