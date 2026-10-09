@@ -407,7 +407,7 @@ fn candidate_ids(fixture_text: &str) -> Result<Vec<(String, String)>, String> {
         let mut seen_counts = HashSet::new();
         if support.is_empty()
             || support.iter().any(|value| {
-                !value.as_u64().is_some_and(|count| count > 0)
+                value.as_u64().is_none_or(|count| count == 0)
                     || !seen_counts.insert(value.as_u64().unwrap_or(0))
             })
         {
