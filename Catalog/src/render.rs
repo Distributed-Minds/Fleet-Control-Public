@@ -209,7 +209,8 @@ mod tests {
 
         let html = render_catalog(&[record]);
         assert_eq!(
-            html.matches("link withheld: unsafe or unverified URL").count(),
+            html.matches("link withheld: unsafe or unverified URL")
+                .count(),
             4,
             "every mutated outbound URL must become non-clickable"
         );
@@ -219,7 +220,10 @@ mod tests {
             "href=\"https://valid.org/%2f",
             "href=\"https://localhost",
         ] {
-            assert!(!html.contains(forbidden), "unsafe rendered link: {forbidden}");
+            assert!(
+                !html.contains(forbidden),
+                "unsafe rendered link: {forbidden}"
+            );
         }
         assert!(html.contains("Source upstream (external) (link withheld:"));
         assert!(html.contains("Open upstream download (unverified by FREE ENERGY) (link withheld:"));
