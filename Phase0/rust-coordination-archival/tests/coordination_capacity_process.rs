@@ -70,11 +70,7 @@ fn rollover_threshold_and_exhaustion_fail_without_stdout() {
         1,
         "ROLLOVER_REQUIRED remaining=1;",
     );
-    expect_failure(
-        &["2500", "2500", "1", "0"],
-        1,
-        "EXHAUSTED remaining=0;",
-    );
+    expect_failure(&["2500", "2500", "1", "0"], 1, "EXHAUSTED remaining=0;");
 }
 
 #[test]
@@ -125,9 +121,5 @@ fn adding_consumption_never_recovers_successful_capacity() {
         1,
         "ROLLOVER_REQUIRED remaining=22;",
     );
-    expect_failure(
-        &["2500", "2500", "6", "16"],
-        1,
-        "EXHAUSTED remaining=0;",
-    );
+    expect_failure(&["2500", "2500", "6", "16"], 1, "EXHAUSTED remaining=0;");
 }
