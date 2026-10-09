@@ -140,6 +140,7 @@ fn run_oracles(selection: Selection, root: &Path) -> Result<(), String> {
         .parent()
         .ok_or("runner executable has no parent directory")?;
     let mut failed = Vec::new();
+    let mut passed = Vec::new();
     for oracle in ORACLES {
         if let Selection::Family(ref chosen) = selection {
             if chosen != oracle.name {
@@ -161,7 +162,7 @@ fn run_oracles(selection: Selection, root: &Path) -> Result<(), String> {
         }
         match command.output() {
             Ok(output) if output.status.success() && has_verification_output(&output.stdout) => {
-                println!("PASS {}", oracle.name);
+                passed.push(oracle.name);
             }
             Ok(output) if output.status.success() => failed.push(format!(
                 "{}: child exited successfully without verification output",
@@ -181,6 +182,10 @@ fn run_oracles(selection: Selection, root: &Path) -> Result<(), String> {
         }
     }
     if failed.is_empty() {
+        // Aggregate success is atomic: never emit PASS for a failed --all run.
+        for name in passed {
+            println!("PASS {name}");
+        }
         Ok(())
     } else {
         Err(failed.join("\nFAIL: "))
