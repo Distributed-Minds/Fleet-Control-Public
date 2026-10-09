@@ -4,6 +4,7 @@
 //! or paths supplied by fixture data. This is a developer verification runner:
 //! passing fixtures is not Python semantic parity or runtime authorization.
 
+use std::collections::HashSet;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -185,6 +186,10 @@ fn has_verification_output(oracle: &Oracle, stdout: &[u8]) -> bool {
                 "compatible-constructor-migration",
             ];
             let entries: Vec<&str> = line.split('\n').collect();
+            // The four fixed historical candidate envelopes differ in parent
+            // order, parent cardinality or constructor identity. Four copies
+            // of one plausible SHA-256 string cannot be a complete receipt.
+            let mut seen_digests = HashSet::new();
             entries.len() == REQUIRED.len()
                 && entries.iter().zip(REQUIRED).all(|(entry, expected_name)| {
                     let Some((name, digest)) = entry.split_once(": ") else {
@@ -195,6 +200,7 @@ fn has_verification_output(oracle: &Oracle, stdout: &[u8]) -> bool {
                         && digest
                             .bytes()
                             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+                        && seen_digests.insert(digest)
                 })
         }
         "merge_base_topology" => exact_count(
@@ -346,8 +352,11 @@ mod tests {
             .find(|oracle| oracle.name == "integration_candidate_digest")
             .unwrap();
         let digest_output = format!(
-            "normal-two-parent: {0}\nreversed-parents-same-tree: {0}\nunsupported-three-parent: {0}\ncompatible-constructor-migration: {0}\n",
-            "a".repeat(64)
+            "normal-two-parent: {}\nreversed-parents-same-tree: {}\nunsupported-three-parent: {}\ncompatible-constructor-migration: {}\n",
+            "a".repeat(64),
+            "b".repeat(64),
+            "c".repeat(64),
+            "d".repeat(64)
         );
         assert!(has_verification_output(
             digest_oracle,
@@ -394,9 +403,19 @@ mod tests {
             assert!(!has_verification_output(digest_oracle, output.as_bytes()));
         }
         let good = format!(
-            "normal-two-parent: {0}\nreversed-parents-same-tree: {0}\nunsupported-three-parent: {0}\ncompatible-constructor-migration: {0}\n",
-            "a".repeat(64)
+            "normal-two-parent: {}\nreversed-parents-same-tree: {}\nunsupported-three-parent: {}\ncompatible-constructor-migration: {}\n",
+            "a".repeat(64),
+            "b".repeat(64),
+            "c".repeat(64),
+            "d".repeat(64)
         );
+        for repeated in ["b", "c", "d"] {
+            let forged = good.replacen(&repeated.repeat(64), &"a".repeat(64), 1);
+            assert!(
+                !has_verification_output(digest_oracle, forged.as_bytes()),
+                "accepted repeated SHA-256 digest for distinct historical envelopes"
+            );
+        }
         for invalid in [
             // Previously a single plausible digest, repeated names, swapped
             // order and undeclared names all qualified as aggregate success.
