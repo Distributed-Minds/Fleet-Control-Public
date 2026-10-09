@@ -139,6 +139,44 @@ fn compute(c: &Case) -> Result<Computed<'_>, &'static str> {
         return Err("scenario must select exactly one semantic operation");
     }
 
+    // The primary selectors are exclusive above. Reject witnesses owned by
+    // different operations before interpreting any expected verdict.
+    let witnesses = [
+        (0, c.authority_change.is_some()),
+        (
+            3,
+            c.evaluator_changed.is_some()
+                || c.metric_changed.is_some()
+                || c.control_changed.is_some()
+                || c.fixture_changed.is_some()
+                || c.semantic_equivalence.is_some()
+                || c.identifier_changed.is_some()
+                || c.delta_kind.is_some()
+                || c.lineage_preserved.is_some()
+                || c.bounded_allowance.is_some()
+                || c.prior_evidence_incomparable.is_some(),
+        ),
+        (5, c.numeric_default.is_some()),
+        (
+            8,
+            c.candidate_identity.is_some()
+                || c.independent_acceptance.is_some()
+                || c.named_blocker.is_some()
+                || c.corrective_surface.is_some(),
+        ),
+        (
+            9,
+            c.siblings_pass.is_some() || c.regression_present.is_some(),
+        ),
+        (10, c.lineage_present.is_some()),
+    ];
+    if witnesses
+        .into_iter()
+        .any(|(owner, present)| present && !selector_groups[owner])
+    {
+        return Err("witness does not belong to selected semantic operation");
+    }
+
     let mut result = Computed::default();
     if c.fixture.is_some() {
         result.disposition = Some(if c.authority_change == Some(false) {
@@ -458,6 +496,30 @@ mod tests {
                 .any(|error| error.contains("missing telemetry cannot acquire a numeric default")),
             "{errors:?}"
         );
+    }
+
+    #[test]
+    fn unrelated_witness_inputs_never_disappear_behind_a_valid_expected_verdict() {
+        for (case_name, field, forged) in [
+            ("ack-loss-reconciles-first", "authority_change", json!(true)),
+            ("fixture-authority-is-inert", "bounded_allowance", json!(9)),
+            ("ack-loss-reconciles-first", "numeric_default", json!(2)),
+            (
+                "missing-telemetry-is-unknown",
+                "candidate_identity",
+                json!(true),
+            ),
+            ("evaluation-budget-exhaustion", "siblings_pass", json!(true)),
+            ("patch-accepted-is-closure", "lineage_present", json!(true)),
+        ] {
+            let errors = checked(change(case_name, field, forged))
+                .expect_err("cross-operation evidence must be rejected");
+            assert!(
+                errors.iter().any(|message| message
+                    .contains("witness does not belong to selected semantic operation")),
+                "unexpected acceptance for {case_name} / {field}: {errors:?}"
+            );
+        }
     }
 }
 
