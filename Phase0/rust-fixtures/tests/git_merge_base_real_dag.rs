@@ -33,6 +33,14 @@ impl ScratchGit {
 
     fn execute(&self, args: &[&str], input: &str, use_replacements: bool) -> Output {
         let mut command = Command::new("git");
+        // Git environment variables inherited from a contributor's shell
+        // can redirect objects, repository discovery, or executable config.
+        // These are isolated synthetic fixture DAGs, not caller-owned repos.
+        for (key, _) in std::env::vars_os() {
+            if key.to_string_lossy().starts_with("GIT_") {
+                command.env_remove(key);
+            }
+        }
         command
             .arg("-C")
             .arg(&self.directory)
@@ -161,4 +169,38 @@ fn real_git_shallow_boundary_cannot_reuse_a_full_history_merge_base() {
 
     fs::remove_file(shallow_file).expect("restore full history view");
     assert_eq!(git.merge_bases(&descendant, &right, false), [root].into());
+}
+
+#[test]
+fn poisoned_parent_git_environment_cannot_redirect_real_dag_fixture() {
+    // Invoke the actual compiled DAG test in a separate process. Do not
+    // mutate process-global environment shared with other Rust tests.
+    let child = Command::new(std::env::current_exe().expect("current test executable"))
+        .args([
+            "--exact",
+            "real_git_criss_cross_has_two_best_bases_and_overlays_change_the_answer",
+            "--nocapture",
+        ])
+        .env(
+            "GIT_OBJECT_DIRECTORY",
+            "/__free_energy_nonexistent_object_store__",
+        )
+        .env("GIT_INDEX_FILE", "/__free_energy_nonexistent_index__")
+        .env("GIT_CONFIG_COUNT", "1")
+        .env("GIT_CONFIG_KEY_0", "core.bare")
+        .env("GIT_CONFIG_VALUE_0", "true")
+        .env("GIT_NO_REPLACE_OBJECTS", "1")
+        .output()
+        .expect("execute real Git test in isolated child process");
+    assert!(
+        child.status.success(),
+        "inherited Git settings changed fixture behavior: stdout={} stderr={}",
+        String::from_utf8_lossy(&child.stdout),
+        String::from_utf8_lossy(&child.stderr)
+    );
+    let output = String::from_utf8_lossy(&child.stdout);
+    assert!(
+        output.contains("1 passed; 0 failed"),
+        "child did not execute the intended actual Git DAG test: {output}"
+    );
 }

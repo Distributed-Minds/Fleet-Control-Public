@@ -116,3 +116,47 @@ fn missing_root_and_unknown_family_fail_without_false_pass() {
         assert!(stderr(&output).contains("FAIL:"), "{args:?}");
     }
 }
+
+#[test]
+fn aggregate_failure_suppresses_success_records_from_passing_siblings() {
+    // An incomplete checkout passes the root-path check but lacks fixture data.
+    // The embedded topology oracle still succeeds; aggregate output must not
+    // leak that PASS before reporting failure of the other families.
+    let scratch = std::env::temp_dir().join(format!(
+        "free-energy-all-oracles-incomplete-{}",
+        std::process::id()
+    ));
+    let crate_dir = scratch.join("Phase0/rust-fixtures");
+    std::fs::create_dir_all(&crate_dir).expect("create isolated incomplete fixture root");
+    std::fs::write(crate_dir.join("Cargo.toml"), b"fixture-root-marker")
+        .expect("write root marker");
+
+    let individual = Command::new(RUNNER)
+        .args(["--family", "merge_base_topology", "--root"])
+        .arg(&scratch)
+        .output()
+        .expect("run independent compiled topology oracle");
+    let aggregate = Command::new(RUNNER)
+        .args(["--all", "--root"])
+        .arg(&scratch)
+        .output()
+        .expect("run mixed success/failure aggregate");
+    std::fs::remove_dir_all(&scratch).expect("remove isolated fixture root");
+
+    assert!(
+        individual.status.success(),
+        "positive topology control failed: {}",
+        stderr(&individual)
+    );
+    assert_eq!(stdout(&individual), "PASS merge_base_topology\n");
+    assert!(
+        !aggregate.status.success(),
+        "missing fixtures were accepted"
+    );
+    assert!(
+        aggregate.stdout.is_empty(),
+        "failed aggregate leaked PASS records: {}",
+        stdout(&aggregate)
+    );
+    assert!(stderr(&aggregate).contains("FAIL: "));
+}

@@ -116,6 +116,47 @@ fn validate_inputs(case: &Map<String, Value>) -> Result<(), String> {
     Ok(())
 }
 
+/// The fixture is an observation, not a declaration that omitted evidence is
+/// false. Require the paired witness when a branch's positive trigger is present,
+/// even if an unrelated earlier branch would otherwise short-circuit evaluation.
+fn require_necessary_witnesses(case: &Map<String, Value>) -> Result<(), String> {
+    const REQUIRED_IF_TRUE: &[(&str, &str)] = &[
+        ("provider_credential_valid", "fleet_authority_revoked"),
+        ("fleet_authority_revoked", "external_invalidation_complete"),
+        ("cancel_ack_lost", "authoritative_state_known"),
+        ("locator_reused", "same_incarnation"),
+        ("same_operation_id", "same_incarnation"),
+        ("external_deletion", "closure_caused_deletion"),
+        ("cleanup_consequential", "recovery_authority"),
+        ("handoff_independent", "retained_scope_exact"),
+        ("cycle", "external_root"),
+        ("job_started_after_cutoff", "current_authority"),
+        ("ancestor_cutoff", "child_effect_after_cutoff"),
+        ("shared_infrastructure", "authority_dependency"),
+        ("runtime_minted", "initiator_stopped"),
+        (
+            "declared_surfaces_complete",
+            "undeclared_external_surfaces_unknown",
+        ),
+    ];
+    for (trigger, required) in REQUIRED_IF_TRUE {
+        if case.get(*trigger).and_then(Value::as_bool) == Some(true)
+            && !case.contains_key(*required)
+        {
+            return Err(format!("{trigger} requires current witness: {required}"));
+        }
+    }
+    if case
+        .get("lineage_protocol_compatible")
+        .and_then(Value::as_bool)
+        == Some(false)
+        && !case.contains_key("mutation_requested")
+    {
+        return Err("incompatible lineage requires current witness: mutation_requested".to_owned());
+    }
+    Ok(())
+}
+
 fn yes(case: &Map<String, Value>, key: &str) -> bool {
     case.get(key).and_then(Value::as_bool) == Some(true)
 }
@@ -170,6 +211,7 @@ fn composition(case: &Map<String, Value>) -> Result<Option<(String, Value)>, Str
 /// Deliberately receives *only* semantic inputs; never receives fixture expected labels.
 fn evaluate(case: &Map<String, Value>) -> Result<(String, Value), String> {
     validate_inputs(case)?;
+    require_necessary_witnesses(case)?;
 
     // Compatibility, inventory, and durable closure evidence are gates.
     if no(case, "lineage_protocol_compatible") && yes(case, "mutation_requested") {
@@ -338,6 +380,102 @@ mod tests {
 
     fn check(value: Value, expected: &str) {
         assert_eq!(evaluate(&input(value)).unwrap(), verdict(expected));
+    }
+
+    #[test]
+    fn historical_necessary_witnesses_cannot_be_deleted_or_masked_by_other_inputs() {
+        let source = include_str!("../../../fixtures/authority-closure-spec2.json");
+        let original: Value = serde_json::from_str(source).expect("historical fixture parses");
+        let omissions = [
+            (
+                "provider-valid-revoked-credential-denied-with-debt",
+                "external_invalidation_complete",
+            ),
+            (
+                "ack-loss-reconciles-before-retry",
+                "authoritative_state_known",
+            ),
+            ("locator-reuse-incarnation-safe", "same_incarnation"),
+            (
+                "independent-handoff-survives-bounded",
+                "retained_scope_exact",
+            ),
+            ("cycle-with-independent-root", "external_root"),
+            (
+                "delayed-job-requires-current-authority",
+                "current_authority",
+            ),
+            (
+                "unrelated-deletion-not-attributed",
+                "closure_caused_deletion",
+            ),
+            (
+                "fresh-cleanup-needs-recovery-authority",
+                "recovery_authority",
+            ),
+            (
+                "independent-sibling-not-over-revoked",
+                "authority_dependency",
+            ),
+            (
+                "lineage-version-disagreement-fails-closed",
+                "mutation_requested",
+            ),
+            (
+                "closure-complete-only-declared-surfaces",
+                "undeclared_external_surfaces_unknown",
+            ),
+            (
+                "runtime-minted-authority-is-descendant",
+                "initiator_stopped",
+            ),
+            ("repeat-cancel-is-idempotent", "same_incarnation"),
+            ("child-after-cutoff-denied", "child_effect_after_cutoff"),
+        ];
+        for (name, field) in omissions {
+            let mut fixture = original.clone();
+            let case = fixture["cases"]
+                .as_array_mut()
+                .expect("cases array")
+                .iter_mut()
+                .find(|item| item["name"].as_str() == Some(name))
+                .expect("original named fixture case");
+            case.as_object_mut().expect("case object").remove(field);
+            let mut semantic = case.as_object().expect("case object").clone();
+            semantic.remove("name");
+            for key in EXPECTED_KEYS {
+                semantic.remove(*key);
+            }
+            let error = evaluate(&semantic).expect_err("missing witness must not yield a verdict");
+            assert!(
+                error.contains("requires current witness"),
+                "{name}/{field}: {error}"
+            );
+            assert!(
+                validate_fixture(&fixture.to_string()).is_err(),
+                "historical fixture {name} accepted omission of {field}"
+            );
+        }
+    }
+
+    #[test]
+    fn unrelated_terminal_hint_does_not_mask_incomplete_revocation_witnesses() {
+        let case = input(json!({
+            "provider_access": "ERROR",
+            "provider_credential_valid": true,
+            "fleet_authority_revoked": true
+        }));
+        assert!(evaluate(&case).is_err());
+        let complete = input(json!({
+            "provider_access": "ERROR",
+            "provider_credential_valid": true,
+            "fleet_authority_revoked": true,
+            "external_invalidation_complete": false
+        }));
+        assert_eq!(
+            evaluate(&complete).unwrap(),
+            result("expected_closure", "ERROR")
+        );
     }
 
     #[test]
