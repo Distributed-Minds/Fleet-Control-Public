@@ -56,11 +56,17 @@ fn assess(o: Observation) -> Result<Decision, &'static str> {
     if o.standby_max >= o.hard_limit {
         return Err("standby maximum must be below the hard limit");
     }
+    if o.standby_max >= o.switch_at {
+        return Err("standby maximum must precede the switch threshold");
+    }
     if o.active_count > o.hard_limit || o.other_count > o.hard_limit {
         return Err("observed count exceeds the hard limit");
     }
     if o.active_epoch <= o.other_epoch {
         return Err("active slot epoch is not newer than the other slot");
+    }
+    if o.active_epoch == u64::MAX {
+        return Err("active slot epoch cannot advance for rotation");
     }
     if o.pending_upper_bound == 0 {
         return Err("pending writes require a nonzero upper bound");
@@ -77,7 +83,14 @@ fn assess(o: Observation) -> Result<Decision, &'static str> {
 
     // Never advertise a rotation while the other issue is still DRAINING
     // or has not been compacted within its configured standby headroom.
-    let standby_ready = o.other_state == OtherState::Standby && o.other_count <= o.standby_max;
+    // Rotation must leave enough capacity for the entire declared write batch
+    // in the successor slot, before its own proactive switch threshold.
+    // Being below standby_max alone does not establish that headroom.
+    let standby_ready = o.other_state == OtherState::Standby
+        && o.other_count <= o.standby_max
+        && o.other_count
+            .checked_add(budget)
+            .is_some_and(|projected| projected < o.switch_at);
     if !standby_ready {
         return Ok(Decision::MaintenanceRequired { remaining });
     }
@@ -300,6 +313,51 @@ mod tests {
                 assert!(!matches!(result, Decision::Headroom { .. }));
             }
         }
+    }
+
+
+    #[test]
+    fn rotation_requires_successor_epoch_and_budget_safe_standby() {
+        let mut o = snapshot(1990);
+
+        // A standby inside a permissive standby_max may already be unable
+        // to accept the pending batch without reaching the switch threshold.
+        o.standby_max = 1999;
+        o.other_count = 1990;
+        assert_eq!(
+            assess(o),
+            Ok(Decision::MaintenanceRequired { remaining: 510 })
+        );
+        o.other_count = 1989;
+        assert_eq!(
+            assess(o),
+            Ok(Decision::RotationReadyModelOnly { remaining: 510 })
+        );
+
+        // The same invariant applies when the configured standby is small
+        // but the declared write budget is unusually large.
+        o.other_count = 300;
+        o.pending_upper_bound = 1700;
+        o.reserve = 0;
+        assert_eq!(
+            assess(o),
+            Ok(Decision::MaintenanceRequired { remaining: 510 })
+        );
+        o.pending_upper_bound = 1699;
+        assert_eq!(
+            assess(o),
+            Ok(Decision::RotationReadyModelOnly { remaining: 510 })
+        );
+
+        // Rotating into a slot above the switch threshold cannot be safe
+        // merely because the provider's hard limit is larger.
+        o.standby_max = 2000;
+        assert!(assess(o).is_err());
+
+        // No strictly newer epoch can be issued after the maximum value.
+        o.standby_max = 1999;
+        o.active_epoch = u64::MAX;
+        assert!(assess(o).is_err());
     }
 
     #[test]
