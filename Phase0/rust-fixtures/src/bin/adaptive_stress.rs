@@ -510,7 +510,10 @@ mod tests {
     #[test]
     fn one_positive_budget_cannot_forge_eligibility_from_an_unseen_budget() {
         for (name, field) in [
-            ("evaluation-budget-exhaustion", "evaluation_budget_remaining"),
+            (
+                "evaluation-budget-exhaustion",
+                "evaluation_budget_remaining",
+            ),
             ("family-budget-exhaustion", "family_budget_remaining"),
         ] {
             let mut forged = change(name, field, json!(7));
@@ -526,9 +529,8 @@ mod tests {
             case["fresh_workload"] = json!(true);
             let errors = checked(forged).expect_err("missing budget cannot admit new work");
             assert!(
-                errors
-                    .iter()
-                    .any(|reason| reason.contains("positive admission requires both budget observations")),
+                errors.iter().any(|reason| reason
+                    .contains("positive admission requires both budget observations")),
                 "{name}: {errors:?}"
             );
         }
