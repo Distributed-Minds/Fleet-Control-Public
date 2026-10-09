@@ -27,7 +27,10 @@ const FILE_CLIS: [(&str, &str); 10] = [
         env!("CARGO_BIN_EXE_coordination_history"),
     ),
     ("github_capability", env!("CARGO_BIN_EXE_github_capability")),
-    ("merge_base_topology", env!("CARGO_BIN_EXE_merge_base_topology")),
+    (
+        "merge_base_topology",
+        env!("CARGO_BIN_EXE_merge_base_topology"),
+    ),
     (
         "integration_candidate",
         env!("CARGO_BIN_EXE_integration_candidate"),
