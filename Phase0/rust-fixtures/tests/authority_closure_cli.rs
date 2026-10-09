@@ -88,7 +88,6 @@ fn compiled_binary_accepts_exact_historical_26_case_fixture() {
     );
 }
 
-
 #[test]
 fn rejects_oversized_sparse_symlink_and_nonregular_fixtures() {
     let serial = NEXT_FILE.fetch_add(1, Ordering::Relaxed);
@@ -131,7 +130,7 @@ fn exactly_eight_mib_of_valid_json_with_trailing_whitespace_is_admitted() {
     assert!(result.stderr.is_empty(), "unexpected diagnostics: {result:?}");
     assert_eq!(
         String::from_utf8_lossy(&result.stdout),
-        "authority closure Rust semantic fixtures: 26 cases passed\\n".replace("\\n", "\n")
+        "authority closure Rust semantic fixtures: 26 cases passed\n"
     );
 }
 
