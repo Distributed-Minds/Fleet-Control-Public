@@ -219,6 +219,20 @@ fn read_body_with_observed_metadata(path: &str, metadata: &fs::Metadata) -> Resu
 }
 
 fn read_body(path: &str) -> Result<String, String> {
+    // A leaf-only lstat follows symlinked parent directories, even when the
+    // leaf itself is a real file. Do not admit such advisory input paths.
+    // This is a preflight guard, not an atomic directory-handle sandbox.
+    let mut examined = std::path::PathBuf::new();
+    if let Some(parent) = std::path::Path::new(path).parent() {
+        for component in parent.components() {
+            examined.push(component.as_os_str());
+            let kind = fs::symlink_metadata(&examined)
+                .map_err(|error| format!("cannot inspect {examined:?}: {error}"))?;
+            if kind.file_type().is_symlink() {
+                return Err("coordination body path contains symlink component".to_owned());
+            }
+        }
+    }
     let observed = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
     read_body_with_observed_metadata(path, &observed)
 }
@@ -449,6 +463,31 @@ mod tests {
                 .contains("regular, non-symlink"));
         }
         fs::remove_dir_all(&scratch).expect("remove isolated test directory");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_ancestor_cannot_supply_a_trusted_coordination_body() {
+        use std::os::unix::fs::symlink;
+        let scratch = std::env::temp_dir().join(format!(
+            "free-energy-slot-ancestor-path-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&scratch).expect("create isolated test root");
+        let real = scratch.join("real");
+        fs::create_dir(&real).expect("create regular parent");
+        let body = real.join("slot-body");
+        fs::write(&body, A).expect("write valid body");
+        assert_eq!(read_body(body.to_str().unwrap()).unwrap(), A);
+
+        let alias = scratch.join("alias");
+        symlink(&real, &alias).expect("create symlinked parent directory");
+        let path_through_alias = alias.join("slot-body");
+        assert_eq!(
+            read_body(path_through_alias.to_str().unwrap()).unwrap_err(),
+            "coordination body path contains symlink component"
+        );
+        fs::remove_dir_all(&scratch).expect("remove isolated test root");
     }
 
     #[cfg(unix)]
