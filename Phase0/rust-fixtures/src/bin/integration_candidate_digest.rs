@@ -12,6 +12,7 @@ use std::collections::HashSet;
 use std::env;
 use std::fmt::Write as _;
 use std::fs;
+use std::io::Read;
 use std::process;
 
 const K: [u32; 64] = [
@@ -450,6 +451,31 @@ fn candidate_ids(fixture_text: &str) -> Result<Vec<(String, String)>, String> {
     Ok(ids)
 }
 
+// Fixture input is a local caller-supplied path, not authenticated provider
+// evidence. Bound regular-file reads before deriving plausible SHA-256 IDs.
+// Recheck the byte limit while reading because a file can grow after stat.
+// This is not an OS-level atomic defense against concurrent path replacement.
+const MAX_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
+
+fn read_fixture_file(path: &str) -> Result<String, String> {
+    let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+    if !metadata.file_type().is_file() {
+        return Err("fixture must be a regular non-symlink file".to_owned());
+    }
+    if metadata.len() > MAX_FIXTURE_BYTES {
+        return Err("fixture exceeds maximum input size".to_owned());
+    }
+    let file = fs::File::open(path).map_err(|error| error.to_string())?;
+    let mut contents = String::new();
+    file.take(MAX_FIXTURE_BYTES + 1)
+        .read_to_string(&mut contents)
+        .map_err(|error| error.to_string())?;
+    if contents.len() as u64 > MAX_FIXTURE_BYTES {
+        return Err("fixture exceeds maximum input size".to_owned());
+    }
+    Ok(contents)
+}
+
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
     if args.len() > 1 {
@@ -460,7 +486,7 @@ fn main() {
         .first()
         .map(String::as_str)
         .unwrap_or("Phase0/fixtures/integration-candidate-v1.json");
-    let result = fs::read_to_string(path)
+    let result = read_fixture_file(path)
         .map_err(|e| e.to_string())
         .and_then(|text| candidate_ids(&text));
     match result {
@@ -482,6 +508,51 @@ mod tests {
     use super::*;
 
     const HISTORICAL: &str = include_str!("../../../fixtures/integration-candidate-v1.json");
+
+    #[test]
+    fn bounded_digest_input_preserves_historical_identities_and_rejects_unsafe_files() {
+        let historical_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../fixtures/integration-candidate-v1.json"
+        );
+        let bytes = read_fixture_file(historical_path).expect("read historical regular fixture");
+        assert_eq!(bytes, HISTORICAL);
+        assert_eq!(candidate_ids(&bytes).unwrap().len(), 4);
+
+        let scratch = std::env::temp_dir().join(format!(
+            "free-energy-candidate-digest-input-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&scratch).expect("create fixture test directory");
+
+        let oversized = scratch.join("oversized.json");
+        let file = fs::File::create(&oversized).expect("create sparse fixture");
+        file.set_len(MAX_FIXTURE_BYTES + 1)
+            .expect("create oversized sparse fixture");
+        assert!(read_fixture_file(oversized.to_str().unwrap())
+            .unwrap_err()
+            .contains("maximum input size"));
+        assert!(read_fixture_file(scratch.to_str().unwrap())
+            .unwrap_err()
+            .contains("regular non-symlink"));
+
+        #[cfg(unix)]
+        {
+            let symlink = scratch.join("alias.json");
+            std::os::unix::fs::symlink(historical_path, &symlink)
+                .expect("create fixture path symlink");
+            assert!(read_fixture_file(symlink.to_str().unwrap())
+                .unwrap_err()
+                .contains("regular non-symlink"));
+        }
+
+        let invalid_utf8 = scratch.join("invalid-utf8.json");
+        fs::write(&invalid_utf8, [0xff, 0xfe]).expect("create invalid UTF-8 fixture");
+        assert!(read_fixture_file(invalid_utf8.to_str().unwrap()).is_err());
+
+        drop(file);
+        fs::remove_dir_all(&scratch).expect("remove fixture test directory");
+    }
 
     #[test]
     fn sha256_standard_vectors_and_long_message() {
