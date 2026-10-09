@@ -15,11 +15,11 @@
 //! Exit 1 means the input or reduction is invalid. No files are modified.
 
 use free_energy_coordination_archival::ownership::{reduce_model_only, Scope, State, Transition};
-use std::{env, fs, io::Read, path::Path, process::ExitCode};
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
 #[cfg(target_os = "linux")]
 use std::os::unix::fs::OpenOptionsExt;
+use std::{env, fs, io::Read, path::Path, process::ExitCode};
 
 const MAX_INPUT_BYTES: u64 = 16 * 1024 * 1024;
 
@@ -151,8 +151,8 @@ fn read_bounded_with_metadata(path: &Path, observed: &fs::Metadata) -> Result<St
 }
 
 fn read_bounded(path: &Path) -> Result<String, String> {
-    let observed = fs::symlink_metadata(path)
-        .map_err(|error| format!("cannot inspect {path:?}: {error}"))?;
+    let observed =
+        fs::symlink_metadata(path).map_err(|error| format!("cannot inspect {path:?}: {error}"))?;
     read_bounded_with_metadata(path, &observed)
 }
 
@@ -320,10 +320,8 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn same_bytes_replacement_between_metadata_and_open_is_rejected() {
-        let scratch = std::env::temp_dir().join(format!(
-            "free-energy-ownership-swap-{}",
-            std::process::id()
-        ));
+        let scratch =
+            std::env::temp_dir().join(format!("free-energy-ownership-swap-{}", std::process::id()));
         fs::create_dir_all(&scratch).expect("create scratch directory");
         let path = scratch.join("transcript.tsv");
         let replacement = scratch.join("replacement.tsv");
@@ -353,6 +351,4 @@ mod tests {
             "transcript exceeds the 16 MiB model limit"
         );
         fs::remove_dir_all(&scratch).expect("remove scratch directory");
-    }
-
-}
+    }}
