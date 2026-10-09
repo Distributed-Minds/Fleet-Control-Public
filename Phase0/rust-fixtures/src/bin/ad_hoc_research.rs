@@ -490,8 +490,7 @@ fn packet_fields(case: &Value) -> Value {
         case.get(*key)
             .and_then(Value::as_array)
             .is_some_and(|items| items.iter().all(Value::is_string))
-    })
-    {
+    }) {
         json!("PRESERVE_REQUIRED_FIELDS")
     } else {
         json!("REJECT_INCOMPLETE_PACKET")
@@ -746,14 +745,12 @@ mod cli_semantic_tests {
         assert!(projection(packet).is_ok());
         for field in SEMANTIC_FIELDS {
             let mut mutated = packet.clone();
-            mutated[field] = if matches!(
-                field,
-                "packet_schema" | "topic" | "authoritative_baseline"
-            ) {
-                json!(["not-a-scalar"])
-            } else {
-                json!(["legitimate", null])
-            };
+            mutated[field] =
+                if matches!(field, "packet_schema" | "topic" | "authoritative_baseline") {
+                    json!(["not-a-scalar"])
+                } else {
+                    json!(["legitimate", null])
+                };
             let result = projection(&mutated);
             assert!(
                 result
@@ -764,11 +761,9 @@ mod cli_semantic_tests {
         }
         let mut mutated = baseline;
         mutated["packet_templates"]["base"]["observations"] = json!(["real", false]);
-        assert!(
-            validate(&mutated)
-                .expect_err("invalid packet template must fail the historical oracle")
-                .iter()
-                .any(|error| error.contains("invalid semantic packet field type: observations"))
-        );
+        assert!(validate(&mutated)
+            .expect_err("invalid packet template must fail the historical oracle")
+            .iter()
+            .any(|error| error.contains("invalid semantic packet field type: observations")));
     }
 }
