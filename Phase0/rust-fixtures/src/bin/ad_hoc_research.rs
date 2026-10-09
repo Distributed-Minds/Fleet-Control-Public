@@ -204,8 +204,7 @@ fn matching_packets<'a>(
     case: &'a Value,
     templates: &'a Map<String, Value>,
 ) -> Result<Vec<&'a Value>, String> {
-    if case.get("matching_packet_refs").is_some()
-        && case.get("matching_packet_payloads").is_some()
+    if case.get("matching_packet_refs").is_some() && case.get("matching_packet_payloads").is_some()
     {
         return Err(
             "matching_packet_refs and matching_packet_payloads are mutually exclusive".to_owned(),
@@ -666,7 +665,9 @@ mod cli_semantic_tests {
         let errors = validate(&modified).expect_err("ambiguous collection must fail closed");
         assert!(
             errors.iter().any(|error| {
-                error.contains("matching_packet_refs and matching_packet_payloads are mutually exclusive")
+                error.contains(
+                    "matching_packet_refs and matching_packet_payloads are mutually exclusive",
+                )
             }),
             "{errors:?}"
         );
