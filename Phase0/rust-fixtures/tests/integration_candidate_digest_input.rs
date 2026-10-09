@@ -80,7 +80,14 @@ impl Drop for Scratch {
 fn compiled_cli_preserves_exact_historical_receipts_at_eight_mib_boundary() {
     let original = invoke(None);
     assert!(original.status.success(), "{}", stderr(&original));
-    assert_eq!(original.stdout.iter().filter(|&&byte| byte == b'\n').count(), 4);
+    assert_eq!(
+        original
+            .stdout
+            .iter()
+            .filter(|&&byte| byte == b'\n')
+            .count(),
+        4
+    );
     assert!(stderr(&original).contains("does not authorize Git mutations"));
 
     let direct = invoke(Some(&historical()));
