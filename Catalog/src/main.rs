@@ -187,6 +187,12 @@ impl ManifestBatchBudget {
 
 fn read_bounded_manifest(path: &Path) -> io::Result<String> {
     let before = fs::symlink_metadata(path)?;
+    read_bounded_manifest_observed(path, &before)
+}
+
+/// Check the exact preflighted inode after opening. Keeping preflight and
+/// opening separate also permits deterministic swap regressions.
+fn read_bounded_manifest_observed(path: &Path, before: &fs::Metadata) -> io::Result<String> {
     if !before.file_type().is_file() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -200,7 +206,20 @@ fn read_bounded_manifest(path: &Path) -> io::Result<String> {
         ));
     }
 
-    let file = fs::File::open(path)?;
+    // The path can change after lstat. A swapped-in FIFO would block a
+    // regular read-only open indefinitely; a swapped-in symlink could
+    // transiently open an unrelated target before the inode check. Apply
+    // Linux's open-time guards before inspecting the opened descriptor.
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let file = options.open(path)?;
     let opened = file.metadata()?;
     if !opened.file_type().is_file() {
         return Err(io::Error::new(
@@ -582,6 +601,56 @@ mod tests {
             padded
         );
         fs::remove_file(file).expect("remove test file");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn manifest_open_rejects_fifo_swapped_after_regular_file_preflight() {
+        let path = env::temp_dir().join(format!(
+            "free-energy-catalog-swapped-fifo-{}",
+            std::process::id()
+        ));
+        fs::write(&path, LUANTI).expect("create preflighted regular manifest");
+        let before = fs::symlink_metadata(&path).expect("observe regular file");
+        fs::remove_file(&path).expect("replace regular file");
+        let status = std::process::Command::new("mkfifo")
+            .arg(&path)
+            .status()
+            .expect("invoke POSIX mkfifo on Linux");
+        assert!(status.success(), "create swapped-in FIFO");
+
+        // A blocking File::open would hang here before inode validation.
+        // O_NONBLOCK lets the opened-descriptor type check reject the FIFO.
+        let error = read_bounded_manifest_observed(&path, &before)
+            .expect_err("special file substitution must not be admitted");
+        assert!(error.to_string().contains("not a regular file"), "{error}");
+        fs::remove_file(path).expect("remove test FIFO");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn manifest_open_rejects_symlink_swapped_after_regular_file_preflight() {
+        use std::os::unix::fs::symlink;
+        let path = env::temp_dir().join(format!(
+            "free-energy-catalog-swapped-link-{}",
+            std::process::id()
+        ));
+        let outside = env::temp_dir().join(format!(
+            "free-energy-catalog-outside-link-{}",
+            std::process::id()
+        ));
+        fs::write(&path, LUANTI).expect("create preflighted regular manifest");
+        fs::write(&outside, LUANTI).expect("create unrelated regular manifest");
+        let before = fs::symlink_metadata(&path).expect("observe regular file");
+        fs::remove_file(&path).expect("replace regular file");
+        symlink(&outside, &path).expect("replace with symlink");
+
+        assert!(
+            read_bounded_manifest_observed(&path, &before).is_err(),
+            "a swapped-in symlink must not read the unrelated target"
+        );
+        fs::remove_file(path).expect("remove test symlink");
+        fs::remove_file(outside).expect("remove unrelated test input");
     }
 
     #[test]
