@@ -245,8 +245,17 @@ fn compute(c: &Case) -> Result<Computed<'_>, &'static str> {
             return Err("missing telemetry cannot acquire a numeric default");
         }
     } else if c.evaluation_budget_remaining.is_some() || c.family_budget_remaining.is_some() {
-        let has_budget = c.evaluation_budget_remaining.unwrap_or(1) > 0
-            && c.family_budget_remaining.unwrap_or(1) > 0;
+        // A known exhausted dimension is sufficient to suppress work even
+        // when the other counter was not observable. Positive admission is
+        // different: it requires BOTH independently observed counters.
+        // Never promote an absent budget to an invented positive default.
+        let exhausted = c.evaluation_budget_remaining.is_some_and(|n| n <= 0)
+            || c.family_budget_remaining.is_some_and(|n| n <= 0);
+        let has_budget = c.evaluation_budget_remaining.is_some_and(|n| n > 0)
+            && c.family_budget_remaining.is_some_and(|n| n > 0);
+        if !exhausted && !has_budget {
+            return Err("positive admission requires both budget observations");
+        }
         result.disposition = Some(if has_budget { "ELIGIBLE" } else { "SUPPRESS" });
         result.fresh_workload = Some(has_budget);
     } else if c.duplicate_evidence.is_some() || c.shared_lineage.is_some() {
@@ -496,6 +505,72 @@ mod tests {
                 .any(|error| error.contains("missing telemetry cannot acquire a numeric default")),
             "{errors:?}"
         );
+    }
+
+    #[test]
+    fn one_positive_budget_cannot_forge_eligibility_from_an_unseen_budget() {
+        for (name, field) in [
+            (
+                "evaluation-budget-exhaustion",
+                "evaluation_budget_remaining",
+            ),
+            ("family-budget-exhaustion", "family_budget_remaining"),
+        ] {
+            let mut forged = change(name, field, json!(7));
+            let case = forged["cases"]
+                .as_array_mut()
+                .expect("cases")
+                .iter_mut()
+                .find(|case| case["name"] == name)
+                .expect("historical case");
+            // The previously accepted invalid fixture asserted a valid-looking
+            // positive result by treating a missing independent budget as 1.
+            case["expected"] = json!("ELIGIBLE");
+            case["fresh_workload"] = json!(true);
+            let errors = checked(forged).expect_err("missing budget cannot admit new work");
+            assert!(
+                errors.iter().any(|reason| reason
+                    .contains("positive admission requires both budget observations")),
+                "{name}: {errors:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn two_observed_positive_budgets_admit_and_one_exhausted_budget_suppresses() {
+        let mut positive = change(
+            "evaluation-budget-exhaustion",
+            "evaluation_budget_remaining",
+            json!(7),
+        );
+        let case = positive["cases"]
+            .as_array_mut()
+            .expect("cases")
+            .iter_mut()
+            .find(|case| case["name"] == "evaluation-budget-exhaustion")
+            .expect("historical case");
+        case["family_budget_remaining"] = json!(3);
+        case["expected"] = json!("ELIGIBLE");
+        case["fresh_workload"] = json!(true);
+        assert_eq!(checked(positive), Ok(23));
+
+        // Even with the other budget unobserved, a known exhausted dimension
+        // proves suppression; preserve both original historical single-budget
+        // fixtures unchanged as a separate positive-parity control.
+        assert_eq!(checked(baseline()), Ok(23));
+        let mut mixed = change(
+            "evaluation-budget-exhaustion",
+            "evaluation_budget_remaining",
+            json!(7),
+        );
+        let case = mixed["cases"]
+            .as_array_mut()
+            .expect("cases")
+            .iter_mut()
+            .find(|case| case["name"] == "evaluation-budget-exhaustion")
+            .expect("historical case");
+        case["family_budget_remaining"] = json!(0);
+        assert_eq!(checked(mixed), Ok(23));
     }
 
     #[test]
