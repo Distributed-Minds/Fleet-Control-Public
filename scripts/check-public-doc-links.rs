@@ -1,4 +1,4 @@
-//! Offline checker for relative links in the nine FREE ENERGY onboarding documents.
+//! Offline checker for relative links in the ten FREE ENERGY onboarding documents.
 //!
 //! Build: rustc --edition=2021 -D warnings scripts/check-public-doc-links.rs -o /tmp/free-energy-doc-links
 //! Run:   /tmp/free-energy-doc-links --root /absolute/path/to/checkout
@@ -13,10 +13,11 @@ use std::env;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
-const DOCUMENTS: [&str; 9] = [
+const DOCUMENTS: [&str; 10] = [
     "README.md",
     "CONTRIBUTING.md",
     "GETTING-STARTED.md",
+    "GLOSSARY.md",
     "HELP-A-PROJECT.md",
     "WORKFLOW-GUIDES.md",
     "TROUBLESHOOTING.md",
