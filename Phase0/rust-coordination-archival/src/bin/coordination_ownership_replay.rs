@@ -106,8 +106,8 @@ fn parse_transcript(input: &str) -> Result<Vec<Transition>, String> {
 fn read_bounded(path: &Path) -> Result<String, String> {
     // A byte limit does not protect an offline CLI from opening a FIFO, device,
     // directory or caller-controlled symlink. This is not provider admission.
-    let before = fs::symlink_metadata(path)
-        .map_err(|error| format!("cannot inspect {path:?}: {error}"))?;
+    let before =
+        fs::symlink_metadata(path).map_err(|error| format!("cannot inspect {path:?}: {error}"))?;
     if !before.file_type().is_file() {
         return Err("transcript must be a regular non-symlink file".to_owned());
     }
@@ -292,34 +292,27 @@ mod tests {
         let events = parse_transcript(&read_bounded(&regular).unwrap()).unwrap();
         assert_eq!(reduce_model_only(&events).unwrap().len(), 1);
 
-        assert!(
-            read_bounded(&directory)
-                .expect_err("directory must be denied")
-                .contains("regular non-symlink")
-        );
+        assert!(read_bounded(&directory)
+            .expect_err("directory must be denied")
+            .contains("regular non-symlink"));
 
         let oversized = directory.join("oversized.tsv");
         File::create(&oversized)
             .expect("sparse fixture")
             .set_len(MAX_INPUT_BYTES + 1)
             .expect("oversized sparse fixture");
-        assert!(
-            read_bounded(&oversized)
-                .expect_err("oversized file must be denied")
-                .contains("16 MiB")
-        );
+        assert!(read_bounded(&oversized)
+            .expect_err("oversized file must be denied")
+            .contains("16 MiB"));
 
         #[cfg(unix)]
         {
             let alias = directory.join("alias.tsv");
             std::os::unix::fs::symlink(&regular, &alias).expect("symlink fixture");
-            assert!(
-                read_bounded(&alias)
-                    .expect_err("symlink must be denied")
-                    .contains("regular non-symlink")
-            );
+            assert!(read_bounded(&alias)
+                .expect_err("symlink must be denied")
+                .contains("regular non-symlink"));
         }
         fs::remove_dir_all(directory).expect("cleanup temporary fixtures");
     }
-
 }
