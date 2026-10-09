@@ -81,8 +81,14 @@ fn oversized_manifest_suppresses_success_for_entire_explain_batch() {
     drop(file);
 
     let output = invoke(&[&valid, &huge]);
-    assert!(!output.status.success(), "oversized file accepted: {output:?}");
-    assert!(output.stdout.is_empty(), "oversized tail leaked a success record");
+    assert!(
+        !output.status.success(),
+        "oversized file accepted: {output:?}"
+    );
+    assert!(
+        output.stdout.is_empty(),
+        "oversized tail leaked a success record"
+    );
     assert!(stderr(&output).contains("manifest exceeds 1 MiB input limit"));
 }
 
@@ -94,7 +100,10 @@ fn invalid_utf8_manifest_does_not_leak_partial_batch_explanation() {
     fs::write(&invalid, [0xff, 0xfe, 0x00]).expect("write invalid UTF-8 fixture");
     let output = invoke(&[&valid, &invalid]);
     assert!(!output.status.success(), "invalid UTF-8 accepted");
-    assert!(output.stdout.is_empty(), "invalid UTF-8 tail leaked positive output");
+    assert!(
+        output.stdout.is_empty(),
+        "invalid UTF-8 tail leaked positive output"
+    );
     assert!(stderr(&output).contains("invalid utf-8 sequence"));
 }
 
