@@ -1,4 +1,4 @@
-//! Historical case identity guard for seven independent Phase0 fixture families (#71).
+//! Historical case identity guard for eight independent Phase0 fixture families (#71).
 //!
 //! The existing inventory checks counts and first entries. Those assertions
 //! cannot detect same-count substitution of a later original case. These
@@ -21,6 +21,95 @@ type FamilyGroup = (
 
 fn historical_groups() -> Vec<FamilyGroup> {
     vec![
+        (
+            "ad-hoc-research-spec1.json",
+            include_str!("../../fixtures/ad-hoc-research-spec1.json"),
+            "publication_cases",
+            &[
+                "complete-absent-current-authority",
+                "existing-complete",
+                "existing-incomplete",
+                "duplicate-equivalent",
+                "inventory-unknown",
+                "authority-stale",
+                "self-asserted-authority-ignored",
+                "schema-incompatible",
+                "locator-conflict",
+                "provider-locator-unknown-before-create",
+            ],
+        ),
+        (
+            "ad-hoc-research-spec1.json",
+            include_str!("../../fixtures/ad-hoc-research-spec1.json"),
+            "identity_cases",
+            &[
+                "same-semantic-retry",
+                "presentation-only-variance-same-identity",
+                "changed-content-new-identity",
+                "changed-source-new-identity",
+                "temporary-cannot-claim-persistent-state",
+                "shared-transport-principal-not-persistent-identity",
+                "packet-storage-not-policy",
+                "recursive-derivative-not-independent",
+                "pure-research-branch-creation",
+                "exceptional-existing-surface-without-authority",
+                "exceptional-mutation-active-collision",
+            ],
+        ),
+        (
+            "ad-hoc-research-spec1.json",
+            include_str!("../../fixtures/ad-hoc-research-spec1.json"),
+            "source_cases",
+            &[
+                "default-authority-first",
+                "branch-fully-contained",
+                "diverged-unique-evidence",
+                "stale-pr-unique-caveat",
+                "branch-name-only",
+                "default-unresolved",
+                "default-head-moved-during-research",
+                "consumed-source-ref-deleted",
+                "same-path-default-vs-nondefault",
+            ],
+        ),
+        (
+            "ad-hoc-research-spec1.json",
+            include_str!("../../fixtures/ad-hoc-research-spec1.json"),
+            "recovery_cases",
+            &[
+                "cutoff-before-create",
+                "cutoff-after-create-before-ack",
+                "lost-ack-retry",
+                "authority-expired-after-create-before-ack",
+                "incomplete-retry-inventory",
+                "lost-ack-schema-incompatible",
+                "lost-ack-content-conflict",
+            ],
+        ),
+        (
+            "ad-hoc-research-spec1.json",
+            include_str!("../../fixtures/ad-hoc-research-spec1.json"),
+            "concurrency_cases",
+            &[
+                "two-empty-atomic-unique",
+                "two-empty-serialized",
+                "two-empty-reconcile-after-create",
+                "two-empty-blind-create",
+                "atomic-create-lost-ack-retry",
+            ],
+        ),
+        (
+            "ad-hoc-research-spec1.json",
+            include_str!("../../fixtures/ad-hoc-research-spec1.json"),
+            "packet_field_cases",
+            &[
+                "required-handoff-fields-preserved",
+                "truthfully-empty-handoff-fields-preserved",
+                "missing-stale-source-warning-rejected",
+                "missing-discovery-vocabulary-rejected",
+                "missing-useful-next-action-rejected",
+            ],
+        ),
         (
             "authority-closure-spec2.json",
             include_str!("../../fixtures/authority-closure-spec2.json"),
@@ -265,7 +354,7 @@ fn check_all_required_ids(cases: &[Value], originals: &[&str]) -> Result<(), Str
 }
 
 #[test]
-fn all_147_original_cases_across_seven_fixture_families_are_present() {
+fn all_194_original_cases_across_eight_fixture_families_are_present() {
     let mut total = 0;
     for (family, source, group, originals) in historical_groups() {
         let document: Value = serde_json::from_str(source).expect("original authored fixture JSON");
@@ -277,7 +366,7 @@ fn all_147_original_cases_across_seven_fixture_families_are_present() {
         total += originals.len();
     }
     assert_eq!(
-        total, 147,
+        total, 194,
         "exact historical inventory must not silently shrink"
     );
 }
@@ -321,10 +410,15 @@ fn duplicates_and_unreadable_case_identity_never_pass() {
     let document: Value = serde_json::from_str(source).unwrap();
     let cases = checked_cases(&document, group).unwrap();
     let mut changed = cases.to_vec();
-    let first_id = changed[0]["name"].clone();
-    changed[1]["name"] = first_id;
+    let first_id = case_id(&changed[0]).expect("first historical case identity");
+    let field = if changed[1].get("id").is_some() {
+        "id"
+    } else {
+        "name"
+    };
+    changed[1][field] = json!(first_id);
     let error = check_all_required_ids(&changed, originals).expect_err("duplicate must fail");
     assert!(error.contains("duplicate"));
-    changed[1]["name"] = json!(null);
+    changed[1][field] = json!(null);
     assert!(check_all_required_ids(&changed, originals).is_err());
 }
