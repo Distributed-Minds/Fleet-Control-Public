@@ -350,8 +350,7 @@ const MAX_EXTERNAL_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
 // Model-only fixture CLI: bound caller-controlled IO; this is not an
 // atomic directory confinement protocol or a live provider authority check.
 fn read_fixture_bounded(input: &Path) -> Result<String, String> {
-    let before =
-        fs::symlink_metadata(input).map_err(|e| format!("cannot read {input:?}: {e}"))?;
+    let before = fs::symlink_metadata(input).map_err(|e| format!("cannot read {input:?}: {e}"))?;
     if !before.file_type().is_file() {
         return Err(format!(
             "fixture {input:?} must be a regular file (no symlinks)"
