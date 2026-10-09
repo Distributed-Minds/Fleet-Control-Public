@@ -106,7 +106,10 @@ mod tests {
     #[test]
     fn the_exhausted_2500_comment_incident_fails_closed() {
         assert_eq!(assess(2500, 2500, 1, 0), Ok(Capacity::Exhausted));
-        assert_eq!(preflight(&args(["2500", "2500", "1", "10"])), Ok(Capacity::Exhausted));
+        assert_eq!(
+            preflight(&args(["2500", "2500", "1", "10"])),
+            Ok(Capacity::Exhausted)
+        );
     }
 
     #[test]
@@ -131,9 +134,21 @@ mod tests {
         assert!(assess(2500, 2501, 1, 0).is_err());
         assert!(assess(2500, 0, 0, 0).is_err());
         assert!(assess(u64::MAX, 0, u64::MAX, 1).is_err());
-        for bad in ["-1", "+1", " 1", "1 ", "1.0", "0x10", "", "18446744073709551616"] {
+        for bad in [
+            "-1",
+            "+1",
+            " 1",
+            "1 ",
+            "1.0",
+            "0x10",
+            "",
+            "18446744073709551616",
+        ] {
             let invalid = args(["2500", bad, "2", "5"]);
-            assert!(preflight(&invalid).is_err(), "invalid count {bad:?} admitted");
+            assert!(
+                preflight(&invalid).is_err(),
+                "invalid count {bad:?} admitted"
+            );
         }
         assert!(preflight(&["2500".to_owned()]).is_err());
         assert!(preflight(&[]).is_err());
