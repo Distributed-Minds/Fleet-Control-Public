@@ -269,7 +269,7 @@ fn main() -> ExitCode {
                                 }
                             }
                             Err(error) => errors
-                                .push(format!("{}: directory entry: {error}", format!("{path:?}")),
+                                .push(format!("{}: directory entry: {error}", format!("{path:?}"))),
                         }
                     }
                     if count == 0 {
