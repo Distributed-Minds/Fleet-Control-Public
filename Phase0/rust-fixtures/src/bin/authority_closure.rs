@@ -6,6 +6,7 @@ use serde_json::{Map, Value};
 use std::collections::HashSet;
 use std::env;
 use std::fs;
+use std::io::Read;
 use std::process;
 
 const REQUIRED: [&str; 26] = [
@@ -383,15 +384,66 @@ fn validate_fixture(source: &str) -> Result<usize, String> {
     Ok(seen.len())
 }
 
+// The historical fixture is small. A caller-controlled file must not be able to
+// exhaust the verification runner before the typed semantic checks execute.
+// This is local input hygiene, not proof of repository or provider authority.
+const MAX_AUTHORITY_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
+
+fn read_fixture_file_checked(path: &str, before: &fs::Metadata) -> Result<String, String> {
+    if !before.file_type().is_file() {
+        return Err("authority fixture must be a regular non-symlink file".to_owned());
+    }
+    if before.len() > MAX_AUTHORITY_FIXTURE_BYTES {
+        return Err("authority fixture exceeds 8 MiB input limit".to_owned());
+    }
+
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // Refuse a symlink or FIFO substituted between lstat and open.
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let file = options.open(path).map_err(|error| error.to_string())?;
+    let opened = file.metadata().map_err(|error| error.to_string())?;
+    if !opened.file_type().is_file() {
+        return Err("opened authority fixture is not a regular file".to_owned());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if before.dev() != opened.dev() || before.ino() != opened.ino() {
+            return Err("authority fixture changed between metadata check and open".to_owned());
+        }
+    }
+    if opened.len() > MAX_AUTHORITY_FIXTURE_BYTES {
+        return Err("authority fixture exceeds 8 MiB input limit".to_owned());
+    }
+    let mut source = String::new();
+    file.take(MAX_AUTHORITY_FIXTURE_BYTES + 1)
+        .read_to_string(&mut source)
+        .map_err(|error| error.to_string())?;
+    if source.len() as u64 > MAX_AUTHORITY_FIXTURE_BYTES {
+        return Err("authority fixture exceeds 8 MiB input limit".to_owned());
+    }
+    Ok(source)
+}
+
+fn read_fixture_file(path: &str) -> Result<String, String> {
+    let before = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+    read_fixture_file_checked(path, &before)
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
         eprintln!("Usage: authority_closure <Phase0/fixtures/authority-closure-spec2.json>");
         process::exit(2);
     }
-    let outcome = fs::read_to_string(&args[1])
-        .map_err(|e| e.to_string())
-        .and_then(|source| validate_fixture(&source));
+    let outcome = read_fixture_file(&args[1]).and_then(|source| validate_fixture(&source));
     match outcome {
         Ok(count) => println!("authority closure Rust semantic fixtures: {count} cases passed"),
         Err(reason) => {
@@ -405,6 +457,28 @@ fn main() {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[cfg(unix)]
+    #[test]
+    fn authority_fixture_rejects_identical_bytes_after_inode_replacement() {
+        let scratch = env::temp_dir().join(format!(
+            "free-energy-authority-inode-swap-{}",
+            process::id()
+        ));
+        fs::create_dir_all(&scratch).expect("create isolated fixture directory");
+        let path = scratch.join("source.json");
+        let replacement = scratch.join("replacement.json");
+        let historical = include_str!("../../../fixtures/authority-closure-spec2.json");
+        fs::write(&path, historical).expect("write original fixture");
+        fs::write(&replacement, historical).expect("write identical replacement");
+        let before = fs::symlink_metadata(&path).expect("capture original file identity");
+        fs::rename(&replacement, &path).expect("replace file after preflight");
+        assert_eq!(
+            read_fixture_file_checked(path.to_str().unwrap(), &before).unwrap_err(),
+            "authority fixture changed between metadata check and open"
+        );
+        fs::remove_dir_all(&scratch).expect("remove fixture directory");
+    }
 
     fn input(value: Value) -> Map<String, Value> {
         value.as_object().unwrap().clone()
