@@ -526,7 +526,7 @@ mod tests {
         for raw in [
             r#"{"spec":5,"spec":5}"#,
             r#"{"outer":{"authority":"current","authority":"forged"}}"#,
-            r#"{"cases":[{"lineage":"current","\\u006cineage":"unknown"}]}"#,
+            r#"{"cases":[{"lineage":"current","\u006cineage":"unknown"}]}"#,
         ] {
             let err = serde_json::from_str::<UniqueJsonMemberCheck>(raw)
                 .err()
