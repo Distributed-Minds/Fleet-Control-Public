@@ -550,10 +550,7 @@ fn is_public_https_url(url: &str) -> bool {
     // including when the dots are percent-encoded or mixed-case escaped.
     // Only inspect the path: query/fragment text is not normalized this way.
     let after_authority = &decoded["https://".len() + authority.len()..];
-    let path = after_authority
-        .split(['?', '#'])
-        .next()
-        .unwrap_or_default();
+    let path = after_authority.split(['?', '#']).next().unwrap_or_default();
     if path.split('/').any(|segment| matches!(segment, "." | "..")) {
         return false;
     }
