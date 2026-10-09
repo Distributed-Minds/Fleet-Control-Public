@@ -181,7 +181,10 @@ fn poisoned_parent_git_environment_cannot_redirect_real_dag_fixture() {
             "real_git_criss_cross_has_two_best_bases_and_overlays_change_the_answer",
             "--nocapture",
         ])
-        .env("GIT_OBJECT_DIRECTORY", "/__free_energy_nonexistent_object_store__")
+        .env(
+            "GIT_OBJECT_DIRECTORY",
+            "/__free_energy_nonexistent_object_store__",
+        )
         .env("GIT_INDEX_FILE", "/__free_energy_nonexistent_index__")
         .env("GIT_CONFIG_COUNT", "1")
         .env("GIT_CONFIG_KEY_0", "core.bare")
