@@ -165,7 +165,7 @@ pub fn reduce_model_only(
                     return Err(InvalidTransition);
                 }
             }
-            Recovered => return Err(InvalidTransition),
+            Recovered => { /* Recovery is evidence only; it never transfers a lease. */ }
             Owned => {
                 if !previous.is_some_and(|old| old.state == Intent) {
                     return Err(InvalidTransition);
