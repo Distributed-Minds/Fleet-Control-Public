@@ -151,8 +151,8 @@ fn read_bounded_with_observed_metadata(
 }
 
 fn read_bounded(path: &Path) -> Result<String, String> {
-    let metadata = fs::symlink_metadata(path)
-        .map_err(|error| format!("cannot stat {path:?}: {error}"))?;
+    let metadata =
+        fs::symlink_metadata(path).map_err(|error| format!("cannot stat {path:?}: {error}"))?;
     read_bounded_with_observed_metadata(path, &metadata)
 }
 
@@ -230,7 +230,10 @@ mod tests {
         let path = scratch.join("transcript.tsv");
         fs::write(&path, TRANSCRIPT).unwrap();
         assert_eq!(read_bounded(&path).unwrap(), TRANSCRIPT);
-        assert!(read_bounded(&scratch).is_err(), "directories are not transcripts");
+        assert!(
+            read_bounded(&scratch).is_err(),
+            "directories are not transcripts"
+        );
 
         let oversized = scratch.join("oversized.tsv");
         fs::File::create(&oversized)
@@ -270,7 +273,10 @@ mod tests {
         fs::remove_file(&path).unwrap();
         std::os::unix::fs::symlink(&target, &path).unwrap();
         assert!(read_bounded_with_observed_metadata(&path, &before_symlink).is_err());
-        assert!(read_bounded(&path).is_err(), "preexisting symlinks are rejected");
+        assert!(
+            read_bounded(&path).is_err(),
+            "preexisting symlinks are rejected"
+        );
         fs::remove_dir_all(&scratch).unwrap();
     }
 
