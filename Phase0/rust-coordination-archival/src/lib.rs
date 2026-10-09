@@ -441,10 +441,7 @@ mod tests {
             witness.observed_source.record_id = padded.into();
             witness.archive.source.record_id = padded.into();
             witness.authority.source.record_id = padded.into();
-            assert_eq!(
-                evaluate(&witness),
-                Verdict::Ineligible(Denial::SourceMoved)
-            );
+            assert_eq!(evaluate(&witness), Verdict::Ineligible(Denial::SourceMoved));
         }
         for padded in [" delete-R42", "delete-R42 "] {
             let mut witness = fixture();
