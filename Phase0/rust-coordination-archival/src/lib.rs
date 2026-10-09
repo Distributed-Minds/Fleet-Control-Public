@@ -149,6 +149,7 @@ fn named(id: &str) -> bool {
     // formatting/variation selectors may spoof identity in operator logs.
     // Reject such characters without normalizing opaque provider IDs.
     !id.trim().is_empty()
+        && id.trim() == id
         && !id.chars().any(|ch| {
             ch.is_control()
                 || (!ch.is_ascii() && ch.is_whitespace())
@@ -437,6 +438,36 @@ mod tests {
             protections: Protections::default(),
             effect_state: EffectState::NotAttempted,
         }
+    }
+
+    #[test]
+    fn padded_receipt_identifiers_fail_closed_even_when_all_copies_agree() {
+        for padded in [" R42", "R42 "] {
+            let mut witness = fixture();
+            witness.observed_source.record_id = padded.into();
+            witness.archive.source.record_id = padded.into();
+            witness.authority.source.record_id = padded.into();
+            assert_eq!(evaluate(&witness), Verdict::Ineligible(Denial::SourceMoved));
+        }
+        for padded in [" delete-R42", "delete-R42 "] {
+            let mut witness = fixture();
+            witness.operation_id = padded.into();
+            witness.authority.operation_id = padded.into();
+            assert_eq!(
+                evaluate(&witness),
+                Verdict::Ineligible(Denial::AuthorityNotCurrent)
+            );
+        }
+        for padded in [" a", "a "] {
+            let mut forged = item("a", 10);
+            forged.stable_id = padded.into();
+            assert_eq!(
+                replay(&[forged, item("b", 11)], &[item("c", 12)], &cut()),
+                Err(ReplayFailure::UntrustedCut)
+            );
+        }
+        // Interior spaces remain legal; byte identity is preserved.
+        assert!(named("visible internal space"));
     }
 
     #[test]
