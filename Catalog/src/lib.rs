@@ -389,10 +389,16 @@ fn is_invisible_path_format(ch: char) -> bool {
             | '\u{034f}'
             | '\u{180e}'
             | '\u{200b}'..='\u{200d}'
-            | '\u{2060}'
+            | '\u{115f}' // Hangul choseong filler
+            | '\u{1160}' // Hangul jungseong filler
+            | '\u{3164}' // Hangul compatibility filler
+            | '\u{ffa0}' // Halfwidth Hangul filler
+            | '\u{2060}'..='\u{206f}' // Includes invisible math operators
+            | '\u{fe00}'..='\u{fe0f}' // BMP variation selectors
             | '\u{feff}'
             | '\u{e0001}' // Plane 14 language tag
             | '\u{e0020}'..='\u{e007f}' // Plane 14 tag text and terminator
+            | '\u{e0100}'..='\u{e01ef}' // Supplementary variation selectors
     )
 }
 
@@ -1558,6 +1564,49 @@ mod tests {
         assert!(is_relative_path("assets/música.png"));
         assert!(is_public_https_url("https://example.org/visible/filename"));
         validate_manifest(VELOREN).expect("Unicode tag checks must not corrupt baseline");
+    }
+
+    #[test]
+    fn invisible_selectors_and_fillers_cannot_spoof_rights_or_evidence() {
+        use std::fmt::Write as _;
+
+        validate_manifest(VELOREN).expect("pilot baseline");
+        for marker in [
+            '\u{115f}', '\u{1160}', '\u{3164}', '\u{ffa0}',
+            '\u{2061}', '\u{206a}', '\u{fe00}', '\u{fe0e}',
+            '\u{fe0f}', '\u{e0100}', '\u{e01ef}',
+        ] {
+            let path = format!("assets/music{marker}theme.ogg");
+            assert!(!is_relative_path(&path), "spoofed path: {path:?}");
+            let raw = format!("https://example.org/music{marker}theme");
+            assert!(!is_public_https_url(&raw), "raw URL: {raw:?}");
+            let mut escape = String::new();
+            for byte in marker.to_string().bytes() {
+                write!(&mut escape, "%{byte:02X}").expect("test URL encoding");
+            }
+            let encoded = format!("https://example.org/music{escape}theme");
+            assert!(!is_public_https_url(&encoded), "encoded URL: {encoded}");
+
+            let rights = changed(VELOREN, |v| {
+                v["rights_claims"][0]["scope_kind"] = json!("PATH");
+                v["rights_claims"][0]["scope"] = json!(path.clone());
+            });
+            let errors = validate_manifest(&rights).unwrap_err();
+            assert!(errors.iter().any(|e| e.contains("unsafe rights path scope")), "{errors:?}");
+            let evidence = changed(VELOREN, |v| {
+                v["evidence"][0]["path"] = json!(path.clone());
+            });
+            let errors = validate_manifest(&evidence).unwrap_err();
+            assert!(errors.iter().any(|e| e.contains("invalid pinned repository evidence")), "{errors:?}");
+            let metadata = changed(VELOREN, |v| {
+                v["display_name"] = json!(format!("Music{marker}Game"));
+            });
+            let errors = validate_manifest(&metadata).unwrap_err();
+            assert!(errors.iter().any(|e| e.contains("default-ignorable formatting control")), "{errors:?}");
+        }
+        assert!(is_relative_path("assets/música/café.png"));
+        assert!(is_public_https_url("https://example.org/music%20theme"));
+        validate_manifest(VELOREN).expect("pilot remains admitted");
     }
 
     #[test]
