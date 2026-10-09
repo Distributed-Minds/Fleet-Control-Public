@@ -144,7 +144,7 @@ mod tests {
         let mut has_become_unsafe = false;
         for observed in 0..=2500 {
             let decision = assess(2500, observed, 6, 16).unwrap();
-            if decision != Capacity::Headroom { remaining: 2500 - observed } {
+            if !matches!(decision, Capacity::Headroom { .. }) {
                 has_become_unsafe = true;
             }
             if has_become_unsafe {
