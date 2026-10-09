@@ -733,6 +733,11 @@ fn check_visible_text(problems: &mut Vec<String>, path: &str, value: &str) {
             "{path}: bidirectional formatting control in visible metadata"
         ));
     }
+    if value.chars().any(is_invisible_path_format) {
+        problems.push(format!(
+            "{path}: default-ignorable formatting control in visible metadata"
+        ));
+    }
 }
 
 fn validate_visible_metadata(record: &Project, problems: &mut Vec<String>) {
