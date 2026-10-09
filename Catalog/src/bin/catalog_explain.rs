@@ -220,7 +220,9 @@ fn read_file(path: &Path) -> Result<String, String> {
         return Err(format!("{path:?}: manifest exceeds 1 MiB input limit"));
     }
     let file = fs::File::open(path).map_err(|error| format!("{path:?}: {error}"))?;
-    let opened = file.metadata().map_err(|error| format!("{path:?}: {error}"))?;
+    let opened = file
+        .metadata()
+        .map_err(|error| format!("{path:?}: {error}"))?;
     if !opened.file_type().is_file() {
         return Err(format!("{path:?}: opened manifest is not a regular file"));
     }
@@ -228,7 +230,9 @@ fn read_file(path: &Path) -> Result<String, String> {
     {
         use std::os::unix::fs::MetadataExt;
         if metadata.dev() != opened.dev() || metadata.ino() != opened.ino() {
-            return Err(format!("{path:?}: manifest changed between preflight and open"));
+            return Err(format!(
+                "{path:?}: manifest changed between preflight and open"
+            ));
         }
     }
     if opened.len() > MAX_EXPLAIN_MANIFEST_BYTES {
