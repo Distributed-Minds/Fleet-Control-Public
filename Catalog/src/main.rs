@@ -255,6 +255,17 @@ fn main() -> ExitCode {
     for input in paths {
         let path = std::path::PathBuf::from(input);
         if path.is_dir() {
+            // is_dir() follows symlinks. Reject a supplied alias before
+            // enumerating files outside the chosen project directory.
+            if fs::symlink_metadata(&path)
+                .is_ok_and(|metadata| metadata.file_type().is_symlink())
+            {
+                errors.push(format!(
+                    "{}: symlinked project directory prohibited",
+                    path.display()
+                ));
+                continue;
+            }
             let mut count = 0;
             match fs::read_dir(&path) {
                 Ok(entries) => {
@@ -286,6 +297,23 @@ fn main() -> ExitCode {
 
     let mut loaded = Vec::new();
     for path in manifest_paths {
+        // Explicit manifests and directory children use the same pre-read
+        // admission rule. This does not prevent concurrent path replacement.
+        match fs::symlink_metadata(&path) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                errors.push(format!("{}: symlinked manifest prohibited", path.display()));
+                continue;
+            }
+            Ok(metadata) if !metadata.file_type().is_file() => {
+                errors.push(format!("{}: manifest is not a regular file", path.display()));
+                continue;
+            }
+            Err(error) => {
+                errors.push(format!("{}: {error}", path.display()));
+                continue;
+            }
+            Ok(_) => {}
+        }
         match fs::read_to_string(&path) {
             Ok(text) => loaded.push((path.to_string_lossy().into_owned(), text)),
             Err(error) => errors.push(format!("{}: {error}", path.display())),
