@@ -150,10 +150,15 @@ fn packet<'a>(
     templates: &'a Map<String, Value>,
     field: &str,
 ) -> Result<Option<&'a Value>, String> {
+    let reference = format!("{field}_ref");
+    // Prevent an inline packet from hiding a contradictory template reference.
+    // Even an explicit null conflicts with a second selector.
+    if case.get(field).is_some() && case.get(&reference).is_some() {
+        return Err(format!("{field} and {reference} are mutually exclusive"));
+    }
     if let Some(value) = case.get(field) {
         return Ok((!value.is_null()).then_some(value));
     }
-    let reference = format!("{field}_ref");
     match text(case, &reference)? {
         None => Ok(None),
         Some(name) => templates
@@ -199,6 +204,13 @@ fn matching_packets<'a>(
     case: &'a Value,
     templates: &'a Map<String, Value>,
 ) -> Result<Vec<&'a Value>, String> {
+    if case.get("matching_packet_refs").is_some()
+        && case.get("matching_packet_payloads").is_some()
+    {
+        return Err(
+            "matching_packet_refs and matching_packet_payloads are mutually exclusive".to_owned(),
+        );
+    }
     if let Some(references) = case.get("matching_packet_refs") {
         let references = references
             .as_array()
@@ -623,5 +635,52 @@ mod cli_semantic_tests {
         let mut fixture: Value = serde_json::from_str(BASELINE).expect("valid baseline");
         fixture["identity_cases"][0]["expected"] = json!("NEW_LINEAGE");
         assert!(validate(&fixture).is_err());
+    }
+
+    #[test]
+    fn conflicting_inline_packet_and_reference_fail_across_semantic_families() {
+        let original: Value = serde_json::from_str(BASELINE).expect("valid baseline");
+        let conflicting = original["packet_templates"]["changed_source"].clone();
+        for (family, index, field) in [
+            ("publication_cases", 0, "packet"),
+            ("identity_cases", 0, "retry_packet"),
+            ("recovery_cases", 1, "matching_packet"),
+        ] {
+            let mut modified = original.clone();
+            modified[family][index][field] = conflicting.clone();
+            let errors = validate(&modified).expect_err("ambiguous packet must fail closed");
+            let expected = format!("{field} and {field}_ref are mutually exclusive");
+            assert!(
+                errors.iter().any(|error| error.contains(&expected)),
+                "{family}: {errors:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn simultaneous_inline_collection_and_reference_list_fail_closed() {
+        let mut modified: Value = serde_json::from_str(BASELINE).expect("valid baseline");
+        let conflicting = modified["packet_templates"]["changed_source"].clone();
+        modified["publication_cases"][3]["matching_packet_payloads"] =
+            json!([conflicting.clone(), conflicting]);
+        let errors = validate(&modified).expect_err("ambiguous collection must fail closed");
+        assert!(
+            errors.iter().any(|error| {
+                error.contains("matching_packet_refs and matching_packet_payloads are mutually exclusive")
+            }),
+            "{errors:?}"
+        );
+    }
+
+    #[test]
+    fn single_inline_packet_remains_admissible() {
+        let mut modified: Value = serde_json::from_str(BASELINE).expect("valid baseline");
+        let packet = modified["packet_templates"]["base"].clone();
+        modified["publication_cases"][0]
+            .as_object_mut()
+            .expect("historical scenario")
+            .remove("packet_ref");
+        modified["publication_cases"][0]["packet"] = packet;
+        assert_eq!(validate(&modified), Ok(47));
     }
 }
