@@ -77,7 +77,9 @@ impl GitRepo {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        let mut child = command.spawn().expect("Git executable required by topology CI");
+        let mut child = command
+            .spawn()
+            .expect("Git executable required by topology CI");
         child
             .stdin
             .take()
@@ -141,14 +143,25 @@ fn real_git_unique_criss_cross_shallow_and_replacement_probes() {
 
     // Historical real-unique-base: exactly the common root.
     let unique = repo.run(&["merge-base", "--all", &unique_tip, &right], "");
-    assert!(unique.success, "unique merge-base failed: {}", unique.stderr);
-    assert_eq!(unique.stdout.lines().collect::<Vec<_>>(), vec![root.as_str()]);
+    assert!(
+        unique.success,
+        "unique merge-base failed: {}",
+        unique.stderr
+    );
+    assert_eq!(
+        unique.stdout.lines().collect::<Vec<_>>(),
+        vec![root.as_str()]
+    );
 
     // Historical real-criss-cross: two incomparable best common ancestors.
     let merge_left = repo.commit(&tree, "merge-left", &[&left, &right]);
     let merge_right = repo.commit(&tree, "merge-right", &[&right, &left]);
     let criss = repo.run(&["merge-base", "--all", &merge_left, &merge_right], "");
-    assert!(criss.success, "criss-cross merge-base failed: {}", criss.stderr);
+    assert!(
+        criss.success,
+        "criss-cross merge-base failed: {}",
+        criss.stderr
+    );
     let observed = criss.stdout.lines().collect::<BTreeSet<_>>();
     assert_eq!(observed, BTreeSet::from([left.as_str(), right.as_str()]));
     assert_eq!(criss.stdout.lines().count(), 2, "duplicate merge bases");
