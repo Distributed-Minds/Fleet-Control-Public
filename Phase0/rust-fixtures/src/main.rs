@@ -7,10 +7,10 @@ use std::collections::HashSet;
 use std::env;
 use std::fs;
 use std::io::Read;
-#[cfg(target_os = "linux")]
-use std::os::unix::fs::OpenOptionsExt;
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
+#[cfg(target_os = "linux")]
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::process;
 
@@ -503,8 +503,7 @@ fn read_fixture(path: &Path) -> Result<String, String> {
     if bytes.len() as u64 > MAX_FIXTURE_BYTES {
         return Err(format!("fixture {path:?} grew beyond 8 MiB"));
     }
-    String::from_utf8(bytes)
-        .map_err(|error| format!("fixture {path:?} is not UTF-8: {error}"))
+    String::from_utf8(bytes).map_err(|error| format!("fixture {path:?} is not UTF-8: {error}"))
 }
 
 fn run() -> Result<(), String> {
@@ -874,6 +873,4 @@ mod tests {
         }
         fs::remove_file(&input).expect("remove fixture");
     }
-
-
 }
