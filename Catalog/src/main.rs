@@ -29,6 +29,20 @@ fn validate_output_directory(parent: &Path) -> io::Result<()> {
     Ok(())
 }
 
+/// A successful regeneration check must examine a real checked-in artifact,
+/// not HTML reached through a symlink (possibly outside the catalog tree).
+/// Reject directories and special files before attempting to read them too.
+fn read_regular_generated_page(output: &Path) -> io::Result<String> {
+    let metadata = fs::symlink_metadata(output)?;
+    if !metadata.file_type().is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "generated catalog page must be a regular file (symlink prohibited)",
+        ));
+    }
+    fs::read_to_string(output)
+}
+
 /// Publish a fully written page with a same-directory rename. An interrupted
 /// write must not truncate the previously generated static page. This changes
 /// only the local preview file; it is not hosting or publication authority.
@@ -199,7 +213,7 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
             eprintln!("{}: {error}", diagnostic_path(&output));
             return ExitCode::FAILURE;
         }
-        match fs::read_to_string(&output) {
+        match read_regular_generated_page(&output) {
             Ok(previous) if previous == html => {
                 println!(
                     "Catalog HTML matches typed pilot input (not full schema/rights verification)"
@@ -481,6 +495,50 @@ mod atomic_render_tests {
             .map(|entry| entry.expect("entry").file_name())
             .collect();
         assert_eq!(entries, [std::ffi::OsString::from("index.html")]);
+        fs::remove_dir_all(&dir).expect("clean isolated sandbox");
+    }
+
+    #[test]
+    fn check_requires_regular_existing_generated_page() {
+        let dir = sandbox();
+        let target = dir.join("index.html");
+        assert_eq!(
+            read_regular_generated_page(&target).unwrap_err().kind(),
+            io::ErrorKind::NotFound
+        );
+        fs::create_dir(&target).expect("seed invalid directory output");
+        assert_eq!(
+            read_regular_generated_page(&target).unwrap_err().kind(),
+            io::ErrorKind::InvalidInput
+        );
+        fs::remove_dir(&target).expect("remove invalid directory output");
+        fs::write(&target, "<html>expected</html>").expect("seed real generated page");
+        assert_eq!(
+            read_regular_generated_page(&target).unwrap(),
+            "<html>expected</html>"
+        );
+        fs::remove_dir_all(&dir).expect("clean isolated sandbox");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn check_cannot_accept_matching_html_via_output_file_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let dir = sandbox();
+        let outside = dir.join("external.html");
+        let target = dir.join("index.html");
+        fs::write(&outside, "<html>expected</html>").expect("seed unrelated HTML");
+        symlink(&outside, &target).expect("replace checked page with symlink");
+        let error = read_regular_generated_page(&target)
+            .expect_err("symlink to matching HTML must never pass regeneration check");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(error.to_string().contains("symlink prohibited"));
+        assert_eq!(
+            fs::read_to_string(&outside).unwrap(),
+            "<html>expected</html>",
+            "check must never mutate the symlink target"
+        );
         fs::remove_dir_all(&dir).expect("clean isolated sandbox");
     }
 
