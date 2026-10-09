@@ -197,8 +197,8 @@ fn read_file(path: &Path) -> Result<String, String> {
     let mut component_path = PathBuf::new();
     for component in path.components() {
         component_path.push(component.as_os_str());
-        let kind = fs::symlink_metadata(&component_path)
-            .map_err(|error| format!("{path:?}: {error}"))?;
+        let kind =
+            fs::symlink_metadata(&component_path).map_err(|error| format!("{path:?}: {error}"))?;
         if kind.file_type().is_symlink() {
             return Err(format!(
                 "{path:?}: symlink path component {component_path:?} prohibited"
@@ -367,7 +367,10 @@ mod tests {
         symlink(&real_dir, scratch.join("alias")).expect("create directory symlink");
         let aliased = scratch.join("alias/luanti.json");
 
-        assert!(read_file(&good).is_ok(), "real regular file must still work");
+        assert!(
+            read_file(&good).is_ok(),
+            "real regular file must still work"
+        );
         let failure = read_file(&aliased).expect_err("symlinked ancestor must fail closed");
         assert!(failure.contains("symlink"), "{failure}");
         assert!(
