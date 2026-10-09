@@ -398,7 +398,10 @@ fn is_relative_path(value: &str) -> bool {
         && !value.contains('%')
         && !value.contains('\\')
         && !value.chars().any(|ch| {
-            ch.is_control() || is_bidi_format_character(ch) || is_invisible_path_format(ch)
+            ch.is_control()
+                || matches!(ch, '\u{2028}' | '\u{2029}')
+                || is_bidi_format_character(ch)
+                || is_invisible_path_format(ch)
         })
         && value.split('/').all(|part| {
             !part.is_empty()
@@ -1605,6 +1608,18 @@ mod tests {
             v["upstream"]["read_only_mirror_urls"][0] = json!("http://github.com/veloren");
         });
         assert!(validate_manifest(&mirror).is_err());
+    }
+
+    #[test]
+    fn unicode_record_separators_cannot_disguise_repository_path_identity() {
+        // U+2028 and U+2029 are line/paragraph separators. They are not
+        // control bytes or format characters, but can spoof path identity in
+        // rights/provenance displays despite differing exact Git path bytes.
+        for separator in ['\u{2028}', '\u{2029}'] {
+            let forged = format!("src/{separator}README.md");
+            assert!(!is_relative_path(&forged), "admitted path: {forged:?}");
+        }
+        assert!(is_relative_path("src/café/README.md"));
     }
 
     #[test]
