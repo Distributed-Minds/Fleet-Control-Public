@@ -161,7 +161,10 @@ where
         match free_energy_catalog::validate_manifest(source) {
             Ok(project) => {
                 if !seen.insert(project.id.clone()) {
-                    errors.push(format!("{filename:?}: duplicate project ID {:?}", project.id));
+                    errors.push(format!(
+                        "{filename:?}: duplicate project ID {:?}",
+                        project.id
+                    ));
                 } else {
                     accepted.push((project.id.clone(), explain(&project, filename)));
                 }
@@ -178,7 +181,10 @@ where
         return Err(errors);
     }
     accepted.sort_by(|a, b| a.0.cmp(&b.0));
-    Ok(accepted.into_iter().map(|(_, explanation)| explanation).collect())
+    Ok(accepted
+        .into_iter()
+        .map(|(_, explanation)| explanation)
+        .collect())
 }
 
 /// Reject symlinks and directories before reading. This does not pretend to
@@ -186,7 +192,9 @@ where
 fn read_file(path: &Path) -> Result<String, String> {
     let metadata = fs::symlink_metadata(path).map_err(|error| format!("{path:?}: {error}"))?;
     if !metadata.file_type().is_file() {
-        return Err(format!("{path:?}: expected a regular non-symlink JSON file"));
+        return Err(format!(
+            "{path:?}: expected a regular non-symlink JSON file"
+        ));
     }
     fs::read_to_string(path).map_err(|error| format!("{path:?}: {error}"))
 }
@@ -271,14 +279,15 @@ mod tests {
         assert_eq!(first[1]["project_id"], "engine/openra");
         assert_eq!(first[2]["project_id"], "game/veloren");
         for project in first {
-            assert_eq!(project["rights"]["free_energy_redistribution_authorized"], false);
+            assert_eq!(
+                project["rights"]["free_energy_redistribution_authorized"],
+                false
+            );
             assert_eq!(project["play"]["free_energy_hosted_download"], false);
             assert_eq!(project["record_review"]["status"], "DRAFT");
-            assert!(
-                project["rights"]["permission_decisions"]
-                    .as_array()
-                    .is_some_and(|decisions| !decisions.is_empty())
-            );
+            assert!(project["rights"]["permission_decisions"]
+                .as_array()
+                .is_some_and(|decisions| !decisions.is_empty()));
         }
     }
 
@@ -303,12 +312,10 @@ mod tests {
             ("malformed.json", r#"{"schema":"free-energy.project/v0"}"#),
         ]);
         assert!(invalid.is_err(), "no successful prefix can be returned");
-        let duplicate = explain_sources([
-            ("one.json", OPENRA),
-            ("two.json", OPENRA),
-        ])
-        .unwrap_err();
-        assert!(duplicate.iter().any(|error| error.contains("duplicate project ID")));
+        let duplicate = explain_sources([("one.json", OPENRA), ("two.json", OPENRA)]).unwrap_err();
+        assert!(duplicate
+            .iter()
+            .any(|error| error.contains("duplicate project ID")));
         assert!(duplicate.iter().any(|error| error.contains("\"two.json\"")));
     }
 
