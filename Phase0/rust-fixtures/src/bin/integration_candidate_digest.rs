@@ -626,6 +626,33 @@ mod tests {
         fs::remove_dir_all(&scratch).expect("remove link swap directory");
     }
 
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn digest_reader_rejects_fifo_swapped_in_after_preflight_without_blocking() {
+        // A plain blocking File::open would hang here indefinitely; on Linux
+        // O_NONBLOCK must permit descriptor inspection to reject the FIFO.
+        let scratch = env::temp_dir().join(format!(
+            "free-energy-candidate-digest-fifo-swap-{}",
+            process::id()
+        ));
+        fs::create_dir_all(&scratch).expect("create FIFO swap directory");
+        let path = scratch.join("fixture.json");
+        fs::write(&path, HISTORICAL).expect("write regular fixture");
+        let before = fs::symlink_metadata(&path).expect("preflight regular fixture");
+        fs::remove_file(&path).expect("remove original fixture");
+
+        let status = process::Command::new("mkfifo")
+            .arg(&path)
+            .status()
+            .expect("create FIFO with Linux mkfifo");
+        assert!(status.success(), "mkfifo failed");
+
+        let error = read_fixture_file_with_metadata(path.to_str().unwrap(), &before)
+            .expect_err("swapped FIFO must never be accepted");
+        assert_eq!(error, "opened fixture is not a regular file");
+        fs::remove_dir_all(&scratch).expect("remove FIFO swap directory");
+    }
+
     #[test]
     fn sha256_standard_vectors_and_long_message() {
         assert_eq!(
