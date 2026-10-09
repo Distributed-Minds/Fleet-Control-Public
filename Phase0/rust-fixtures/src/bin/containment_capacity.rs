@@ -192,6 +192,28 @@ fn simulate(c: &Workload) -> Result<Value, String> {
         return Err("negative arrivals, backlog, or restoration work".to_owned());
     }
 
+    // A supplied trace is evidence even when this workload does not select it.
+    // Do not accept malformed negative/short traces merely because an inactive
+    // capacity mode or an already-restored fast path never reads that field.
+    for (field, input) in [
+        ("service_capacity", &c.service_capacity),
+        ("adjudication_capacity", &c.adjudication_capacity),
+        ("restoration_capacity", &c.restoration_capacity),
+    ] {
+        match input {
+            Some(Capacity::Constant(value)) if *value < 0 => {
+                return Err(format!("{field}: negative capacity"));
+            }
+            Some(Capacity::PerTick(values)) if values.len() != ticks => {
+                return Err(format!("{field}: capacity trace length does not match arrivals"));
+            }
+            Some(Capacity::PerTick(values)) if values.iter().any(|value| *value < 0) => {
+                return Err(format!("{field}: negative capacity"));
+            }
+            _ => {}
+        }
+    }
+
     let mut backlog = c.initial_adjudication_backlog;
     let mut restoration = c.initial_restoration_work;
     let mut effect_active = c.effect_active;
@@ -711,6 +733,46 @@ mod tests {
         arrival["workload_cases"][0]["arrivals"][0] = json!(-2);
         assert!(mutated(arrival).is_err());
     }
+    #[test]
+    fn inactive_capacity_fields_still_require_valid_traces() {
+        let mut case = original()["workload_cases"][0].clone();
+        case["authority_current"] = json!(false);
+        case["effect_active"] = json!(false);
+        case["restoration_debt"] = json!(false);
+        case["initial_adjudication_backlog"] = json!(0);
+        case["initial_restoration_work"] = json!(0);
+        case["arrivals"] = json!([0, 0]);
+        case["capacity_mode"] = json!("separate");
+        case["service_capacity"] = json!([0, 0]);
+        case["adjudication_capacity"] = json!([0, 0]);
+        case["restoration_capacity"] = json!([0, 0]);
+        let clean: Workload = serde_json::from_value(case.clone()).unwrap();
+        assert_eq!(
+            simulate(&clean),
+            Ok(json!({"disposition": "RESTORED", "final_adjudication_backlog": 0}))
+        );
+
+        for (field, malformed) in [
+            ("service_capacity", json!([-1, 0])),
+            ("service_capacity", json!([0])),
+            ("restoration_capacity", json!([0, -1])),
+            ("restoration_capacity", json!([0])),
+        ] {
+            let mut changed = case.clone();
+            changed[field] = malformed;
+            let workload: Workload = serde_json::from_value(changed).unwrap();
+            let error = simulate(&workload).expect_err("invalid unused capacity must fail");
+            assert!(error.contains(field), "{field}: {error}");
+        }
+
+        // The shared-mode fast path cannot ignore a malformed separate-mode
+        // field either. Legitimate, complete unused traces remain permitted.
+        case["capacity_mode"] = json!("shared");
+        case["adjudication_capacity"] = json!([0, -1]);
+        let workload: Workload = serde_json::from_value(case).unwrap();
+        assert!(simulate(&workload).is_err());
+    }
+
     #[test]
     fn already_restored_separate_capacity_uses_adjudication_not_shared_service() {
         let mut case = original()["workload_cases"][0].clone();
