@@ -139,6 +139,9 @@ pub fn plan_compaction(
         // This is a pure model check, not current provider deletion authority.
         let basis = (
             witness.manifest.destination_incarnation.as_str(),
+            // Individually hash-valid archive receipts must still agree on
+            // the bytes of the ONE current manifest for this removal batch.
+            witness.archive.manifest_digest,
             &witness.horizon.basis,
             witness.horizon.policy_source_incarnation.as_str(),
             witness.horizon.preserve_through_epoch,
@@ -554,5 +557,43 @@ mod tests {
                 Err(PlanFailure::DuplicateCandidate)
             );
         }
+    }
+    #[test]
+    fn batch_rejects_hash_valid_but_different_current_manifest_contents() {
+        let (archived, live) = histories();
+        let first = witness(&live[0]);
+        let mut second = witness(&live[1]);
+
+        // Both are self-consistent and individually model-eligible. However,
+        // one current manifest identity/generation cannot authorize two
+        // different content digests in a single destructive batch.
+        second.archive.manifest_digest = [88; 32];
+        second.archive.remotely_read_digest = [88; 32];
+        assert_eq!(evaluate(&first), Verdict::EligibleModelOnly);
+        assert_eq!(evaluate(&second), Verdict::EligibleModelOnly);
+        assert_eq!(first.manifest.basis, second.manifest.basis);
+
+        for candidates in [
+            [first.clone(), second.clone()],
+            [second.clone(), first.clone()],
+        ] {
+            assert_eq!(
+                plan_compaction(&archived, &live, &cut(), &candidates),
+                Err(PlanFailure::InconsistentWitness),
+                "provider page order cannot select mismatching manifest bytes"
+            );
+        }
+
+        // The same two source witnesses are admissible when the verified
+        // current-manifest bytes agree, independently of witness page order.
+        second.archive.manifest_digest = first.archive.manifest_digest;
+        second.archive.remotely_read_digest = first.archive.remotely_read_digest;
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[first, second])
+                .expect("one coherent manifest may authorize distinct records")
+                .model_removals
+                .len(),
+            2
+        );
     }
 }
