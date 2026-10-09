@@ -36,16 +36,24 @@ jobs:
         id: issue
         env:
           GH_TOKEN: ${{ github.token }}
+          TRUSTED_AUTHORS: ${{ vars.COORDINATION_TRUSTED_AUTHORS || 'geromet' }}
         shell: bash
         run: |
           set -euo pipefail
           title=$(sed -n 's/^COORDINATION_ISSUE_TITLE=//p' Phase0/05-FLEET-CONFIG.md | head -n1)
           marker=$(sed -n 's/^COORDINATION_BODY_MARKER=//p' Phase0/05-FLEET-CONFIG.md | head -n1)
-          gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 1000 --json number,title,body > "$RUNNER_TEMP/issues.json"
-          number=$(python3 - "$RUNNER_TEMP/issues.json" "$title" "$marker" <<'PY'
+          gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 1000 --json number,title,body,author > "$RUNNER_TEMP/issues.json"
+          number=$(python3 - "$RUNNER_TEMP/issues.json" "$title" "$marker" "$TRUSTED_AUTHORS" <<'PY'
           import json, sys
           items=json.load(open(sys.argv[1], encoding='utf-8'))
-          hits=[x['number'] for x in items if x.get('title') == sys.argv[2] and sys.argv[3] in (x.get('body') or '')]
+          trusted={n.strip().lower() for n in sys.argv[4].split(',') if n.strip()}
+          if not trusted:
+              raise SystemExit('no trusted authors configured')
+          # Anyone can open an issue on a public repo: require a trusted author and the marker as the body's first line.
+          hits=[x['number'] for x in items
+                if x.get('title') == sys.argv[2]
+                and (x.get('body') or '').split('\n', 1)[0].strip() == sys.argv[3]
+                and ((x.get('author') or {}).get('login') or '').lower() in trusted]
           if len(hits) != 1:
               raise SystemExit(f'expected exactly one coordination issue, found {len(hits)}')
           print(hits[0])
@@ -56,11 +64,14 @@ jobs:
       - name: Prepare archive when capacity trigger is reached
         env:
           GH_TOKEN: ${{ github.token }}
+          TRUSTED_AUTHORS: ${{ vars.COORDINATION_TRUSTED_AUTHORS || 'geromet' }}
+          ISSUE_NUMBER: ${{ steps.issue.outputs.issue_number }}
         run: |
           set -euo pipefail
           python3 scripts/coordination_archive.py prepare \
             --repo "$GITHUB_REPOSITORY" \
-            --issue "${{ steps.issue.outputs.issue_number }}" \
+            --issue "$ISSUE_NUMBER" \
+            --trusted-authors "$TRUSTED_AUTHORS" \
             --archive-dir Phase0/archives/coordination \
             --trigger-count 1500 --tail-min 750 --segment-size 200
 
@@ -123,11 +134,15 @@ jobs:
       - name: Compact only after byte-identical remote read-back
         env:
           GH_TOKEN: ${{ github.token }}
+          TRUSTED_AUTHORS: ${{ vars.COORDINATION_TRUSTED_AUTHORS || 'geromet' }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.issue_number }}
+          ARCHIVE_REF: ${{ needs.prepare.outputs.archive_ref }}
         run: |
           set -euo pipefail
           python3 scripts/coordination_archive.py compact \
             --repo "$GITHUB_REPOSITORY" \
-            --issue "${{ needs.prepare.outputs.issue_number }}" \
+            --issue "$ISSUE_NUMBER" \
+            --trusted-authors "$TRUSTED_AUTHORS" \
             --archive-dir Phase0/archives/coordination \
-            --archive-ref "${{ needs.prepare.outputs.archive_ref }}" \
+            --archive-ref "$ARCHIVE_REF" \
             --tail-min 750 --confirm-delete

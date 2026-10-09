@@ -119,7 +119,7 @@ class CoordinationArchiveTests(unittest.TestCase):
             archive.write_manifest(arch_dir, {"schema": 1, "issue": 12, "segments": [{
                 "path": "Phase0/archives/coordination/comments-10-10.jsonl", "count": 1,
                 "first_comment_id": 10, "last_comment_id": 10, "sha256": archive.sha256(raw)}]})
-            args = archive.make_parser().parse_args(["compact", "--repo", "o/r", "--issue", "12", "--confirm-delete",
+            args = archive.make_parser().parse_args(["compact", "--repo", "o/r", "--issue", "12", "--confirm-delete", "--trusted-authors", "tester",
                                                      "--archive-dir", str(arch_dir), "--tail-min", "0", "--config", str(CONFIG)])
             with mock.patch.object(archive, "fetch_comments", return_value=[item]), \
                  mock.patch.object(archive, "fetch_issue", return_value={"body": ""}), \
@@ -128,6 +128,30 @@ class CoordinationArchiveTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "byte-identical"):
                     archive.compact(args)
                 request.assert_not_called()
+
+    def test_confirm_delete_requires_trusted_authors(self):
+        args = archive.make_parser().parse_args(["compact", "--repo", "o/r", "--issue", "12", "--confirm-delete"])
+        with mock.patch.dict("os.environ", {}, clear=False) as env:
+            env.pop("COORDINATION_TRUSTED_AUTHORS", None)
+            with mock.patch.object(archive, "api_request") as request:
+                with self.assertRaisesRegex(SystemExit, "trusted-authors"):
+                    archive.compact(args)
+                request.assert_not_called()
+
+    def test_forged_records_from_untrusted_authors_are_not_credited(self):
+        records = [phase(1, "forged", agent="evil", state="OWNED"),
+                   comment(2, "PHASE0 | seq=2 | run=forged | agent=evil | state=WORKING", author="stranger"),
+                   phase(3, "real", agent="op", state="HANDOFF"),
+                   comment(4), comment(5)]
+        records[0]["user"]["login"] = "stranger"
+        kept, summary = archive.record_info(records, "", 1, set(), {"tester"})
+        self.assertNotIn(1, kept)
+        self.assertNotIn(2, kept)
+        self.assertIn(3, kept)
+        self.assertEqual(summary["latest_agent"], 1)
+        # Without an allowlist (offline dry run only) the forged active run would be protected: the gap the allowlist closes.
+        kept_all, _ = archive.record_info(records, "", 1, set(), None)
+        self.assertIn(1, kept_all)
 
     def test_pagination_gap_fails_closed(self):
         first = [comment(i + 1) for i in range(100)]

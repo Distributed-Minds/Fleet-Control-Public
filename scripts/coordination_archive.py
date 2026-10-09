@@ -152,8 +152,14 @@ def configured_agents(config_path: Path) -> set[str]:
     raise RuntimeError(f"AGENTS not found in {config_path}")
 
 
+def trusted_authors(args: argparse.Namespace) -> set[str] | None:
+    raw = getattr(args, "trusted_authors", None) or os.environ.get("COORDINATION_TRUSTED_AUTHORS", "")
+    names = {item.strip().lower() for item in raw.split(",") if item.strip()}
+    return names or None
+
+
 def record_info(comments: list[dict[str, Any]], issue_body: str, tail_min: int,
-                agents: set[str]) -> tuple[set[int], dict[str, int]]:
+                agents: set[str], trusted: set[str] | None = None) -> tuple[set[int], dict[str, int]]:
     if tail_min < 0:
         raise RuntimeError("tail-min must be nonnegative")
     ordered = comments
@@ -168,7 +174,10 @@ def record_info(comments: list[dict[str, Any]], issue_body: str, tail_min: int,
     by_id = {item["id"]: item for item in ordered}
     for item in ordered:
         body = item.get("body") or ""
-        if body.startswith("PHASE0 |"):
+        author = ((item.get("user") or {}).get("login") or "").lower()
+        # Anyone can comment on a public issue: only records by trusted authors are authoritative.
+        # Untrusted records are still archived losslessly but never credited as state or ownership.
+        if body.startswith("PHASE0 |") and (trusted is None or author in trusted):
             parsed = fields(body)
             agent = parsed.get("agent")
             run = parsed.get("run")
@@ -363,7 +372,7 @@ def prepare_online(args: argparse.Namespace) -> int:
         print(f"prepare: below trigger; live={len(comments)} trigger={args.trigger_count}")
         return 0
     agents = configured_agents(args.config)
-    protected, summary = record_info(comments, issue_obj.get("body") or "", args.tail_min, agents)
+    protected, summary = record_info(comments, issue_obj.get("body") or "", args.tail_min, agents, trusted_authors(args))
     manifest = load_manifest(args.archive_dir, args.issue)
     raw_lines = [line for line in encode_api_records(comments).splitlines(keepends=True)]
     created = append_segments(args.archive_dir, manifest, comments, raw_lines, args.segment_size)
@@ -378,7 +387,7 @@ def prepare_offline(args: argparse.Namespace) -> int:
     # The export cannot know current issue-body references; caller may supply an
     # offline body file for consistent count-only classification.
     issue_body = args.issue_body.read_text(encoding="utf-8") if args.issue_body else ""
-    protected, summary = record_info(comments, issue_body, args.tail_min, agents)
+    protected, summary = record_info(comments, issue_body, args.tail_min, agents, trusted_authors(args))
     if args.out_dir.exists() and any(args.out_dir.iterdir()):
         raise RuntimeError(f"offline output directory must be empty: {args.out_dir}")
     manifest = {"schema": SCHEMA, "issue": None, "source": "offline-jsonl-export",
@@ -419,6 +428,9 @@ def verify_remote(repo: str, archive_dir: Path, manifest: dict[str, Any], ref: s
 
 
 def compact(args: argparse.Namespace) -> int:
+    if args.confirm_delete and trusted_authors(args) is None:
+        raise SystemExit("compact --confirm-delete requires --trusted-authors (or COORDINATION_TRUSTED_AUTHORS): "
+                         "protection state must come from trusted authors only")
     manifest = load_manifest(args.archive_dir, args.issue)
     if not manifest["segments"]:
         print("compact: no archive segments")
@@ -432,7 +444,7 @@ def compact(args: argparse.Namespace) -> int:
     if mismatched:
         raise RuntimeError(f"live comments differ from archived evidence (sample IDs: {mismatched[:10]})")
     protected, summary = record_info(comments, issue_obj.get("body") or "", args.tail_min,
-                                    configured_agents(args.config))
+                                    configured_agents(args.config), trusted_authors(args))
     delete_ids = [cid for cid in candidates if cid not in protected]
     print(f"compact: live={len(comments)} archived_live={len(candidates)} keep={len(candidates)-len(delete_ids)} would_delete={len(delete_ids)}")
     print("compact: keep_rule_counts=" + json.dumps(summary, sort_keys=True))
@@ -460,7 +472,7 @@ def compact(args: argparse.Namespace) -> int:
         if match != live[cid]:
             raise RuntimeError(f"live comment {cid} changed since planning; refusing deletion")
         now_protected, _ = record_info(current, current_issue.get("body") or "", args.tail_min,
-                                       configured_agents(args.config))
+                                       configured_agents(args.config), trusted_authors(args))
         if cid in now_protected:
             raise RuntimeError(f"comment {cid} became protected before deletion")
         api_request(args.repo, "DELETE", f"/repos/{args.repo}/issues/comments/{cid}", allow_not_found=True)
@@ -485,6 +497,9 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--delete-delay", type=float, default=0.4)
     parser.add_argument("--request-budget", type=int, default=3000,
                         help="maximum estimated REST calls for this compaction run")
+    parser.add_argument("--trusted-authors", default="",
+                        help="comma-separated GitHub logins whose PHASE0 records are authoritative "
+                             "(or env COORDINATION_TRUSTED_AUTHORS); REQUIRED for compact --confirm-delete")
     parser.add_argument("--confirm-delete", action="store_true")
     parser.add_argument("--config", type=Path, default=Path("Phase0/05-FLEET-CONFIG.md"))
     parser.add_argument("--input-jsonl", type=Path)
