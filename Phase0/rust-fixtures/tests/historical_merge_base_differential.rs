@@ -142,8 +142,7 @@ fn rust_recomputes_topology_and_rejects_mutated_witnesses() {
     check_rust("wrong virtual-base result", &wrong_virtual, false);
 
     let mut bad_same_set = original.clone();
-    case(&mut bad_same_set, "multiple-reordered")["same_set_as"] =
-        json!("unique-complete");
+    case(&mut bad_same_set, "multiple-reordered")["same_set_as"] = json!("unique-complete");
     check_rust("wrong set identity", &bad_same_set, false);
 
     let mut bad_same_computation = original.clone();
@@ -180,14 +179,18 @@ fn historical_python_and_rust_expose_shared_semantics_and_strict_admission_diffe
     check_both("wrong virtual result", &wrong_virtual, false, false);
 
     let mut bad_same_set = original.clone();
-    case(&mut bad_same_set, "multiple-reordered")["same_set_as"] =
-        json!("unique-complete");
+    case(&mut bad_same_set, "multiple-reordered")["same_set_as"] = json!("unique-complete");
     check_both("wrong set witness", &bad_same_set, false, false);
 
     let mut bad_same_computation = original.clone();
     case(&mut bad_same_computation, "multi-virtual-a-reordered")["same_computation_as"] =
         json!("multi-virtual-version-drift");
-    check_both("wrong computation witness", &bad_same_computation, false, false);
+    check_both(
+        "wrong computation witness",
+        &bad_same_computation,
+        false,
+        false,
+    );
 
     let mut false_stale = original.clone();
     case(&mut false_stale, "same-heads-replaced-history")["stale_against"] =
@@ -207,7 +210,6 @@ fn historical_python_and_rust_expose_shared_semantics_and_strict_admission_diffe
     // Python's self-comparison succeeds mechanically; Rust requires a distinct
     // provenance witness, rather than accepting self-attestation as evidence.
     let mut self_witness = original;
-    case(&mut self_witness, "multiple-reordered")["same_set_as"] =
-        json!("multiple-reordered");
+    case(&mut self_witness, "multiple-reordered")["same_set_as"] = json!("multiple-reordered");
     check_both("self-witness", &self_witness, true, false);
 }
