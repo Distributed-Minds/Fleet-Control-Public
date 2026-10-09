@@ -1103,3 +1103,4 @@ mod tests {
 }
 
 pub mod compaction;
+pub mod ownership;
