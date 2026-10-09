@@ -285,8 +285,8 @@ fn read_fixture_with_observed_metadata(
 }
 
 fn read_fixture_bounded(path: &Path) -> Result<String, String> {
-    let observed = fs::symlink_metadata(path)
-        .map_err(|error| format!("cannot stat fixture: {error}"))?;
+    let observed =
+        fs::symlink_metadata(path).map_err(|error| format!("cannot stat fixture: {error}"))?;
     read_fixture_with_observed_metadata(path, &observed)
 }
 
@@ -441,10 +441,7 @@ mod tests {
 
     #[test]
     fn fixture_reader_rejects_nonregular_oversized_and_non_utf8_inputs() {
-        let root = env::temp_dir().join(format!(
-            "free-energy-history-reader-{}",
-            process::id()
-        ));
+        let root = env::temp_dir().join(format!("free-energy-history-reader-{}", process::id()));
         fs::create_dir_all(&root).unwrap();
         let valid = root.join("valid.json");
         fs::write(&valid, BASELINE).unwrap();
@@ -470,10 +467,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn fixture_reader_rejects_same_path_inode_swap_and_symlink_replacement() {
-        let root = env::temp_dir().join(format!(
-            "free-energy-history-inode-{}",
-            process::id()
-        ));
+        let root = env::temp_dir().join(format!("free-energy-history-inode-{}", process::id()));
         fs::create_dir_all(&root).unwrap();
         let path = root.join("history.json");
         let next = root.join("next.json");
@@ -495,5 +489,4 @@ mod tests {
         assert!(read_fixture_bounded(&path).is_err());
         fs::remove_dir_all(root).unwrap();
     }
-
 }
