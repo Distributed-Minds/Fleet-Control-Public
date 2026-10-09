@@ -459,13 +459,11 @@ fn main() -> ExitCode {
                 }
                 Err(error) => errors.push(format!("{}: {error}", diagnostic_path(&path))),
             }
+        } else if let Err(error) = path_budget.note_file() {
+            errors.push(format!("{}: {error}", diagnostic_path(&path)));
+            over_limit = true;
         } else {
-            if let Err(error) = path_budget.note_file() {
-                errors.push(format!("{}: {error}", diagnostic_path(&path)));
-                over_limit = true;
-            } else {
-                manifest_paths.push(path);
-            }
+            manifest_paths.push(path);
         }
         if over_limit {
             break;
@@ -623,6 +621,26 @@ mod tests {
             .contains("16 MiB"));
         assert_eq!(budget.bytes, MAX_BATCH_BYTES);
         assert!(budget.note_bytes(0).is_ok());
+    }
+
+    #[test]
+    fn render_collection_rejects_more_than_256_json_paths() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock after epoch")
+            .as_nanos();
+        let dir = env::temp_dir().join(format!(
+            "free-energy-catalog-render-count-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir(&dir).expect("create disposable render project directory");
+        for index in 0..=MAX_BATCH_MANIFESTS {
+            fs::write(dir.join(format!("{index:03}.json")), "{}")
+                .expect("create disposable manifest path");
+        }
+        let error = collect_render_manifests(&dir).expect_err("257 render paths must fail");
+        assert!(error.contains("256 manifests"), "{error}");
+        fs::remove_dir_all(&dir).expect("remove disposable render project directory");
     }
 
     #[test]
