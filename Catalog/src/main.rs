@@ -58,16 +58,71 @@ fn validate_output_directory(parent: &Path) -> io::Result<()> {
 /// A successful regeneration check must examine a real checked-in artifact,
 /// not HTML reached through a symlink (possibly outside the catalog tree).
 /// Reject directories and special files before attempting to read them too.
-fn read_regular_generated_page(output: &Path) -> io::Result<String> {
+/// Compare a generated preview without permitting a damaged or attacker-grown
+/// checked-in page to allocate an unbounded String. The canonical newly rendered
+/// page is already available, so its exact byte length is the natural read cap.
+/// This remains a best-effort local filesystem check, not a race-free sandbox.
+fn read_regular_generated_page(output: &Path, expected_len: usize) -> io::Result<String> {
     reject_symlinked_ancestors(output)?;
-    let metadata = fs::symlink_metadata(output)?;
-    if !metadata.file_type().is_file() {
+    let before = fs::symlink_metadata(output)?;
+    if !before.file_type().is_file() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "generated catalog page must be a regular file (symlink prohibited)",
         ));
     }
-    fs::read_to_string(output)
+    let limit = u64::try_from(expected_len)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "expected HTML length overflow"))?;
+    if before.len() > limit {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "generated catalog page exceeds expected output length",
+        ));
+    }
+
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // Reject swapped-in symlinks and avoid blocking on a swapped-in FIFO
+        // before the opened-file type/identity checks can run.
+        options.custom_flags(0o400000 | 0o4000); // O_NOFOLLOW | O_NONBLOCK
+    }
+    let file = options.open(output)?;
+    let opened = file.metadata()?;
+    if !opened.file_type().is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "opened generated catalog page is not a regular file",
+        ));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if before.dev() != opened.dev() || before.ino() != opened.ino() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "generated catalog page changed between preflight and open",
+            ));
+        }
+    }
+    if opened.len() > limit {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "generated catalog page exceeds expected output length",
+        ));
+    }
+
+    let mut bytes = Vec::new();
+    file.take(limit.saturating_add(1)).read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > limit {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "generated catalog page grew beyond expected output length",
+        ));
+    }
+    String::from_utf8(bytes).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
 }
 
 /// Publish a fully written page with a same-directory rename. An interrupted
@@ -346,7 +401,7 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
             eprintln!("{}: {error}", diagnostic_path(&output));
             return ExitCode::FAILURE;
         }
-        match read_regular_generated_page(&output) {
+        match read_regular_generated_page(&output, html.len()) {
             Ok(previous) if previous == html => {
                 println!(
                     "Catalog HTML matches typed pilot input (not full schema/rights verification)"
@@ -994,5 +1049,111 @@ mod render_manifest_file_admission_tests {
             assert!(diagnosis.contains("symlinks prohibited"), "{diagnosis}");
         }
         assert_eq!(read_render_manifest(&internal).unwrap(), PILOT);
+    }
+}
+
+#[cfg(test)]
+mod generated_page_read_bounds_tests {
+    use super::read_regular_generated_page;
+    use std::{
+        fs,
+        io::ErrorKind,
+        path::PathBuf,
+        sync::atomic::{AtomicUsize, Ordering},
+    };
+
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new() -> Self {
+            let dir = std::env::temp_dir().join(format!(
+                "free-energy-generated-check-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            fs::create_dir(&dir).expect("create disposable page check");
+            Self(dir)
+        }
+
+        fn page(&self) -> PathBuf {
+            self.0.join("index.html")
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn unchanged_page_admits_exact_bytes_and_shorter_page_is_only_a_mismatch() {
+        let scratch = Scratch::new();
+        let page = scratch.page();
+        let expected = "<!doctype html>\n<html>draft</html>\n";
+        fs::write(&page, expected).expect("write known page");
+        assert_eq!(
+            read_regular_generated_page(&page, expected.len()).expect("read exact page"),
+            expected
+        );
+        fs::write(&page, "<html>stale</html>").expect("write shorter page");
+        assert_eq!(
+            read_regular_generated_page(&page, expected.len()).expect("read shorter page"),
+            "<html>stale</html>"
+        );
+    }
+
+    #[test]
+    fn oversized_sparse_or_growing_page_cannot_allocate_to_declared_size() {
+        let scratch = Scratch::new();
+        let page = scratch.page();
+        let expected_len = 32;
+        fs::write(&page, vec![b'x'; expected_len + 1]).expect("write one-byte excess");
+        let error = read_regular_generated_page(&page, expected_len).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::InvalidData);
+        assert!(error.to_string().contains("expected output length"));
+
+        let file = fs::OpenOptions::new()
+            .write(true)
+            .open(&page)
+            .expect("open disposable sparse file");
+        file.set_len(64 * 1024 * 1024).expect("grow sparse page");
+        let error = read_regular_generated_page(&page, expected_len).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::InvalidData);
+        assert!(error.to_string().contains("expected output length"));
+    }
+
+    #[test]
+    fn malformed_utf8_and_nonregular_pages_fail_closed() {
+        let scratch = Scratch::new();
+        let page = scratch.page();
+        fs::write(&page, [0xff, 0xfe]).expect("write invalid UTF-8");
+        assert_eq!(
+            read_regular_generated_page(&page, 2).unwrap_err().kind(),
+            ErrorKind::InvalidData
+        );
+        fs::remove_file(&page).expect("remove sample");
+        fs::create_dir(&page).expect("make nonregular page");
+        assert_eq!(
+            read_regular_generated_page(&page, 2).unwrap_err().kind(),
+            ErrorKind::InvalidInput
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_generated_page_is_not_followed() {
+        use std::os::unix::fs::symlink;
+        let scratch = Scratch::new();
+        let target = scratch.0.join("legitimate.html");
+        let alias = scratch.page();
+        fs::write(&target, "<html>draft</html>").expect("write real page");
+        symlink(&target, &alias).expect("make symlink");
+        assert_eq!(
+            read_regular_generated_page(&alias, 128).unwrap_err().kind(),
+            ErrorKind::InvalidInput
+        );
     }
 }
