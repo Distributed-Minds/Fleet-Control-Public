@@ -564,12 +564,36 @@ mod tests {
     #[test]
     fn sha256_matches_independent_binary_boundary_vectors() {
         const REPEATED: &[(u8, usize, &str)] = &[
-            (0x00, 55, "02779466cdec163811d078815c633f21901413081449002f24aa3e80f0b88ef7"),
-            (0x80, 56, "ab44ecde4bac7f799c8588f617770b1a5877bead1a4bee5d3d848cd41b8855a0"),
-            (0x80, 63, "19cac792c6caf6b1218607e8a46fcea40d7c7bade71844a331aa841223bcc2f1"),
-            (0x80, 64, "1df1b7ce1fd8fcbe20cde61646875e54fe38d8945ea7911afd59e025cc520a68"),
-            (0xff, 119, "b863f94597d433ef2280e3b4656f13ea265a79bb8047287321c218905b03c99b"),
-            (0xff, 120, "9088fee917e5a748c2f0b4f5458c1cbdabbd696291c69be6e605bae0ef779e8f"),
+            (
+                0x00,
+                55,
+                "02779466cdec163811d078815c633f21901413081449002f24aa3e80f0b88ef7",
+            ),
+            (
+                0x80,
+                56,
+                "ab44ecde4bac7f799c8588f617770b1a5877bead1a4bee5d3d848cd41b8855a0",
+            ),
+            (
+                0x80,
+                63,
+                "19cac792c6caf6b1218607e8a46fcea40d7c7bade71844a331aa841223bcc2f1",
+            ),
+            (
+                0x80,
+                64,
+                "1df1b7ce1fd8fcbe20cde61646875e54fe38d8945ea7911afd59e025cc520a68",
+            ),
+            (
+                0xff,
+                119,
+                "b863f94597d433ef2280e3b4656f13ea265a79bb8047287321c218905b03c99b",
+            ),
+            (
+                0xff,
+                120,
+                "9088fee917e5a748c2f0b4f5458c1cbdabbd696291c69be6e605bae0ef779e8f",
+            ),
         ];
         for &(byte, len, expected) in REPEATED {
             let input = vec![byte; len];
