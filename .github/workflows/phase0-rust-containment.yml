@@ -31,6 +31,7 @@ jobs:
           rustup run 1.85.1 cargo test --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline --test historical_ad_hoc_research_differential -- --ignored
           rustup run 1.85.1 cargo test --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline --test historical_github_capability_differential -- --ignored
           rustup run 1.85.1 cargo test --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline --test historical_integration_candidate_differential -- --ignored
+          rustup run 1.85.1 cargo test --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline --test historical_merge_base_differential -- --ignored
           rustup run 1.85.1 cargo clippy --manifest-path Phase0/rust-fixtures/Cargo.toml --all-targets --locked --offline -- -D warnings
           rustup run 1.85.1 cargo run --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline -- Phase0/fixtures/containment-spec3.json
           # CLI execution is distinct from cargo test: exercise every staged oracle.
