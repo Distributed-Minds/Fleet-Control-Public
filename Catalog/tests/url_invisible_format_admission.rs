@@ -93,8 +93,7 @@ fn visible_unicode_and_benign_percent_encodings_remain_accepted() {
             // A PINNED_REPOSITORY_FILE cannot arbitrarily swap only one
             // permalink component: that would contradict its immutable pin.
             let input = if surface.starts_with("/evidence/") {
-                let mut manifest: Value =
-                    serde_json::from_str(VELOREN).expect("valid baseline");
+                let mut manifest: Value = serde_json::from_str(VELOREN).expect("valid baseline");
                 manifest["evidence"][0]["evidence_kind"] = json!("MUTABLE_UPSTREAM_PAGE");
                 manifest["evidence"][0]["currentness"] = json!("OBSERVED_AT");
                 manifest["evidence"][0]["commit"] = Value::Null;
