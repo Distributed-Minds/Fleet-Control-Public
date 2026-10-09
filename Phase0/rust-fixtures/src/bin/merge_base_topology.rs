@@ -5,8 +5,8 @@
 //! establish complete best-base discovery under its effective Git history view.
 
 use serde::Deserialize;
-use std::io::Read;
 use std::collections::{BTreeMap, BTreeSet};
+use std::io::Read;
 
 const HISTORICAL_CASE_COUNT: usize = 12;
 // The historical Python migration must not silently replace one of the named
@@ -353,10 +353,14 @@ fn read_bounded_fixture(path: &std::path::Path) -> Result<String, String> {
     let pre = std::fs::symlink_metadata(path)
         .map_err(|error| format!("cannot inspect merge-base fixture {path:?}: {error}"))?;
     if !pre.file_type().is_file() {
-        return Err(format!("merge-base fixture {path:?} must be a regular file (no symlinks)"));
+        return Err(format!(
+            "merge-base fixture {path:?} must be a regular file (no symlinks)"
+        ));
     }
     if pre.len() > MAX_FIXTURE_BYTES {
-        return Err(format!("merge-base fixture {path:?} exceeds {MAX_FIXTURE_BYTES} bytes"));
+        return Err(format!(
+            "merge-base fixture {path:?} exceeds {MAX_FIXTURE_BYTES} bytes"
+        ));
     }
 
     let opened = std::fs::File::open(path)
@@ -365,10 +369,14 @@ fn read_bounded_fixture(path: &std::path::Path) -> Result<String, String> {
         .metadata()
         .map_err(|error| format!("cannot inspect opened merge-base fixture {path:?}: {error}"))?;
     if !actual.is_file() {
-        return Err(format!("opened merge-base fixture {path:?} is not a regular file"));
+        return Err(format!(
+            "opened merge-base fixture {path:?} is not a regular file"
+        ));
     }
     if actual.len() > MAX_FIXTURE_BYTES {
-        return Err(format!("merge-base fixture {path:?} exceeds {MAX_FIXTURE_BYTES} bytes"));
+        return Err(format!(
+            "merge-base fixture {path:?} exceeds {MAX_FIXTURE_BYTES} bytes"
+        ));
     }
 
     let mut bytes = String::new();
@@ -377,7 +385,9 @@ fn read_bounded_fixture(path: &std::path::Path) -> Result<String, String> {
         .read_to_string(&mut bytes)
         .map_err(|error| format!("cannot read merge-base fixture {path:?}: {error}"))?;
     if (bytes.len() as u64) > MAX_FIXTURE_BYTES {
-        return Err(format!("merge-base fixture {path:?} exceeds {MAX_FIXTURE_BYTES} bytes"));
+        return Err(format!(
+            "merge-base fixture {path:?} exceeds {MAX_FIXTURE_BYTES} bytes"
+        ));
     }
     Ok(bytes)
 }
