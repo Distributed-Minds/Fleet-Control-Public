@@ -11,6 +11,10 @@ use std::collections::HashSet;
 use std::env;
 use std::fs;
 use std::io::{Read, Write};
+#[cfg(target_os = "linux")]
+use std::os::unix::fs::OpenOptionsExt;
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
 use std::process;
 
 #[cfg(test)]
@@ -77,15 +81,42 @@ struct Fixture {
 // since a regular file can grow after the metadata observation.
 const MAX_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
 
-fn read_fixture_file(path: &str) -> Result<String, String> {
-    let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+fn read_fixture_with_observed_metadata(
+    path: &str,
+    metadata: &fs::Metadata,
+) -> Result<String, String> {
     if !metadata.file_type().is_file() {
         return Err("fixture must be a regular non-symlink file".to_owned());
     }
     if metadata.len() > MAX_FIXTURE_BYTES {
         return Err("fixture exceeds maximum input size".to_owned());
     }
-    let file = fs::File::open(path).map_err(|error| error.to_string())?;
+
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        // Do not follow a swapped-in symlink or block on a substituted FIFO.
+        // These open(2) flags are Linux-specific, not portable numeric values.
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let file = options.open(path).map_err(|error| error.to_string())?;
+    let opened = file.metadata().map_err(|error| error.to_string())?;
+    if !opened.file_type().is_file() {
+        return Err("opened fixture is not a regular file".to_owned());
+    }
+    #[cfg(unix)]
+    if opened.dev() != metadata.dev() || opened.ino() != metadata.ino() {
+        return Err("fixture changed between metadata check and open".to_owned());
+    }
+    if opened.len() > MAX_FIXTURE_BYTES {
+        return Err("fixture exceeds maximum input size".to_owned());
+    }
+
+    // Bound the descriptor read even if the file grows after both size checks.
+    // This does not authenticate the mutable bytes or authorize provider use.
     let mut contents = String::new();
     file.take(MAX_FIXTURE_BYTES + 1)
         .read_to_string(&mut contents)
@@ -94,6 +125,11 @@ fn read_fixture_file(path: &str) -> Result<String, String> {
         return Err("fixture exceeds maximum input size".to_owned());
     }
     Ok(contents)
+}
+
+fn read_fixture_file(path: &str) -> Result<String, String> {
+    let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+    read_fixture_with_observed_metadata(path, &metadata)
 }
 
 fn git_id(value: &str) -> bool {
@@ -373,6 +409,46 @@ mod tests {
 
         drop(file);
         fs::remove_dir_all(&scratch).expect("remove isolated fixture test directory");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn opened_fixture_rejects_byte_identical_path_swap_and_symlink() {
+        let scratch = std::env::temp_dir().join(format!(
+            "free-energy-fixture-open-swap-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&scratch).expect("create isolated fixture directory");
+        let source = scratch.join("fixture.json");
+        let replacement = scratch.join("replacement.json");
+        fs::write(&source, HISTORICAL_FIXTURE).expect("write source fixture");
+        fs::write(&replacement, HISTORICAL_FIXTURE).expect("write identical replacement");
+        let observed = fs::symlink_metadata(&source).expect("observe original inode");
+        assert_eq!(
+            read_fixture_with_observed_metadata(source.to_str().unwrap(), &observed)
+                .expect("same opened inode is accepted"),
+            HISTORICAL_FIXTURE
+        );
+
+        fs::rename(&replacement, &source).expect("replace fixture before open");
+        let error = read_fixture_with_observed_metadata(source.to_str().unwrap(), &observed)
+            .expect_err("byte-identical replacement must not pass inode check");
+        assert!(
+            error.contains("changed between metadata check and open"),
+            "unexpected rejection: {error}"
+        );
+
+        let second_observation = fs::symlink_metadata(&source).expect("observe replacement");
+        let target = scratch.join("target.json");
+        fs::write(&target, HISTORICAL_FIXTURE).expect("write symlink target");
+        fs::remove_file(&source).expect("remove regular input");
+        std::os::unix::fs::symlink(&target, &source).expect("replace with symlink");
+        assert!(
+            read_fixture_with_observed_metadata(source.to_str().unwrap(), &second_observation)
+                .is_err(),
+            "symlink substituted after metadata observation must not be opened"
+        );
+        fs::remove_dir_all(&scratch).expect("remove isolated fixture directory");
     }
 
     #[test]
