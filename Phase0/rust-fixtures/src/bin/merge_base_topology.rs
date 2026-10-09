@@ -586,6 +586,47 @@ mod tests {
     }
 
     #[test]
+    fn exact_limit_is_valid_but_post_preflight_growth_is_rejected() {
+        let scratch = std::env::temp_dir().join(format!(
+            "free-energy-merge-base-growth-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&scratch).unwrap();
+        let path = scratch.join("fixture.json");
+
+        // A valid JSON fixture plus insignificant whitespace must remain valid
+        // at the inclusive 8 MiB cap, rather than being rejected off-by-one.
+        let mut padded = FIXTURES.as_bytes().to_vec();
+        padded.resize(MAX_FIXTURE_BYTES as usize, b' ');
+        std::fs::write(&path, &padded).unwrap();
+        let content = read_bounded_fixture(&path).expect("accept exactly 8 MiB");
+        assert_eq!(content.len(), MAX_FIXTURE_BYTES as usize);
+        let cases: Vec<Case> = serde_json::from_str(&content).unwrap();
+        assert_eq!(check(&cases), Ok(HISTORICAL_CASE_COUNT));
+
+        // The file can grow between the pathname preflight and descriptor
+        // inspection. Its previous small-enough metadata must not authorize
+        // the now-oversized descriptor, even without a pathname/inode swap.
+        let preflight = std::fs::symlink_metadata(&path).unwrap();
+        let writer = std::fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .unwrap();
+        writer.set_len(MAX_FIXTURE_BYTES + 1).unwrap();
+        drop(writer);
+        let error = read_bounded_fixture_with_metadata(&path, &preflight).unwrap_err();
+        assert!(
+            error.contains("exceeds"),
+            "post-preflight growth must reject oversized fixture: {error}"
+        );
+        std::fs::remove_dir_all(&scratch).unwrap();
+    }
+
+    #[test]
     fn historical_twelve_cases_compute_correctly() {
         assert_eq!(check(&baseline()), Ok(12));
     }
