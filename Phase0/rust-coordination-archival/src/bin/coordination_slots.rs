@@ -132,15 +132,11 @@ fn select_active(records: [Observation<'_>; 2], trusted: &str) -> Result<SlotRec
     }
 
     match (first.state, second.state) {
-        (State::Active, State::Active) => {
-            match first.epoch.cmp(&second.epoch) {
-                std::cmp::Ordering::Equal => {
-                    Err("conflicting ACTIVE slots at equal epoch".to_owned())
-                }
-                std::cmp::Ordering::Greater => Ok(first),
-                std::cmp::Ordering::Less => Ok(second),
-            }
-        }
+        (State::Active, State::Active) => match first.epoch.cmp(&second.epoch) {
+            std::cmp::Ordering::Equal => Err("conflicting ACTIVE slots at equal epoch".to_owned()),
+            std::cmp::Ordering::Greater => Ok(first),
+            std::cmp::Ordering::Less => Ok(second),
+        },
         (State::Active, _) if first.epoch > second.epoch => Ok(first),
         (_, State::Active) if second.epoch > first.epoch => Ok(second),
         (State::Active, _) | (_, State::Active) => {
