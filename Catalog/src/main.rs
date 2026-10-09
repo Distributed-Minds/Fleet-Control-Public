@@ -107,14 +107,14 @@ where
 /// project source directory (or silently accept a JSON-named directory).
 fn read_render_manifest(path: &Path) -> Result<String, String> {
     let metadata = fs::symlink_metadata(path)
-        .map_err(|error| format!("{}: {error}", diagnostic_path(&path)))?;
+        .map_err(|error| format!("{}: {error}", diagnostic_path(path)))?;
     if !metadata.file_type().is_file() {
         return Err(format!(
             "{}: render source must be a regular file (symlinks prohibited)",
-            diagnostic_path(&path)
+            diagnostic_path(path)
         ));
     }
-    fs::read_to_string(path).map_err(|error| format!("{}: {error}", diagnostic_path(&path)))
+    fs::read_to_string(path).map_err(|error| format!("{}: {error}", diagnostic_path(path)))
 }
 
 /// Collect the complete manifest set only from a real project directory.
@@ -122,9 +122,9 @@ fn read_render_manifest(path: &Path) -> Result<String, String> {
 /// renderer to unrelated JSON files before per-file admission takes place.
 fn collect_render_manifests(project_dir: &Path) -> Result<Vec<std::path::PathBuf>, String> {
     validate_output_directory(project_dir)
-        .map_err(|error| format!("{}: {error}", diagnostic_path(&project_dir)))?;
+        .map_err(|error| format!("{}: {error}", diagnostic_path(project_dir)))?;
     let entries = fs::read_dir(project_dir)
-        .map_err(|error| format!("{}: {error}", diagnostic_path(&project_dir)))?;
+        .map_err(|error| format!("{}: {error}", diagnostic_path(project_dir)))?;
     let mut paths = Vec::new();
     for entry in entries {
         let entry = entry.map_err(|error| format!("project directory entry: {error}"))?;
@@ -221,7 +221,7 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
     } else {
         if let Some(parent) = output.parent() {
             if let Err(error) = fs::create_dir_all(parent) {
-                eprintln!("{}: {error}", diagnostic_path(&parent));
+                eprintln!("{}: {error}", diagnostic_path(parent));
                 return ExitCode::FAILURE;
             }
         }
