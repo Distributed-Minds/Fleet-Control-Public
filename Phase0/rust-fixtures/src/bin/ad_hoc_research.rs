@@ -4,8 +4,116 @@
 //! fixture integration test, without runtime Python or network access.
 //! NOTE: canonical SHA-256 identity parity is not established by this CLI.
 
+use serde::de::{self, MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer};
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
+
+// Identity-bearing fixture JSON must not silently discard duplicate object
+// keys. serde_json::Value alone keeps the last one, including when the same
+// decoded key is spelled using distinct JSON escape sequences.
+// This is stricter input admission than the historical Python fixture runner;
+// its otherwise identical 47 semantic decisions remain the parity target.
+struct StrictJson(Value);
+
+impl<'de> Deserialize<'de> for StrictJson {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct StrictVisitor;
+        impl<'de> Visitor<'de> for StrictVisitor {
+            type Value = StrictJson;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("JSON with unique decoded object keys at every depth")
+            }
+
+            fn visit_unit<E>(self) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::Null))
+            }
+
+            fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::Bool(value)))
+            }
+
+            fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::from(value)))
+            }
+
+            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::from(value)))
+            }
+
+            fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                serde_json::Number::from_f64(value)
+                    .map(|number| StrictJson(Value::Number(number)))
+                    .ok_or_else(|| de::Error::custom("non-finite JSON number"))
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::String(value.to_owned())))
+            }
+
+            fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::String(value)))
+            }
+
+            fn visit_seq<A>(self, mut sequence: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut values = Vec::new();
+                while let Some(StrictJson(value)) = sequence.next_element::<StrictJson>()? {
+                    values.push(value);
+                }
+                Ok(StrictJson(Value::Array(values)))
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut values = Map::new();
+                while let Some((key, StrictJson(value))) = map.next_entry::<String, StrictJson>()? {
+                    if values.contains_key(&key) {
+                        return Err(de::Error::custom(format!(
+                            "duplicate JSON object member: {key:?}"
+                        )));
+                    }
+                    values.insert(key, value);
+                }
+                Ok(StrictJson(Value::Object(values)))
+            }
+        }
+        deserializer.deserialize_any(StrictVisitor)
+    }
+}
+
+fn parse_fixture_json(source: &str) -> Result<Value, serde_json::Error> {
+    serde_json::from_str::<StrictJson>(source).map(|strict| strict.0)
+}
 
 const SEMANTIC_FIELDS: [&str; 16] = [
     "packet_schema",
@@ -578,7 +686,7 @@ fn run() -> Result<usize, String> {
     }
     let data = fs::read_to_string(&path)
         .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
-    let fixture: Value = serde_json::from_str(&data)
+    let fixture: Value = parse_fixture_json(&data)
         .map_err(|error| format!("invalid fixture {}: {error}", path.display()))?;
     validate(&fixture).map_err(|errors| errors.join("\n"))
 }
@@ -598,6 +706,46 @@ mod cli_semantic_tests {
     use super::*;
 
     const BASELINE: &str = include_str!("../../../fixtures/ad-hoc-research-spec1.json");
+
+    #[test]
+    fn raw_and_escaped_duplicate_members_fail_before_semantic_evaluation() {
+        let canonical = serde_json::to_string(
+            &parse_fixture_json(BASELINE).expect("strict original fixture"),
+        )
+        .expect("serialize canonical fixture");
+
+        // Exercise the actual input decoder at the shell, nested packet,
+        // nested expected verdict, and escaped-key alias boundaries.
+        for (needle, replacement) in [
+            (
+                r#""packet_templates":"#,
+                r#""packet_templates":{},"packet_templates":"#,
+            ),
+            (r#""topic":"#, r#""topic":"forged","topic":"#),
+            (r#""expected":"#, r#""expected":"forged","expected":"#),
+            (r#""topic":"#, r#""\u0074opic":"forged","topic":"#),
+        ] {
+            assert!(canonical.contains(needle), "missing test insertion point");
+            let forged = canonical.replacen(needle, replacement, 1);
+            let error = parse_fixture_json(&forged)
+                .expect_err("duplicate decoded object key must not be last-wins");
+            assert!(
+                error.to_string().contains("duplicate JSON object member"),
+                "missing duplicate-member diagnostic: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn strict_fixture_decoder_preserves_all_original_semantic_verdicts() {
+        let input = parse_fixture_json(BASELINE).expect("original fixture must decode");
+        assert_eq!(validate(&input), Ok(47));
+        let ordered = serde_json::to_string(&input).expect("serialize canonical fixture");
+        assert_eq!(
+            validate(&parse_fixture_json(&ordered).expect("canonical fixture")),
+            Ok(47)
+        );
+    }
 
     #[test]
     fn baseline_47_cases_execute_without_reading_expected_as_oracle() {
