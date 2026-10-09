@@ -702,9 +702,8 @@ mod tests {
 
         // Validation does not elevate a valid composition over a stronger
         // provider denial; preserve the historical decision precedence.
-        let mut valid = input(
-            json!({"composition":"ALL_REQUIRED","surviving_roots":1,"required_roots":2}),
-        );
+        let mut valid =
+            input(json!({"composition":"ALL_REQUIRED","surviving_roots":1,"required_roots":2}));
         valid.insert("provider_access".to_owned(), json!("ERROR"));
         assert_eq!(
             evaluate(&valid).unwrap(),
