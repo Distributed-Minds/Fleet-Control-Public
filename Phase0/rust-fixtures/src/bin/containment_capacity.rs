@@ -6,7 +6,8 @@ use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::process;
 
 const REQUIRED_DECISION_IDS: &[&str] = &[
@@ -520,6 +521,63 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
     }
 }
 
+// An offline fixture must never read an unbounded or blocking caller-controlled path.
+// The open descriptor is rechecked, and the read limit also covers growing files.
+const MAX_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
+
+fn read_fixture_with_metadata(path: &Path, before: &fs::Metadata) -> Result<String, String> {
+    if !before.file_type().is_file() {
+        return Err("containment-capacity fixture must be a regular, non-symlink file".to_owned());
+    }
+    if before.len() > MAX_FIXTURE_BYTES {
+        return Err("containment-capacity fixture exceeds 8 MiB limit".to_owned());
+    }
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // A replaced FIFO must not block at open; a replaced symlink must fail.
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let file = options
+        .open(path)
+        .map_err(|error| format!("cannot open {path:?}: {error}"))?;
+    let opened = file
+        .metadata()
+        .map_err(|error| format!("cannot stat {path:?}: {error}"))?;
+    if !opened.file_type().is_file() {
+        return Err("opened containment-capacity fixture is not a regular file".to_owned());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if before.dev() != opened.dev() || before.ino() != opened.ino() {
+            return Err("containment-capacity fixture changed before open".to_owned());
+        }
+    }
+    if opened.len() > MAX_FIXTURE_BYTES {
+        return Err("containment-capacity fixture exceeds 8 MiB limit".to_owned());
+    }
+    let mut bytes = Vec::new();
+    file.take(MAX_FIXTURE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("cannot read {path:?}: {error}"))?;
+    if bytes.len() as u64 > MAX_FIXTURE_BYTES {
+        return Err("containment-capacity fixture exceeds 8 MiB limit".to_owned());
+    }
+    String::from_utf8(bytes)
+        .map_err(|_| "containment-capacity fixture must be UTF-8".to_owned())
+}
+
+fn read_fixture_bounded(path: &Path) -> Result<String, String> {
+    let before =
+        fs::symlink_metadata(path).map_err(|error| format!("cannot stat {path:?}: {error}"))?;
+    read_fixture_with_metadata(path, &before)
+}
+
 fn run() -> Result<(), String> {
     let mut args = env::args_os().skip(1);
     let path = args
@@ -529,10 +587,9 @@ fn run() -> Result<(), String> {
     if args.next().is_some() {
         return Err("usage: containment_capacity [fixture.json]".to_owned());
     }
-    let source = fs::read_to_string(&path)
-        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    let source = read_fixture_bounded(&path)?;
     let fixture: Fixture = serde_json::from_str(&source)
-        .map_err(|error| format!("invalid fixture {}: {error}", path.display()))?;
+        .map_err(|error| format!("invalid fixture {path:?}: {error}"))?;
     match validate(&fixture) {
         Ok(count) => {
             println!("containment-capacity fixtures (Rust): {count} passed");
@@ -553,6 +610,50 @@ fn main() {
 mod tests {
     use super::*;
     const BASELINE: &str = include_str!("../../../fixtures/containment-capacity-spec2.json");
+
+    #[test]
+    fn caller_fixture_bounded_regular_open_and_historical_success() {
+        let scratch = env::temp_dir().join(format!(
+            "free-energy-containment-capacity-input-{}",
+            process::id()
+        ));
+        fs::create_dir_all(&scratch).unwrap();
+        let input = scratch.join("baseline.json");
+        fs::write(&input, BASELINE).unwrap();
+        let parsed: Fixture = serde_json::from_str(&read_fixture_bounded(&input).unwrap()).unwrap();
+        assert_eq!(validate(&parsed), Ok(17));
+        assert!(read_fixture_bounded(&scratch).is_err());
+
+        let large = scratch.join("large.json");
+        fs::File::create(&large)
+            .unwrap()
+            .set_len(MAX_FIXTURE_BYTES + 1)
+            .unwrap();
+        assert!(read_fixture_bounded(&large).unwrap_err().contains("8 MiB"));
+
+        let bad_utf8 = scratch.join("bad-utf8.json");
+        fs::write(&bad_utf8, [0xff_u8, 0xfe_u8]).unwrap();
+        assert!(read_fixture_bounded(&bad_utf8)
+            .unwrap_err()
+            .contains("UTF-8"));
+
+        #[cfg(unix)]
+        {
+            let link = scratch.join("symlink.json");
+            std::os::unix::fs::symlink(&input, &link).unwrap();
+            assert!(read_fixture_bounded(&link).is_err());
+
+            // A same-path file swap after preflight cannot substitute evidence.
+            let stale = fs::symlink_metadata(&input).unwrap();
+            let replacement = scratch.join("replacement.json");
+            fs::write(&replacement, BASELINE).unwrap();
+            fs::rename(&replacement, &input).unwrap();
+            assert!(read_fixture_with_metadata(&input, &stale)
+                .unwrap_err()
+                .contains("changed before open"));
+        }
+        fs::remove_dir_all(&scratch).unwrap();
+    }
 
     fn original() -> Value {
         serde_json::from_str(BASELINE).expect("valid legacy fixture")
