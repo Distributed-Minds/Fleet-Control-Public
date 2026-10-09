@@ -130,7 +130,6 @@ impl<'de> Deserialize<'de> for StrictJson {
     }
 }
 
-
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Case {
