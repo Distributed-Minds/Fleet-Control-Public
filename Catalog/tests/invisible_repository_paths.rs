@@ -57,6 +57,13 @@ fn ordinary_scoped_and_pinned_paths_still_pass() {
     input["rights_claims"][0]["scope_kind"] = json!("PATH");
     input["rights_claims"][0]["scope"] = json!("assets/LICENSE.txt");
     input["evidence"][0]["path"] = json!("docs/LICENSE.txt");
+    let original = input["evidence"][0]["url"]
+        .as_str()
+        .expect("pilot pinned evidence URL")
+        .strip_suffix("LICENSE.txt")
+        .expect("pilot LICENSE path")
+        .to_owned();
+    input["evidence"][0]["url"] = json!(format!("{original}docs/LICENSE.txt"));
     // A changed rights scope also changes which scope each related decision
     // refers to; preserve semantic consistency in this positive control.
     for decision in input["permission_decisions"].as_array_mut().unwrap() {
