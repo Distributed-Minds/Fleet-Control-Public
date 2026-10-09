@@ -568,8 +568,7 @@ fn read_fixture_with_metadata(path: &Path, before: &fs::Metadata) -> Result<Stri
     if bytes.len() as u64 > MAX_FIXTURE_BYTES {
         return Err("containment-capacity fixture exceeds 8 MiB limit".to_owned());
     }
-    String::from_utf8(bytes)
-        .map_err(|_| "containment-capacity fixture must be UTF-8".to_owned())
+    String::from_utf8(bytes).map_err(|_| "containment-capacity fixture must be UTF-8".to_owned())
 }
 
 fn read_fixture_bounded(path: &Path) -> Result<String, String> {
