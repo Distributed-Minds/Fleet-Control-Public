@@ -76,6 +76,13 @@ fn ordinary_nested_paths_remain_usable() {
     ] {
         let mut value = candidate();
         value["evidence"][0]["path"] = json!(path);
+        let link = value["evidence"][0]["url"]
+            .as_str()
+            .expect("pilot evidence URL")
+            .strip_suffix("LICENSE.txt")
+            .expect("pilot pinned LICENSE path")
+            .to_owned();
+        value["evidence"][0]["url"] = json!(format!("{link}{path}"));
         validate_manifest(&value.to_string())
             .unwrap_or_else(|errors| panic!("safe path {path:?}: {errors:?}"));
     }

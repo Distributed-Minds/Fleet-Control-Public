@@ -130,6 +130,14 @@ fn pinned_evidence_paths_do_not_bypass_rights_path_safety_rules() {
     ] {
         let mut changed = baseline.clone();
         changed["evidence"][0]["path"] = Value::String(path.to_owned());
+        let prefix = changed["evidence"][0]["url"]
+            .as_str()
+            .expect("pilot pinned URL")
+            .strip_suffix("LICENSE.txt")
+            .expect("pilot LICENSE permalink")
+            .to_owned();
+        changed["evidence"][0]["url"] =
+            serde_json::json!(format!("{prefix}{}", path.replace(' ', "%20")));
         let outcome = validate_manifest(&changed.to_string());
         assert!(outcome.is_ok(), "valid evidence path {path:?}: {outcome:?}");
     }

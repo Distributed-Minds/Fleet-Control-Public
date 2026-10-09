@@ -540,7 +540,7 @@ fn pinned_evidence_link_matches(repository: &str, commit: &str, path: &str, url:
         || !is_relative_path(path)
         || repository.ends_with('/')
         || repository.chars().any(|ch| matches!(ch, '?' | '#' | '%'))
-        || url.chars().any(|ch| matches!(ch, '?' | '#' | '%'))
+        || url.chars().any(|ch| matches!(ch, '?' | '#'))
     {
         return false;
     }
@@ -570,7 +570,7 @@ fn pinned_evidence_link_matches(repository: &str, commit: &str, path: &str, url:
     } else {
         return false;
     };
-    url == format!("{repository}{marker}{commit}/{path}")
+    url == format!("{repository}{marker}{commit}/{}", path.replace(' ', "%20"))
 }
 
 // These enum vocabularies are part of the checked-in v5 JSON Schema, but

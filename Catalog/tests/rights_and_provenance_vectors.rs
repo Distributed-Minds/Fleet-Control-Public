@@ -83,6 +83,21 @@ fn check_evidence(suite: &Value) -> Result<(), String> {
         let mut manifest = full_manifest();
         let mut additional = suite["base_evidence"].clone();
         apply_overrides(&mut additional, &case["overrides"]);
+        // Original schema fragments test path validity independently of the
+        // permalink. For positive changed-path cases, derive the matching
+        // pinned link rather than silently making a contradictory record.
+        if case["expected_valid"] == true
+            && case["overrides"].get("path").is_some()
+            && additional["evidence_kind"] == "PINNED_REPOSITORY_FILE"
+        {
+            let repo = additional["repository"].as_str().expect("pinned repo");
+            let revision = additional["commit"].as_str().expect("pinned revision");
+            let path = additional["path"].as_str().expect("pinned path");
+            additional["url"] = json!(format!(
+                "{repo}/blob/{revision}/{}",
+                path.replace(' ', "%20")
+            ));
+        }
         // An unreferenced supplemental evidence record remains traceable even
         // when INVALIDATED. This does not approve any rights claim.
         manifest["evidence"]
