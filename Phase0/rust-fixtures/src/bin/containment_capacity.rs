@@ -530,9 +530,9 @@ fn run() -> Result<(), String> {
         return Err("usage: containment_capacity [fixture.json]".to_owned());
     }
     let source = fs::read_to_string(&path)
-        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+        .map_err(|error| format!("cannot read {path:?}: {error}"))?;
     let fixture: Fixture = serde_json::from_str(&source)
-        .map_err(|error| format!("invalid fixture {}: {error}", path.display()))?;
+        .map_err(|error| format!("invalid fixture {path:?}: {error}"))?;
     match validate(&fixture) {
         Ok(count) => {
             println!("containment-capacity fixtures (Rust): {count} passed");

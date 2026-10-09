@@ -353,10 +353,7 @@ fn run() -> Result<usize, String> {
     }
     let content = match input {
         Some(path) => std::fs::read_to_string(&path).map_err(|error| {
-            format!(
-                "cannot read merge-base fixture {}: {error}",
-                std::path::Path::new(&path).display()
-            )
+            format!("cannot read merge-base fixture {path:?}: {error}")
         })?,
         None => FIXTURES.to_owned(),
     };

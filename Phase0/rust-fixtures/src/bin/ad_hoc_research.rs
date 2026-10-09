@@ -577,9 +577,9 @@ fn run() -> Result<usize, String> {
         return Err("usage: ad_hoc_research [fixture.json]".to_owned());
     }
     let data = fs::read_to_string(&path)
-        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+        .map_err(|error| format!("cannot read {path:?}: {error}"))?;
     let fixture: Value = serde_json::from_str(&data)
-        .map_err(|error| format!("invalid fixture {}: {error}", path.display()))?;
+        .map_err(|error| format!("invalid fixture {path:?}: {error}"))?;
     validate(&fixture).map_err(|errors| errors.join("\n"))
 }
 

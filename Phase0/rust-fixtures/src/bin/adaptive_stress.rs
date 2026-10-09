@@ -353,7 +353,7 @@ fn main() {
         process::exit(2);
     }
     let result = fs::read_to_string(&path)
-        .map_err(|err| format!("{}: {err}", path.display()))
+        .map_err(|err| format!("{path:?}: {err}"))
         .and_then(|content| {
             serde_json::from_str::<Fixture>(&content)
                 .map_err(|err| format!("invalid adaptive-stress JSON: {err}"))
