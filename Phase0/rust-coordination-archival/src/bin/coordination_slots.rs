@@ -202,10 +202,10 @@ fn execute(args: &[String]) -> Result<SlotRecord, String> {
     }
     let first_id = decimal(&args[1]).map_err(str::to_owned)?;
     let second_id = decimal(&args[5]).map_err(str::to_owned)?;
-    let first_body = read_body(&args[4])
-        .map_err(|error| format!("first body unavailable: {error}"))?;
-    let second_body = read_body(&args[8])
-        .map_err(|error| format!("second body unavailable: {error}"))?;
+    let first_body =
+        read_body(&args[4]).map_err(|error| format!("first body unavailable: {error}"))?;
+    let second_body =
+        read_body(&args[8]).map_err(|error| format!("second body unavailable: {error}"))?;
     select_active(
         [
             Observation {
@@ -443,8 +443,9 @@ mod tests {
             TITLE.to_owned(),
             too_large.to_str().unwrap().to_owned(),
         ];
-        assert!(execute(&args).unwrap_err().contains("second body unavailable"));
+        assert!(execute(&args)
+            .unwrap_err()
+            .contains("second body unavailable"));
         fs::remove_dir_all(&scratch).unwrap();
     }
-
 }
