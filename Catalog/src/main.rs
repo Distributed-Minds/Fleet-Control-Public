@@ -257,9 +257,7 @@ fn main() -> ExitCode {
         if path.is_dir() {
             // is_dir() follows symlinks. Reject a supplied alias before
             // enumerating files outside the chosen project directory.
-            if fs::symlink_metadata(&path)
-                .is_ok_and(|metadata| metadata.file_type().is_symlink())
-            {
+            if fs::symlink_metadata(&path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
                 errors.push(format!(
                     "{}: symlinked project directory prohibited",
                     path.display()
@@ -305,7 +303,10 @@ fn main() -> ExitCode {
                 continue;
             }
             Ok(metadata) if !metadata.file_type().is_file() => {
-                errors.push(format!("{}: manifest is not a regular file", path.display()));
+                errors.push(format!(
+                    "{}: manifest is not a regular file",
+                    path.display()
+                ));
                 continue;
             }
             Err(error) => {
