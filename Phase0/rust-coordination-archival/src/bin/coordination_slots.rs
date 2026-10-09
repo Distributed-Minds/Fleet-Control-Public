@@ -10,6 +10,10 @@
 use std::env;
 use std::fs;
 use std::io::Read;
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
+#[cfg(target_os = "linux")]
+use std::os::unix::fs::OpenOptionsExt;
 use std::process::ExitCode;
 
 const TITLE: &str = "[fleet-control] coordination";
@@ -170,19 +174,40 @@ fn select_active(records: [Observation<'_>; 2], trusted: &str) -> Result<SlotRec
     }
 }
 
-fn read_body(path: &str) -> Result<String, String> {
-    let metadata = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
-    // A FIFO/device could block indefinitely; a symlink could point outside
-    // the intended input set. This is input hygiene, not provider attestation.
+fn read_body_with_observed_metadata(path: &str, metadata: &fs::Metadata) -> Result<String, String> {
     if !metadata.file_type().is_file() {
         return Err("coordination body must be a regular, non-symlink file".to_owned());
     }
     if metadata.len() > MAX_BODY_BYTES {
         return Err("coordination body exceeds bounded input size".to_owned());
     }
-    // Metadata checks alone are racy: cap the actual read too, so an appended
-    // or swapped file cannot make this advisory parser allocate without bound.
-    let file = fs::File::open(path).map_err(|e| e.to_string())?;
+
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        // Linux O_NONBLOCK stops a swapped-in FIFO from hanging the reader;
+        // O_NOFOLLOW refuses symlink substitution at open time. The numeric
+        // constants are Linux-specific, so do not apply them on other OSes.
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let file = options.open(path).map_err(|e| e.to_string())?;
+    let opened = file.metadata().map_err(|e| e.to_string())?;
+    if !opened.file_type().is_file() {
+        return Err("opened coordination body is not a regular file".to_owned());
+    }
+    #[cfg(unix)]
+    if opened.dev() != metadata.dev() || opened.ino() != metadata.ino() {
+        return Err("coordination body changed between metadata check and open".to_owned());
+    }
+    if opened.len() > MAX_BODY_BYTES {
+        return Err("coordination body exceeds bounded input size".to_owned());
+    }
+
+    // Check the open descriptor, not just the pathname; cap actual reads in
+    // case another writer appends after the size check.
     let mut body = String::new();
     file.take(MAX_BODY_BYTES + 1)
         .read_to_string(&mut body)
@@ -191,6 +216,11 @@ fn read_body(path: &str) -> Result<String, String> {
         return Err("coordination body exceeds bounded input size".to_owned());
     }
     Ok(body)
+}
+
+fn read_body(path: &str) -> Result<String, String> {
+    let observed = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
+    read_body_with_observed_metadata(path, &observed)
 }
 
 fn execute(args: &[String]) -> Result<SlotRecord, String> {
@@ -418,6 +448,37 @@ mod tests {
                 .unwrap_err()
                 .contains("regular, non-symlink"));
         }
+        fs::remove_dir_all(&scratch).expect("remove isolated test directory");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn renamed_regular_file_after_observation_is_not_trusted() {
+        let scratch =
+            std::env::temp_dir().join(format!("free-energy-slot-open-swap-{}", std::process::id()));
+        fs::create_dir_all(&scratch).expect("create isolated test directory");
+        let source = scratch.join("slot-body");
+        let replacement = scratch.join("replacement-body");
+        fs::write(&source, A).expect("write original observed body");
+        fs::write(&replacement, B).expect("write replacement body");
+        let original = fs::symlink_metadata(&source).expect("observe original identity");
+        fs::rename(&replacement, &source).expect("replace body between check and open");
+        assert!(
+            read_body_with_observed_metadata(source.to_str().unwrap(), &original)
+                .unwrap_err()
+                .contains("changed between metadata check and open"),
+            "a swapped same-path regular file must never be accepted"
+        );
+
+        let prior = fs::symlink_metadata(&source).expect("observe second regular file");
+        let outside = scratch.join("outside");
+        fs::write(&outside, A).expect("create symlink destination");
+        fs::remove_file(&source).expect("remove prior file");
+        std::os::unix::fs::symlink(&outside, &source).expect("swap in symlink");
+        assert!(
+            read_body_with_observed_metadata(source.to_str().unwrap(), &prior).is_err(),
+            "an open-time symlink swap cannot be trusted"
+        );
         fs::remove_dir_all(&scratch).expect("remove isolated test directory");
     }
 
