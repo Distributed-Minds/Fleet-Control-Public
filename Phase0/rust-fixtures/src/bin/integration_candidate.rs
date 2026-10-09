@@ -377,8 +377,7 @@ mod tests {
     #[test]
     fn migration_cannot_rewrite_its_pinned_baseline_compatibility_basis() {
         let mut fixture = sample();
-        fixture.cases[0].candidate.compatibility_basis =
-            "self-asserted-baseline".to_owned();
+        fixture.cases[0].candidate.compatibility_basis = "self-asserted-baseline".to_owned();
         assert!(validate(&fixture).is_err());
     }
 
