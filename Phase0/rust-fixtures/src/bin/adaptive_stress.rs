@@ -7,7 +7,8 @@ use serde::Deserialize;
 use std::collections::HashSet;
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::process;
 
 #[cfg(test)]
@@ -342,6 +343,59 @@ fn validate(fixture: &Fixture) -> Result<usize, Vec<String>> {
     }
 }
 
+// This is a developer fixture input, never a trusted provider authority
+// receipt. Reject symlinks, special files and oversized inputs before JSON
+// decoding; also bound bytes read if the file grows after metadata inspection.
+const MAX_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
+
+fn read_fixture_with_metadata(path: &Path, before: &fs::Metadata) -> Result<String, String> {
+    if !before.file_type().is_file() {
+        return Err("adaptive-stress fixture must be a regular, non-symlink file".to_owned());
+    }
+    if before.len() > MAX_FIXTURE_BYTES {
+        return Err("adaptive-stress fixture exceeds 8 MiB limit".to_owned());
+    }
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // Reject symlink substitutions and avoid blocking on swapped-in FIFOs.
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let file = options.open(path).map_err(|err| format!("cannot open {path:?}: {err}"))?;
+    let opened = file.metadata().map_err(|err| format!("cannot stat {path:?}: {err}"))?;
+    if !opened.file_type().is_file() {
+        return Err("opened adaptive-stress fixture is not a regular file".to_owned());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if before.dev() != opened.dev() || before.ino() != opened.ino() {
+            return Err("adaptive-stress fixture changed before open".to_owned());
+        }
+    }
+    if opened.len() > MAX_FIXTURE_BYTES {
+        return Err("adaptive-stress fixture exceeds 8 MiB limit".to_owned());
+    }
+    let mut bytes = Vec::new();
+    file.take(MAX_FIXTURE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|err| format!("cannot read {path:?}: {err}"))?;
+    if bytes.len() as u64 > MAX_FIXTURE_BYTES {
+        return Err("adaptive-stress fixture exceeds 8 MiB limit".to_owned());
+    }
+    String::from_utf8(bytes).map_err(|_| "adaptive-stress fixture must be UTF-8".to_owned())
+}
+
+fn read_fixture_bounded(path: &Path) -> Result<String, String> {
+    let before = fs::symlink_metadata(path)
+        .map_err(|err| format!("cannot stat {path:?}: {err}"))?;
+    read_fixture_with_metadata(path, &before)
+}
+
 fn main() {
     let mut args = env::args_os().skip(1);
     let path = args
@@ -352,8 +406,7 @@ fn main() {
         eprintln!("Usage: adaptive_stress [fixture.json]");
         process::exit(2);
     }
-    let result = fs::read_to_string(&path)
-        .map_err(|err| format!("{}: {err}", path.display()))
+    let result = read_fixture_bounded(&path)
         .and_then(|content| {
             serde_json::from_str::<Fixture>(&content)
                 .map_err(|err| format!("invalid adaptive-stress JSON: {err}"))
@@ -395,6 +448,49 @@ mod tests {
             .expect("named historical case");
         case[field] = value;
         root
+    }
+
+    #[test]
+    fn caller_supplied_fixture_is_bounded_regular_and_exact() {
+        let scratch = env::temp_dir().join(format!(
+            "free-energy-adaptive-input-{}",
+            process::id()
+        ));
+        fs::create_dir_all(&scratch).unwrap();
+        let input = scratch.join("adaptive.json");
+        fs::write(&input, HISTORICAL).unwrap();
+        let parsed: Fixture = serde_json::from_str(&read_fixture_bounded(&input).unwrap()).unwrap();
+        assert_eq!(validate(&parsed), Ok(23));
+        assert!(read_fixture_bounded(&scratch).is_err());
+
+        let large = scratch.join("oversized.json");
+        fs::File::create(&large)
+            .unwrap()
+            .set_len(MAX_FIXTURE_BYTES + 1)
+            .unwrap();
+        assert!(read_fixture_bounded(&large).unwrap_err().contains("8 MiB"));
+
+        let invalid_utf8 = scratch.join("invalid.json");
+        fs::write(&invalid_utf8, [0xff_u8, 0xfe_u8]).unwrap();
+        assert!(read_fixture_bounded(&invalid_utf8).unwrap_err().contains("UTF-8"));
+
+        #[cfg(unix)]
+        {
+            let link = scratch.join("shortcut.json");
+            std::os::unix::fs::symlink(&input, &link).unwrap();
+            assert!(read_fixture_bounded(&link).is_err());
+
+            let observed = fs::symlink_metadata(&input).unwrap();
+            let replacement = scratch.join("replacement.json");
+            fs::write(&replacement, HISTORICAL).unwrap();
+            fs::rename(&replacement, &input).unwrap();
+            assert_eq!(
+                read_fixture_with_metadata(&input, &observed).unwrap_err(),
+                "adaptive-stress fixture changed before open",
+                "same fixture bytes must not conceal replaced inode"
+            );
+        }
+        fs::remove_dir_all(&scratch).unwrap();
     }
 
     #[test]
