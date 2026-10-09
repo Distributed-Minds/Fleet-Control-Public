@@ -92,16 +92,24 @@ struct Observed {
 // identical in human-reviewed fixture receipts. Preserve readable Unicode.
 fn deceptive_identity_scalar(ch: char) -> bool {
     ch.is_control()
+        || (!ch.is_ascii() && ch.is_whitespace())
         || matches!(
             ch,
             '\u{00ad}'
                 | '\u{034f}'
+                | '\u{061c}'
                 | '\u{180e}'
+                | '\u{115f}'
+                | '\u{1160}'
+                | '\u{3164}'
+                | '\u{ffa0}'
                 | '\u{200b}'..='\u{200f}'
                 | '\u{202a}'..='\u{202e}'
                 | '\u{2060}'..='\u{206f}'
                 | '\u{fe00}'..='\u{fe0f}'
                 | '\u{feff}'
+                | '\u{e0001}'
+                | '\u{e0020}'..='\u{e007f}'
                 | '\u{e0100}'..='\u{e01ef}'
         )
 }
@@ -388,12 +396,20 @@ mod tests {
         for marker in [
             '\u{00ad}',
             '\u{034f}',
+            '\u{061c}',
             '\u{180e}',
+            '\u{115f}',
+            '\u{1160}',
+            '\u{3164}',
+            '\u{ffa0}',
             '\u{200b}',
             '\u{202e}',
             '\u{2060}',
             '\u{fe0f}',
             '\u{feff}',
+            '\u{e0001}',
+            '\u{e0020}',
+            '\u{e007f}',
             '\u{e0100}',
             '\u{e01ef}',
         ] {
@@ -437,6 +453,16 @@ mod tests {
                 "invisible virtual algorithm marker passed: {marker:?}"
             );
         }
+
+        // Whitespace that is visible in a Unicode scalar classification but
+        // visually easy to overlook must not become a provenance token.
+        let mut hidden_separator = cases
+            .iter()
+            .find(|case| case.name == "unique-complete")
+            .expect("historical unique case")
+            .clone();
+        hidden_separator.history_view = "view\u{2007}name".to_owned();
+        assert!(compute(&hidden_separator).is_err());
 
         // Reject spoofing without imposing ASCII-only identities.
         let mut readable = cases
