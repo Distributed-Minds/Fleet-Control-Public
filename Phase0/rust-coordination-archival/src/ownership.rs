@@ -7,6 +7,26 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
+// Coordination records are also reviewed by humans. Unicode format controls
+// can make distinct authority identities appear identical in logs or diffs.
+// Reject these at the advisory reducer boundary; do not normalize/merge them.
+fn ambiguous_identity_scalar(ch: char) -> bool {
+    ch.is_control()
+        || matches!(
+            ch,
+            '\u{00AD}'
+                | '\u{034F}'
+                | '\u{061C}'
+                | '\u{180E}'
+                | '\u{200B}'..='\u{200F}'
+                | '\u{202A}'..='\u{202E}'
+                | '\u{2060}'..='\u{206F}'
+                | '\u{FE00}'..='\u{FE0F}'
+                | '\u{FEFF}'
+                | '\u{E0100}'..='\u{E01EF}'
+        )
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
     Intent,
@@ -30,11 +50,11 @@ impl Scope {
     fn valid(&self) -> bool {
         !self.seam.trim().is_empty()
             && self.seam == self.seam.trim()
-            && !self.seam.chars().any(char::is_control)
+            && !self.seam.chars().any(ambiguous_identity_scalar)
             && self.issue.is_none_or(|n| n != 0)
             && self.pr.is_none_or(|n| n != 0)
             && self.branch.as_ref().is_none_or(|b| {
-                !b.trim().is_empty() && b.trim() == b && !b.chars().any(char::is_control)
+                !b.trim().is_empty() && b.trim() == b && !b.chars().any(ambiguous_identity_scalar)
             })
     }
 
@@ -111,7 +131,7 @@ pub fn reduce_model_only(transitions: &[Transition]) -> Result<Vec<ActiveLease>,
             || event.seq == 0
             || event.run.is_empty()
             || event.run.trim() != event.run
-            || event.run.chars().any(char::is_control)
+            || event.run.chars().any(ambiguous_identity_scalar)
             || !event.scope.valid()
         {
             return Err(InvalidRecord);
@@ -265,6 +285,62 @@ mod tests {
                 seam: branch.to_owned(),
             },
         }
+    }
+
+    #[test]
+    fn invisible_identity_scalars_never_create_apparently_valid_leases() {
+        // These chars are not all Rust control characters. Keep expected
+        // transitions unchanged while mutating only one identifier at a time.
+        for hidden in [
+            "\u{00AD}", "\u{034F}", "\u{061C}", "\u{200B}",
+            "\u{202E}", "\u{2060}", "\u{FE0F}", "\u{FEFF}",
+            "\u{E0100}",
+        ] {
+            let base = [
+                event(1, 101, "actor", 1, State::Intent, None, "ref-a"),
+                event(2, 102, "actor", 2, State::Owned, Some(101), "ref-a"),
+            ];
+            let mut fake_run = base.clone();
+            for record in &mut fake_run {
+                record.run = format!("actor{hidden}");
+            }
+            assert_eq!(
+                reduce_model_only(&fake_run),
+                Err(ReductionFailure::InvalidRecord),
+                "hidden run identity {hidden:?} accepted"
+            );
+            let mut fake_branch = base.clone();
+            for record in &mut fake_branch {
+                record.scope.branch = Some(format!("ref-a{hidden}"));
+            }
+            assert_eq!(
+                reduce_model_only(&fake_branch),
+                Err(ReductionFailure::InvalidRecord),
+                "hidden branch identity {hidden:?} accepted"
+            );
+            let mut fake_seam = base;
+            for record in &mut fake_seam {
+                record.scope.seam = format!("ref-a{hidden}");
+            }
+            assert_eq!(
+                reduce_model_only(&fake_seam),
+                Err(ReductionFailure::InvalidRecord),
+                "hidden seam identity {hidden:?} accepted"
+            );
+        }
+
+        // Non-ASCII printable letters remain valid: this is not an ASCII-only
+        // ban, normalization, a GitHub identity proof, or Unicode confusable audit.
+        let mut legitimate = [
+            event(1, 101, "actor", 1, State::Intent, None, "ref-a"),
+            event(2, 102, "actor", 2, State::Owned, Some(101), "ref-a"),
+        ];
+        for record in &mut legitimate {
+            record.run = "réparer-β".to_owned();
+            record.scope.branch = Some("travail-β".to_owned());
+            record.scope.seam = "travail-β".to_owned();
+        }
+        assert_eq!(reduce_model_only(&legitimate).unwrap().len(), 1);
     }
 
     #[test]
