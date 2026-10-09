@@ -12,17 +12,24 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 // Reject these at the advisory reducer boundary; do not normalize/merge them.
 fn ambiguous_identity_scalar(ch: char) -> bool {
     ch.is_control()
+        || (!ch.is_ascii() && ch.is_whitespace())
         || matches!(
             ch,
             '\u{00AD}'
                 | '\u{034F}'
                 | '\u{061C}'
                 | '\u{180E}'
+                | '\u{115F}' // Hangul choseong filler
+                | '\u{1160}' // Hangul jungseong filler
+                | '\u{3164}' // Hangul compatibility filler
+                | '\u{FFA0}' // Halfwidth Hangul filler
                 | '\u{200B}'..='\u{200F}'
                 | '\u{202A}'..='\u{202E}'
                 | '\u{2060}'..='\u{206F}'
                 | '\u{FE00}'..='\u{FE0F}'
                 | '\u{FEFF}'
+                | '\u{E0001}' // Language tag
+                | '\u{E0020}'..='\u{E007F}' // Invisible Unicode tags
                 | '\u{E0100}'..='\u{E01EF}'
         )
 }
@@ -301,6 +308,15 @@ mod tests {
             "\u{FE0F}",
             "\u{FEFF}",
             "\u{E0100}",
+            "\u{115F}",
+            "\u{1160}",
+            "\u{3164}",
+            "\u{FFA0}",
+            "\u{E0001}",
+            "\u{E0020}",
+            "\u{E007F}",
+            "\u{00A0}", // Non-ASCII whitespace inside an identifier
+            "\u{3000}",
         ] {
             let base = [
                 event(1, 101, "actor", 1, State::Intent, None, "ref-a"),
@@ -308,7 +324,7 @@ mod tests {
             ];
             let mut fake_run = base.clone();
             for record in &mut fake_run {
-                record.run = format!("actor{hidden}");
+                record.run = format!("act{hidden}or");
             }
             assert_eq!(
                 reduce_model_only(&fake_run),
@@ -317,7 +333,7 @@ mod tests {
             );
             let mut fake_branch = base.clone();
             for record in &mut fake_branch {
-                record.scope.branch = Some(format!("ref-a{hidden}"));
+                record.scope.branch = Some(format!("ref{hidden}-a"));
             }
             assert_eq!(
                 reduce_model_only(&fake_branch),
@@ -326,7 +342,7 @@ mod tests {
             );
             let mut fake_seam = base;
             for record in &mut fake_seam {
-                record.scope.seam = format!("ref-a{hidden}");
+                record.scope.seam = format!("ref{hidden}-a");
             }
             assert_eq!(
                 reduce_model_only(&fake_seam),
