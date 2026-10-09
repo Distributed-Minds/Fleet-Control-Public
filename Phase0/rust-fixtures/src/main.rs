@@ -511,11 +511,15 @@ mod tests {
                 changed[family].as_array_mut().unwrap().push(additional);
                 let errors = validate(&fixture(changed)).expect_err("hostile ID was accepted");
                 assert!(
-                    errors.iter().any(|error| error.contains("invalid or duplicate case id")),
+                    errors
+                        .iter()
+                        .any(|error| error.contains("invalid or duplicate case id")),
                     "{family}: missing explicit identity denial: {errors:?}"
                 );
                 assert!(
-                    errors.iter().all(|error| !error.contains('\n') && !error.contains('\r')),
+                    errors
+                        .iter()
+                        .all(|error| !error.contains('\n') && !error.contains('\r')),
                     "{family}: diagnostic injected a second line: {errors:?}"
                 );
             }
