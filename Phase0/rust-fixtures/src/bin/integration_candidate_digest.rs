@@ -452,20 +452,47 @@ fn candidate_ids(fixture_text: &str) -> Result<Vec<(String, String)>, String> {
 }
 
 // Fixture input is a local caller-supplied path, not authenticated provider
-// evidence. Bound regular-file reads before deriving plausible SHA-256 IDs.
-// Recheck the byte limit while reading because a file can grow after stat.
-// This is not an OS-level atomic defense against concurrent path replacement.
+// evidence. Reject path replacement between metadata and open on Unix;
+// Linux additionally refuses symlink following and FIFO-blocking at open.
+// This is bounded local input hygiene, not a general filesystem sandbox.
 const MAX_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
 
-fn read_fixture_file(path: &str) -> Result<String, String> {
-    let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
-    if !metadata.file_type().is_file() {
+fn read_fixture_file_with_metadata(path: &str, before: &fs::Metadata) -> Result<String, String> {
+    if !before.file_type().is_file() {
         return Err("fixture must be a regular non-symlink file".to_owned());
     }
-    if metadata.len() > MAX_FIXTURE_BYTES {
+    if before.len() > MAX_FIXTURE_BYTES {
         return Err("fixture exceeds maximum input size".to_owned());
     }
-    let file = fs::File::open(path).map_err(|error| error.to_string())?;
+
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // Linux O_NONBLOCK | O_NOFOLLOW: do not hang on a swapped-in FIFO
+        // or follow a symlink installed between lstat and open.
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let file = options.open(path).map_err(|error| error.to_string())?;
+    let opened = file.metadata().map_err(|error| error.to_string())?;
+    if !opened.file_type().is_file() {
+        return Err("opened fixture is not a regular file".to_owned());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if before.dev() != opened.dev() || before.ino() != opened.ino() {
+            return Err("fixture changed between metadata check and open".to_owned());
+        }
+    }
+    if opened.len() > MAX_FIXTURE_BYTES {
+        return Err("fixture exceeds maximum input size".to_owned());
+    }
+
+    // A writer may append after fstat: retain a descriptor-level byte cap.
     let mut contents = String::new();
     file.take(MAX_FIXTURE_BYTES + 1)
         .read_to_string(&mut contents)
@@ -474,6 +501,11 @@ fn read_fixture_file(path: &str) -> Result<String, String> {
         return Err("fixture exceeds maximum input size".to_owned());
     }
     Ok(contents)
+}
+
+fn read_fixture_file(path: &str) -> Result<String, String> {
+    let before = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+    read_fixture_file_with_metadata(path, &before)
 }
 
 fn main() {
@@ -552,6 +584,46 @@ mod tests {
 
         drop(file);
         fs::remove_dir_all(&scratch).expect("remove fixture test directory");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn digest_reader_rejects_equal_size_inode_replacement_after_preflight() {
+        let scratch = env::temp_dir().join(format!(
+            "free-energy-candidate-digest-swap-{}",
+            process::id()
+        ));
+        fs::create_dir_all(&scratch).expect("create digest swap directory");
+        let path = scratch.join("fixture.json");
+        let replacement = scratch.join("replacement.json");
+        fs::write(&path, HISTORICAL).expect("write original fixture");
+        fs::write(&replacement, HISTORICAL).expect("write identical replacement");
+        let before = fs::symlink_metadata(&path).expect("stat original inode");
+        fs::rename(&replacement, &path).expect("replace original inode");
+        let error = read_fixture_file_with_metadata(path.to_str().unwrap(), &before).unwrap_err();
+        assert_eq!(error, "fixture changed between metadata check and open");
+        fs::remove_dir_all(&scratch).expect("remove digest swap directory");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn digest_reader_rejects_symlink_substitution_after_preflight() {
+        let scratch = env::temp_dir().join(format!(
+            "free-energy-candidate-digest-link-swap-{}",
+            process::id()
+        ));
+        fs::create_dir_all(&scratch).expect("create link swap directory");
+        let path = scratch.join("fixture.json");
+        fs::write(&path, HISTORICAL).expect("write original fixture");
+        let before = fs::symlink_metadata(&path).expect("stat regular fixture");
+        fs::remove_file(&path).expect("remove regular fixture");
+        let historical_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../fixtures/integration-candidate-v1.json"
+        );
+        std::os::unix::fs::symlink(historical_path, &path).expect("swap in symlink");
+        assert!(read_fixture_file_with_metadata(path.to_str().unwrap(), &before).is_err());
+        fs::remove_dir_all(&scratch).expect("remove link swap directory");
     }
 
     #[test]
