@@ -354,6 +354,7 @@ fn cut(first: u64, last: u64) -> ReplayCut {
     ReplayCut {
         ordering: basis("ordered", 7),
         source_incarnation: "live-1".into(),
+        manifest: basis("replay-cut-manifest", 7),
         first_sequence: first,
         last_sequence: last,
         authoritative_order: true,
