@@ -130,3 +130,37 @@ fn unsupported_spec_and_malformed_json_fail_closed() {
     assert_denied(&run(&fixture));
     assert_denied(&run_source("{\"spec\":2,\"cases\":["));
 }
+
+#[test]
+fn malformed_composition_cannot_hide_behind_provider_denial_in_compiled_cli() {
+    let baseline: Value = serde_json::from_str(HISTORICAL).unwrap();
+
+    for invalid in [
+        json!({"composition":"ALL_REQUIRED"}),
+        json!({"composition":"ANY_OF_DECLARED","required_roots":0,"surviving_roots":0}),
+        json!({"composition":"ALL_REQUIRED","required_roots":2,"surviving_roots":3}),
+    ] {
+        let mut fixture = baseline.clone();
+        let target = case(&mut fixture, "provider-unavailable-is-debt");
+        for (field, value) in invalid.as_object().expect("composition evidence object") {
+            target[field.as_str()] = value.clone();
+        }
+        // This historical case already expects provider ERROR. An oracle that
+        // skips composition validation would otherwise accept each mutation.
+        assert_denied(&run(&fixture));
+    }
+
+    // Valid but non-authorizing composition must preserve the stronger
+    // provider-error verdict, not turn it into a positive authority outcome.
+    let mut valid = baseline;
+    let target = case(&mut valid, "provider-unavailable-is-debt");
+    target["composition"] = json!("ALL_REQUIRED");
+    target["required_roots"] = json!(2);
+    target["surviving_roots"] = json!(1);
+    let output = run(&valid);
+    assert!(
+        output.status.success(),
+        "valid composition must preserve provider denial: {output:?}"
+    );
+    assert!(output.stderr.is_empty(), "unexpected stderr: {output:?}");
+}
