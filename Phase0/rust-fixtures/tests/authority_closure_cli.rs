@@ -38,6 +38,13 @@ fn run(fixture: &Value) -> Output {
     run_source(&serde_json::to_string(fixture).expect("serialize fixture"))
 }
 
+fn run_path(path: &std::path::Path) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_authority_closure"))
+        .arg(path)
+        .output()
+        .expect("execute compiled authority-closure oracle")
+}
+
 fn assert_denied(result: &Output) {
     assert!(
         !result.status.success(),
@@ -78,6 +85,52 @@ fn compiled_binary_accepts_exact_historical_26_case_fixture() {
             .contains("authority closure Rust semantic fixtures: 26 cases passed"),
         "missing actual CLI result: {result:?}"
     );
+}
+
+#[test]
+fn compiled_binary_rejects_nonregular_symlink_and_oversized_fixture_files() {
+    const LIMIT: usize = 8 * 1024 * 1024;
+    let id = NEXT_FILE.fetch_add(1, Ordering::Relaxed);
+    let scratch = std::env::temp_dir().join(format!(
+        "free-energy-authority-closure-input-{}-{id}",
+        process::id()
+    ));
+    fs::create_dir(&scratch).expect("create distinct test folder");
+
+    // An exact 8 MiB UTF-8 JSON document is a positive boundary control.
+    let exact_path = scratch.join("exact.json");
+    let mut exact = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&exact_path)
+        .unwrap();
+    assert!(HISTORICAL.len() < LIMIT);
+    exact.write_all(HISTORICAL.as_bytes()).unwrap();
+    exact.write_all(&vec![b' '; LIMIT - HISTORICAL.len()])
+        .unwrap();
+    drop(exact);
+    let accepted = run_path(&exact_path);
+    assert!(accepted.status.success(), "8 MiB historical JSON was rejected: {accepted:?}");
+    assert!(
+        String::from_utf8_lossy(&accepted.stdout).contains("26 cases passed")
+    );
+
+    // Directory and sparse oversized inputs must fail before JSON decoding.
+    assert_denied(&run_path(&scratch));
+    let oversized_path = scratch.join("oversized.json");
+    fs::File::create(&oversized_path)
+        .unwrap()
+        .set_len(LIMIT as u64 + 1)
+        .unwrap();
+    assert_denied(&run_path(&oversized_path));
+
+    #[cfg(unix)]
+    {
+        let link = scratch.join("alias.json");
+        std::os::unix::fs::symlink(&exact_path, &link).unwrap();
+        assert_denied(&run_path(&link));
+    }
+    fs::remove_dir_all(&scratch).expect("remove test folder");
 }
 
 #[test]
