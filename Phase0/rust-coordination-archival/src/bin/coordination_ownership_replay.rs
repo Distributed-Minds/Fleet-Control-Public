@@ -14,16 +14,8 @@
 //! Exit 0 means only that the supplied model is internally consistent.
 //! Exit 1 means the input or reduction is invalid. No files are modified.
 
-use free_energy_coordination_archival::ownership::{
-    reduce_model_only, Scope, State, Transition,
-};
-use std::{
-    env,
-    fs::File,
-    io::Read,
-    path::Path,
-    process::ExitCode,
-};
+use free_energy_coordination_archival::ownership::{reduce_model_only, Scope, State, Transition};
+use std::{env, fs::File, io::Read, path::Path, process::ExitCode};
 
 const MAX_INPUT_BYTES: u64 = 16 * 1024 * 1024;
 
@@ -32,7 +24,9 @@ fn positive(label: &str, raw: &str) -> Result<u64, String> {
         || (raw.len() > 1 && raw.starts_with('0'))
         || !raw.bytes().all(|b| b.is_ascii_digit())
     {
-        return Err(format!("{label}: expected canonical positive decimal integer"));
+        return Err(format!(
+            "{label}: expected canonical positive decimal integer"
+        ));
     }
     match raw.parse::<u64>() {
         Ok(value) if value != 0 => Ok(value),
@@ -51,7 +45,9 @@ fn optional_number(label: &str, raw: &str) -> Result<Option<u64>, String> {
 fn parse_transition(line: &str, number: usize) -> Result<Transition, String> {
     let fields: Vec<_> = line.split('\t').collect();
     if fields.len() != 10 {
-        return Err(format!("line {number}: expected exactly ten TAB-separated fields"));
+        return Err(format!(
+            "line {number}: expected exactly ten TAB-separated fields"
+        ));
     }
     let state = match fields[4] {
         "INTENT" => State::Intent,
@@ -145,7 +141,11 @@ fn main() -> ExitCode {
         }
     };
     // Nothing is printed on stdout until every supplied transition is accepted.
-    println!("MODEL_ONLY records={} active={}", transitions.len(), leases.len());
+    println!(
+        "MODEL_ONLY records={} active={}",
+        transitions.len(),
+        leases.len()
+    );
     for lease in leases {
         println!(
             "MODEL_ACTIVE run={:?} state={:?} comment_id={} issue={:?} pr={:?} branch={:?} seam={:?}",
@@ -185,9 +185,8 @@ mod tests {
 
     #[test]
     fn terminal_release_removes_active_lease() {
-        let transcript = format!(
-            "{TRANSCRIPT}4\t104\trun-a\t4\tRELEASE\t103\t22\t-\tbranch-a\tseam-a\n"
-        );
+        let transcript =
+            format!("{TRANSCRIPT}4\t104\trun-a\t4\tRELEASE\t103\t22\t-\tbranch-a\tseam-a\n");
         assert!(reduce_model_only(&parse_transcript(&transcript).unwrap())
             .unwrap()
             .is_empty());
@@ -226,16 +225,14 @@ mod tests {
 
     #[test]
     fn incomplete_order_or_duplicate_comment_is_not_authoritative() {
-        let repeated_position = format!(
-            "{TRANSCRIPT}3\t104\trun-b\t1\tINTENT\t-\t22\t-\tbranch-b\tseam-b\n"
-        );
+        let repeated_position =
+            format!("{TRANSCRIPT}3\t104\trun-b\t1\tINTENT\t-\t22\t-\tbranch-b\tseam-b\n");
         assert_eq!(
             reduce_model_only(&parse_transcript(&repeated_position).unwrap()),
             Err(ReductionFailure::UnorderedOrIncomplete)
         );
-        let repeated_id = format!(
-            "{TRANSCRIPT}4\t103\trun-b\t1\tINTENT\t-\t22\t-\tbranch-b\tseam-b\n"
-        );
+        let repeated_id =
+            format!("{TRANSCRIPT}4\t103\trun-b\t1\tINTENT\t-\t22\t-\tbranch-b\tseam-b\n");
         assert_eq!(
             reduce_model_only(&parse_transcript(&repeated_id).unwrap()),
             Err(ReductionFailure::DuplicateComment)
