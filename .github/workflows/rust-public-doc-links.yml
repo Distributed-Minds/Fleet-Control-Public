@@ -80,20 +80,20 @@ jobs:
           # The compiled CLI must accept one real copyable HELP prompt, not
           # silently pass when the guide is empty or lacks safety guards.
           cat > "$fixture/HELP-A-PROJECT.md" <<'HELP_CONTRACT'
-**Not available yet:**
-See [Phase0 installer](GETTING-STARTED.md).
-```text
-I want to help [OFFICIAL PROJECT URL].
-Join the EXISTING project; do not create a copy.
-If the project prohibits AI-assisted contributions, stop.
-If unknown, remain read-only until the proposed public submission is permitted.
-Do not conceal AI involvement.
-An unassigned issue may still be claimed.
-Never commit proprietary game assets.
-Ask for authorization before a push.
-Never merge into default yourself.
-```
-HELP_CONTRACT
+          **Not available yet:**
+          See [Phase0 installer](GETTING-STARTED.md).
+          ```text
+          I want to help [OFFICIAL PROJECT URL].
+          Join the EXISTING project; do not create a copy.
+          If the project prohibits AI-assisted contributions, stop.
+          If unknown, remain read-only until the proposed public submission is permitted.
+          Do not conceal AI involvement.
+          An unassigned issue may still be claimed.
+          Never commit proprietary game assets.
+          Ask for authorization before a push.
+          Never merge into default yourself.
+          ```
+          HELP_CONTRACT
           cp "$fixture/HELP-A-PROJECT.md" "$fixture/valid-help-prompt.md"
           # Positive control: a real local file, an ignored external URI, and all
           # nine required inputs. This calls the compiled product CLI, not a mock.
