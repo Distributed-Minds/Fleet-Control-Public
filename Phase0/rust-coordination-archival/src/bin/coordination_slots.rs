@@ -9,10 +9,14 @@
 
 use std::env;
 use std::fs;
+use std::io::Read;
 use std::process::ExitCode;
 
 const TITLE: &str = "[fleet-control] coordination";
 const MARKER: &str = "FLEET_COORDINATION_V1";
+// Advisory inputs can come from untrusted downloads or local paths. Do not
+// consume an unbounded file or special device before validating its contents.
+const MAX_BODY_BYTES: u64 = 1_048_576;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Slot {
@@ -166,6 +170,29 @@ fn select_active(records: [Observation<'_>; 2], trusted: &str) -> Result<SlotRec
     }
 }
 
+fn read_body(path: &str) -> Result<String, String> {
+    let metadata = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
+    // A FIFO/device could block indefinitely; a symlink could point outside
+    // the intended input set. This is input hygiene, not provider attestation.
+    if !metadata.file_type().is_file() {
+        return Err("coordination body must be a regular, non-symlink file".to_owned());
+    }
+    if metadata.len() > MAX_BODY_BYTES {
+        return Err("coordination body exceeds bounded input size".to_owned());
+    }
+    // Metadata checks alone are racy: cap the actual read too, so an appended
+    // or swapped file cannot make this advisory parser allocate without bound.
+    let file = fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut body = String::new();
+    file.take(MAX_BODY_BYTES + 1)
+        .read_to_string(&mut body)
+        .map_err(|e| e.to_string())?;
+    if body.len() as u64 > MAX_BODY_BYTES {
+        return Err("coordination body exceeds bounded input size".to_owned());
+    }
+    Ok(body)
+}
+
 fn execute(args: &[String]) -> Result<SlotRecord, String> {
     if args.len() != 9 {
         return Err(
@@ -175,9 +202,9 @@ fn execute(args: &[String]) -> Result<SlotRecord, String> {
     }
     let first_id = decimal(&args[1]).map_err(str::to_owned)?;
     let second_id = decimal(&args[5]).map_err(str::to_owned)?;
-    let first_body =
-        fs::read_to_string(&args[4]).map_err(|error| format!("first body unavailable: {error}"))?;
-    let second_body = fs::read_to_string(&args[8])
+    let first_body = read_body(&args[4])
+        .map_err(|error| format!("first body unavailable: {error}"))?;
+    let second_body = read_body(&args[8])
         .map_err(|error| format!("second body unavailable: {error}"))?;
     select_active(
         [
@@ -358,4 +385,66 @@ mod tests {
         assert!(decimal("").is_err());
         assert!(decimal("18446744073709551616").is_err());
     }
+
+    #[test]
+    fn bounded_body_reader_accepts_real_files_and_rejects_oversize_or_special_inputs() {
+        let scratch = std::env::temp_dir().join(format!(
+            "free-energy-coordination-slots-bounded-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&scratch).expect("create isolated test directory");
+        let good = scratch.join("valid-issue-body");
+        fs::write(&good, A).expect("write valid coordination body");
+        assert_eq!(read_body(good.to_str().unwrap()).unwrap(), A);
+
+        let too_large = scratch.join("oversized-issue-body");
+        fs::write(&too_large, vec![b'X'; MAX_BODY_BYTES as usize + 1])
+            .expect("write oversized file");
+        assert!(read_body(too_large.to_str().unwrap())
+            .unwrap_err()
+            .contains("bounded input size"));
+
+        let directory = scratch.join("a-directory-not-an-issue-body");
+        fs::create_dir(&directory).expect("create non-regular path");
+        assert!(read_body(directory.to_str().unwrap())
+            .unwrap_err()
+            .contains("regular, non-symlink"));
+
+        #[cfg(unix)]
+        {
+            let alias = scratch.join("symlink-to-issue-body");
+            std::os::unix::fs::symlink(&good, &alias).expect("create symlink");
+            assert!(read_body(alias.to_str().unwrap())
+                .unwrap_err()
+                .contains("regular, non-symlink"));
+        }
+        fs::remove_dir_all(&scratch).expect("remove isolated test directory");
+    }
+
+    #[test]
+    fn bounded_reader_failure_cannot_select_an_active_slot() {
+        let scratch = std::env::temp_dir().join(format!(
+            "free-energy-slots-process-boundary-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&scratch).expect("create isolated test directory");
+        let good = scratch.join("slot-a");
+        let too_large = scratch.join("slot-b-oversized");
+        fs::write(&good, A).unwrap();
+        fs::write(&too_large, vec![b'Z'; MAX_BODY_BYTES as usize + 1]).unwrap();
+        let args = [
+            "geromet".to_owned(),
+            "168".to_owned(),
+            "geromet".to_owned(),
+            TITLE.to_owned(),
+            good.to_str().unwrap().to_owned(),
+            "186".to_owned(),
+            "geromet".to_owned(),
+            TITLE.to_owned(),
+            too_large.to_str().unwrap().to_owned(),
+        ];
+        assert!(execute(&args).unwrap_err().contains("second body unavailable"));
+        fs::remove_dir_all(&scratch).unwrap();
+    }
+
 }
