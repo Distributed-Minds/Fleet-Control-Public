@@ -558,7 +558,6 @@ mod tests {
         }
     }
 
-
     const HISTORICAL: &str = include_str!("../../../fixtures/integration-candidate-v1.json");
 
     #[test]
