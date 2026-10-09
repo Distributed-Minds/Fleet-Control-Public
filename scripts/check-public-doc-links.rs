@@ -436,6 +436,11 @@ fn check(root: &Path, docs: &[&str]) -> Report {
                 continue;
             }
         };
+        if *document == "HELP-A-PROJECT.md" {
+            if let Err(problem) = inspect_help_guide_contract(&source) {
+                report.errors.push(format!("{document}: {problem}"));
+            }
+        }
         for path in collect_links(&source, document, &mut report) {
             report.local_links += 1;
             if let Err(reason) = check_target(&root, document, &path) {
@@ -445,6 +450,69 @@ fn check(root: &Path, docs: &[&str]) -> Report {
     }
     report.errors.sort();
     report
+}
+
+fn inspect_help_guide_contract(guide: &str) -> Result<(), &'static str> {
+    // Reuse the production Markdown fence recognizer: a short inner
+    // delimiter must not close a longer fence or create a phantom prompt.
+    let mut opening: Option<(u8, usize, bool)> = None;
+    let mut contents = String::new();
+    let mut prompts = Vec::new();
+    for line in guide.lines() {
+        if let Some((marker, width, closing_suffix)) = fence_marker(line) {
+            if let Some((open_marker, open_width, is_prompt)) = opening {
+                if marker == open_marker && width >= open_width && closing_suffix {
+                    if is_prompt && contents.starts_with("I want to help [") {
+                        prompts.push(std::mem::take(&mut contents));
+                    }
+                    opening = None;
+                    contents.clear();
+                    continue;
+                }
+            } else {
+                let trimmed = line.trim_start_matches(' ');
+                let language = trimmed[width..].trim();
+                opening = Some((marker, width, marker == b'\x60' && language == "text"));
+                contents.clear();
+                continue;
+            }
+        }
+        if opening.is_some() {
+            contents.push_str(line);
+            contents.push('\n');
+        }
+    }
+    if opening.is_some() {
+        return Err("unclosed code fence");
+    }
+    if prompts.len() != 1 {
+        return Err("expected one copyable HELP prompt");
+    }
+    let prompt = &prompts[0];
+    for (needle, diagnostic) in [
+        ("Join the EXISTING project", "existing-project workflow missing"),
+        ("If the project prohibits AI-assisted contributions", "AI policy denial missing"),
+        (
+            "remain read-only until the proposed public submission is permitted",
+            "unknown AI policy fail-closed guard missing",
+        ),
+        ("Do not conceal AI involvement", "AI authorship disclosure guard missing"),
+        ("An unassigned issue may still be claimed", "collision guard missing"),
+        ("Never commit proprietary game assets", "rights guard missing"),
+        ("Ask for authorization before a push", "external-write permission missing"),
+        ("Never merge into default yourself", "default merge guard missing"),
+    ] {
+        if !prompt.contains(needle) {
+            return Err(diagnostic);
+        }
+    }
+    if !guide.contains("**Not available yet:**") {
+        return Err("manual versus future capability disclosure missing");
+    }
+    if !guide.contains("](GETTING-STARTED.md)") {
+        return Err("distinct Phase0 installation link missing");
+    }
+    Ok(())
 }
 
 fn main() {
@@ -921,69 +989,6 @@ mod tests {
 
     // The manual contributor path is a source-level contract, not a hosted agent.
     // PR CI already runs this Rust test module, so guard the copyable prompt here.
-    fn inspect_help_guide_contract(guide: &str) -> Result<(), &'static str> {
-        // Reuse the production Markdown fence recognizer: a short inner
-        // delimiter must not close a longer fence or create a phantom prompt.
-        let mut opening: Option<(u8, usize, bool)> = None;
-        let mut contents = String::new();
-        let mut prompts = Vec::new();
-        for line in guide.lines() {
-            if let Some((marker, width, closing_suffix)) = fence_marker(line) {
-                if let Some((open_marker, open_width, is_prompt)) = opening {
-                    if marker == open_marker && width >= open_width && closing_suffix {
-                        if is_prompt && contents.starts_with("I want to help [") {
-                            prompts.push(std::mem::take(&mut contents));
-                        }
-                        opening = None;
-                        contents.clear();
-                        continue;
-                    }
-                } else {
-                    let trimmed = line.trim_start_matches(' ');
-                    let language = trimmed[width..].trim();
-                    opening = Some((marker, width, marker == b'\x60' && language == "text"));
-                    contents.clear();
-                    continue;
-                }
-            }
-            if opening.is_some() {
-                contents.push_str(line);
-                contents.push('\n');
-            }
-        }
-        if opening.is_some() {
-            return Err("unclosed code fence");
-        }
-        if prompts.len() != 1 {
-            return Err("expected one copyable HELP prompt");
-        }
-        let prompt = &prompts[0];
-        for (needle, diagnostic) in [
-            ("Join the EXISTING project", "existing-project workflow missing"),
-            ("If the project prohibits AI-assisted contributions", "AI policy denial missing"),
-            (
-                "remain read-only until the proposed public submission is permitted",
-                "unknown AI policy fail-closed guard missing",
-            ),
-            ("Do not conceal AI involvement", "AI authorship disclosure guard missing"),
-            ("An unassigned issue may still be claimed", "collision guard missing"),
-            ("Never commit proprietary game assets", "rights guard missing"),
-            ("Ask for authorization before a push", "external-write permission missing"),
-            ("Never merge into default yourself", "default merge guard missing"),
-        ] {
-            if !prompt.contains(needle) {
-                return Err(diagnostic);
-            }
-        }
-        if !guide.contains("**Not available yet:**") {
-            return Err("manual versus future capability disclosure missing");
-        }
-        if !guide.contains("](GETTING-STARTED.md)") {
-            return Err("distinct Phase0 installation link missing");
-        }
-        Ok(())
-    }
-
     #[test]
     fn copyable_help_guide_policy_and_rights_contract() {
         let guide = include_str!("../HELP-A-PROJECT.md");
