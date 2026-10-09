@@ -15,10 +15,36 @@ fn diagnostic_path(path: &Path) -> String {
     format!("{path:?}")
 }
 
+/// Refuse a pathname whose directory ancestors include a symlink. Checking
+/// only the leaf allows a real file or directory to escape the intended tree
+/// through a linked parent. This is not protection against concurrent swaps.
+fn reject_symlinked_ancestors(path: &Path) -> io::Result<()> {
+    let mut prefix = std::path::PathBuf::new();
+    let mut components = path.components().peekable();
+    while let Some(component) = components.next() {
+        prefix.push(component.as_os_str());
+        if components.peek().is_none() {
+            break; // The caller checks the leaf's required file/directory type.
+        }
+        let metadata = fs::symlink_metadata(&prefix)?;
+        if metadata.file_type().is_symlink() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "symlinked ancestor prohibited: {}",
+                    diagnostic_path(&prefix)
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Refuse symlinked render output directories, including links outside the
 /// project tree. This is a local input-admission check, not a race-free
 /// filesystem sandbox against concurrent untrusted directory replacement.
 fn validate_output_directory(parent: &Path) -> io::Result<()> {
+    reject_symlinked_ancestors(parent)?;
     let metadata = fs::symlink_metadata(parent)?;
     if !metadata.file_type().is_dir() {
         return Err(io::Error::new(
@@ -33,6 +59,7 @@ fn validate_output_directory(parent: &Path) -> io::Result<()> {
 /// not HTML reached through a symlink (possibly outside the catalog tree).
 /// Reject directories and special files before attempting to read them too.
 fn read_regular_generated_page(output: &Path) -> io::Result<String> {
+    reject_symlinked_ancestors(output)?;
     let metadata = fs::symlink_metadata(output)?;
     if !metadata.file_type().is_file() {
         return Err(io::Error::new(
@@ -120,6 +147,8 @@ where
 /// checked-in page must not follow an untracked filesystem symlink out of the
 /// project source directory (or silently accept a JSON-named directory).
 fn read_render_manifest(path: &Path) -> Result<String, String> {
+    reject_symlinked_ancestors(path)
+        .map_err(|error| format!("{}: {error}", diagnostic_path(path)))?;
     let metadata = fs::symlink_metadata(path)
         .map_err(|error| format!("{}: {error}", diagnostic_path(path)))?;
     if !metadata.file_type().is_file() {
@@ -277,6 +306,10 @@ fn main() -> ExitCode {
     let mut errors = Vec::new();
     for input in paths {
         let path = std::path::PathBuf::from(input);
+        if let Err(error) = reject_symlinked_ancestors(&path) {
+            errors.push(format!("{}: {error}", diagnostic_path(&path)));
+            continue;
+        }
         if path.is_dir() {
             // is_dir() follows symlinks. Reject a supplied alias before
             // enumerating files outside the chosen project directory.
@@ -322,6 +355,10 @@ fn main() -> ExitCode {
 
     let mut loaded = Vec::new();
     for path in manifest_paths {
+        if let Err(error) = reject_symlinked_ancestors(&path) {
+            errors.push(format!("{}: {error}", diagnostic_path(&path)));
+            continue;
+        }
         // Explicit manifests and directory children use the same pre-read
         // admission rule. This does not prevent concurrent path replacement.
         match fs::symlink_metadata(&path) {
@@ -498,6 +535,35 @@ mod atomic_render_tests {
         fs::remove_dir_all(&dir).expect("clean isolated sandbox");
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn nested_symlinked_output_ancestor_cannot_redirect_render_or_check() {
+        use std::os::unix::fs::symlink;
+
+        let dir = sandbox();
+        let outside = dir.join("unrelated-directory");
+        let real_site = outside.join("site");
+        fs::create_dir_all(&real_site).expect("create unrelated nested output");
+        fs::write(real_site.join("index.html"), "original").expect("seed external page");
+        let alias = dir.join("redirect");
+        symlink(&outside, &alias).expect("link an intermediate directory");
+        let target = alias.join("site/index.html");
+
+        let error = write_complete_page(&target, "replacement")
+            .expect_err("symlinked ancestor must not redirect output");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(error.to_string().contains("symlinked ancestor"));
+        assert!(
+            read_regular_generated_page(&target).is_err(),
+            "matching external HTML must not pass render --check"
+        );
+        assert_eq!(
+            fs::read_to_string(real_site.join("index.html")).unwrap(),
+            "original"
+        );
+        fs::remove_dir_all(&dir).expect("clean isolated sandbox");
+    }
+
     #[test]
     fn check_requires_regular_existing_generated_page() {
         let dir = sandbox();
@@ -638,6 +704,34 @@ mod render_manifest_file_admission_tests {
             PILOT,
             "rejected input must remain unchanged"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_project_ancestor_cannot_supply_real_manifest() {
+        use std::os::unix::fs::symlink;
+
+        let sandbox = Sandbox::new();
+        let outside = sandbox.0.join("unrelated-root");
+        let real_projects = outside.join("projects");
+        fs::create_dir_all(&real_projects).expect("create unrelated project tree");
+        fs::write(real_projects.join("luanti.json"), PILOT).expect("seed real manifest");
+        let alias = sandbox.0.join("redirect");
+        symlink(&outside, &alias).expect("link intermediate parent");
+        let aliased_dir = alias.join("projects");
+        let aliased_file = aliased_dir.join("luanti.json");
+
+        let error = super::collect_render_manifests(&aliased_dir)
+            .expect_err("symlinked ancestor must not supply project directory");
+        assert!(error.contains("symlinked ancestor"), "{error}");
+        let error = read_render_manifest(&aliased_file)
+            .expect_err("symlinked ancestor must not supply a regular manifest");
+        assert!(error.contains("symlinked ancestor"), "{error}");
+        assert_eq!(
+            fs::read_to_string(real_projects.join("luanti.json")).unwrap(),
+            PILOT
+        );
+        assert!(super::reject_symlinked_ancestors(&real_projects).is_ok());
     }
 
     #[test]
