@@ -171,17 +171,30 @@ fn has_verification_output(oracle: &Oracle, stdout: &[u8]) -> bool {
             "integration candidate fixture envelope: ",
             " passed; SHA-256 identity parity NOT checked",
         ),
-        "integration_candidate_digest" => line.split('\n').all(|entry| {
-            let Some((name, digest)) = entry.split_once(": ") else {
-                return false;
-            };
-            !name.is_empty()
-                && name.trim() == name
-                && digest.len() == 64
-                && digest
-                    .bytes()
-                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-        }),
+        "integration_candidate_digest" => {
+            // An arbitrary or truncated list of plausible SHA-256 strings is
+            // not evidence that all four historical candidate identities ran.
+            // Bind the aggregate receipt to the digest CLI's fixed case set
+            // and stable order, without asserting Git mutation authority.
+            const REQUIRED: [&str; 4] = [
+                "normal-two-parent",
+                "reversed-parents-same-tree",
+                "unsupported-three-parent",
+                "compatible-constructor-migration",
+            ];
+            let entries: Vec<&str> = line.split('\n').collect();
+            entries.len() == REQUIRED.len()
+                && entries.iter().zip(REQUIRED).all(|(entry, expected_name)| {
+                    let Some((name, digest)) = entry.split_once(": ") else {
+                        return false;
+                    };
+                    name == expected_name
+                        && digest.len() == 64
+                        && digest
+                            .bytes()
+                            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+                })
+        }
         "merge_base_topology" => positive_count(
             line,
             "merge-base-topology: ",
@@ -329,7 +342,10 @@ mod tests {
             .iter()
             .find(|oracle| oracle.name == "integration_candidate_digest")
             .unwrap();
-        let digest_output = format!("historical-case: {}\n", "a".repeat(64));
+        let digest_output = format!(
+            "normal-two-parent: {0}\nreversed-parents-same-tree: {0}\nunsupported-three-parent: {0}\ncompatible-constructor-migration: {0}\n",
+            "a".repeat(64)
+        );
         assert!(has_verification_output(
             digest_oracle,
             digest_output.as_bytes()
@@ -373,6 +389,27 @@ mod tests {
             "case: 1234\n\n",
         ] {
             assert!(!has_verification_output(digest_oracle, output.as_bytes()));
+        }
+        let good = format!(
+            "normal-two-parent: {0}\nreversed-parents-same-tree: {0}\nunsupported-three-parent: {0}\ncompatible-constructor-migration: {0}\n",
+            "a".repeat(64)
+        );
+        for invalid in [
+            // Previously a single plausible digest, repeated names, swapped
+            // order and undeclared names all qualified as aggregate success.
+            format!("normal-two-parent: {}\n", "a".repeat(64)),
+            good.replacen("reversed-parents-same-tree", "normal-two-parent", 1),
+            good.replacen("normal-two-parent", "unknown-case", 1),
+            good.replacen("normal-two-parent: ", "normal-two-parent: 0", 1),
+            format!("{good}extra-case: 1234\n"),
+            good.replacen("normal-two-parent: ", "normal-two-parent : ", 1),
+            good.replacen("normal-two-parent: ", "normal-two-parent: ABC", 1),
+            good.replacen("normal-two-parent: ", "reversed-parents-same-tree: ", 1),
+        ] {
+            assert!(
+                !has_verification_output(digest_oracle, invalid.as_bytes()),
+                "accepted malformed or incomplete digest receipt: {invalid:?}"
+            );
         }
     }
 
