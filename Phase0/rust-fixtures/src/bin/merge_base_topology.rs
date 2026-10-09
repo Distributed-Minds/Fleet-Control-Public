@@ -612,10 +612,7 @@ mod tests {
         // inspection. Its previous small-enough metadata must not authorize
         // the now-oversized descriptor, even without a pathname/inode swap.
         let preflight = std::fs::symlink_metadata(&path).unwrap();
-        let writer = std::fs::OpenOptions::new()
-            .write(true)
-            .open(&path)
-            .unwrap();
+        let writer = std::fs::OpenOptions::new().write(true).open(&path).unwrap();
         writer.set_len(MAX_FIXTURE_BYTES + 1).unwrap();
         drop(writer);
         let error = read_bounded_fixture_with_metadata(&path, &preflight).unwrap_err();
