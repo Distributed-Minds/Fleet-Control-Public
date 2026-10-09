@@ -365,8 +365,12 @@ fn read_fixture_with_metadata(path: &Path, before: &fs::Metadata) -> Result<Stri
         const O_NOFOLLOW: i32 = 0o400000;
         options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
     }
-    let file = options.open(path).map_err(|err| format!("cannot open {path:?}: {err}"))?;
-    let opened = file.metadata().map_err(|err| format!("cannot stat {path:?}: {err}"))?;
+    let file = options
+        .open(path)
+        .map_err(|err| format!("cannot open {path:?}: {err}"))?;
+    let opened = file
+        .metadata()
+        .map_err(|err| format!("cannot stat {path:?}: {err}"))?;
     if !opened.file_type().is_file() {
         return Err("opened adaptive-stress fixture is not a regular file".to_owned());
     }
@@ -391,8 +395,8 @@ fn read_fixture_with_metadata(path: &Path, before: &fs::Metadata) -> Result<Stri
 }
 
 fn read_fixture_bounded(path: &Path) -> Result<String, String> {
-    let before = fs::symlink_metadata(path)
-        .map_err(|err| format!("cannot stat {path:?}: {err}"))?;
+    let before =
+        fs::symlink_metadata(path).map_err(|err| format!("cannot stat {path:?}: {err}"))?;
     read_fixture_with_metadata(path, &before)
 }
 
@@ -452,10 +456,7 @@ mod tests {
 
     #[test]
     fn caller_supplied_fixture_is_bounded_regular_and_exact() {
-        let scratch = env::temp_dir().join(format!(
-            "free-energy-adaptive-input-{}",
-            process::id()
-        ));
+        let scratch = env::temp_dir().join(format!("free-energy-adaptive-input-{}", process::id()));
         fs::create_dir_all(&scratch).unwrap();
         let input = scratch.join("adaptive.json");
         fs::write(&input, HISTORICAL).unwrap();
@@ -472,7 +473,9 @@ mod tests {
 
         let invalid_utf8 = scratch.join("invalid.json");
         fs::write(&invalid_utf8, [0xff_u8, 0xfe_u8]).unwrap();
-        assert!(read_fixture_bounded(&invalid_utf8).unwrap_err().contains("UTF-8"));
+        assert!(read_fixture_bounded(&invalid_utf8)
+            .unwrap_err()
+            .contains("UTF-8"));
 
         #[cfg(unix)]
         {
