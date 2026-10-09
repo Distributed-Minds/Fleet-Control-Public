@@ -149,7 +149,10 @@ fn aggregate_failure_suppresses_success_records_from_passing_siblings() {
         stderr(&individual)
     );
     assert_eq!(stdout(&individual), "PASS merge_base_topology\n");
-    assert!(!aggregate.status.success(), "missing fixtures were accepted");
+    assert!(
+        !aggregate.status.success(),
+        "missing fixtures were accepted"
+    );
     assert!(
         aggregate.stdout.is_empty(),
         "failed aggregate leaked PASS records: {}",
