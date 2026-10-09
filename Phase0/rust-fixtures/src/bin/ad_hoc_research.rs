@@ -564,8 +564,68 @@ fn validate(data: &Value) -> Result<usize, Vec<String>> {
 
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::process;
+
+// Offline developer fixtures are untrusted caller-selected files, not authority.
+// Reject non-regular/symlink inputs, bound allocation and read length, and
+// defend against a file replacement between path metadata and open on Unix.
+const MAX_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
+
+fn read_fixture_with_metadata(path: &Path, before: &fs::Metadata) -> Result<String, String> {
+    if !before.file_type().is_file() {
+        return Err("ad-hoc research fixture must be a regular, non-symlink file".to_owned());
+    }
+    if before.len() > MAX_FIXTURE_BYTES {
+        return Err("ad-hoc research fixture exceeds 8 MiB limit".to_owned());
+    }
+
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // Do not block on a swapped-in FIFO or follow a swapped-in symlink.
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let file = options
+        .open(path)
+        .map_err(|error| format!("cannot open {path:?}: {error}"))?;
+    let opened = file
+        .metadata()
+        .map_err(|error| format!("cannot stat opened {path:?}: {error}"))?;
+    if !opened.file_type().is_file() {
+        return Err("opened ad-hoc research fixture is not a regular file".to_owned());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if before.dev() != opened.dev() || before.ino() != opened.ino() {
+            return Err("ad-hoc research fixture changed before open".to_owned());
+        }
+    }
+    if opened.len() > MAX_FIXTURE_BYTES {
+        return Err("ad-hoc research fixture exceeds 8 MiB limit".to_owned());
+    }
+
+    let mut bytes = Vec::new();
+    file.take(MAX_FIXTURE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("cannot read {path:?}: {error}"))?;
+    if bytes.len() as u64 > MAX_FIXTURE_BYTES {
+        return Err("ad-hoc research fixture exceeds 8 MiB limit".to_owned());
+    }
+    String::from_utf8(bytes).map_err(|_| "ad-hoc research fixture must be UTF-8".to_owned())
+}
+
+fn read_fixture_bounded(path: &Path) -> Result<String, String> {
+    let before =
+        fs::symlink_metadata(path).map_err(|error| format!("cannot stat {path:?}: {error}"))?;
+    read_fixture_with_metadata(path, &before)
+}
 
 fn run() -> Result<usize, String> {
     let mut args = env::args_os().skip(1);
@@ -576,10 +636,9 @@ fn run() -> Result<usize, String> {
     if args.next().is_some() {
         return Err("usage: ad_hoc_research [fixture.json]".to_owned());
     }
-    let data = fs::read_to_string(&path)
-        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    let data = read_fixture_bounded(&path)?;
     let fixture: Value = serde_json::from_str(&data)
-        .map_err(|error| format!("invalid fixture {}: {error}", path.display()))?;
+        .map_err(|error| format!("invalid fixture {path:?}: {error}"))?;
     validate(&fixture).map_err(|errors| errors.join("\n"))
 }
 
@@ -598,6 +657,48 @@ mod cli_semantic_tests {
     use super::*;
 
     const BASELINE: &str = include_str!("../../../fixtures/ad-hoc-research-spec1.json");
+
+    #[test]
+    fn untrusted_fixture_read_is_bounded_and_rejects_unsafe_paths() {
+        let scratch = env::temp_dir().join(format!("free-energy-adhoc-input-{}", process::id()));
+        fs::create_dir_all(&scratch).unwrap();
+        let input = scratch.join("research.json");
+        fs::write(&input, BASELINE).unwrap();
+        let fixture: Value = serde_json::from_str(&read_fixture_bounded(&input).unwrap()).unwrap();
+        assert_eq!(validate(&fixture), Ok(47));
+
+        assert!(read_fixture_bounded(&scratch).is_err());
+        let large = scratch.join("too-large.json");
+        fs::File::create(&large)
+            .unwrap()
+            .set_len(MAX_FIXTURE_BYTES + 1)
+            .unwrap();
+        assert!(read_fixture_bounded(&large).unwrap_err().contains("8 MiB"));
+
+        let invalid = scratch.join("invalid-utf8.json");
+        fs::write(&invalid, [0xff_u8, 0xfe_u8]).unwrap();
+        assert!(read_fixture_bounded(&invalid)
+            .unwrap_err()
+            .contains("UTF-8"));
+
+        #[cfg(unix)]
+        {
+            let link = scratch.join("link.json");
+            std::os::unix::fs::symlink(&input, &link).unwrap();
+            assert!(read_fixture_bounded(&link).is_err());
+
+            let observed = fs::symlink_metadata(&input).unwrap();
+            let replacement = scratch.join("replacement.json");
+            fs::write(&replacement, BASELINE).unwrap();
+            fs::rename(&replacement, &input).unwrap();
+            assert_eq!(
+                read_fixture_with_metadata(&input, &observed).unwrap_err(),
+                "ad-hoc research fixture changed before open",
+                "same bytes under a replacement inode must not pass"
+            );
+        }
+        fs::remove_dir_all(&scratch).unwrap();
+    }
 
     #[test]
     fn baseline_47_cases_execute_without_reading_expected_as_oracle() {
