@@ -1216,6 +1216,14 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
     // The manifest is a current snapshot, not an append-only ledger.
     // Each supersession source has at most one disposition; known IDs alone
     // cannot justify cyclic, self-referential or contradictory history.
+    // A supersession note must not leave its predecessor looking current.
+    // This is a current-manifest consistency check, not proof of append-only
+    // history or external reviewer authority.
+    let claim_statuses: HashMap<_, _> = record
+        .rights_claims
+        .iter()
+        .map(|claim| (claim.claim_id.as_str(), claim.status.as_str()))
+        .collect();
     let mut history_sources = HashSet::new();
     let mut history_links = HashMap::new();
     for event in &record.review.claim_history {
@@ -1232,6 +1240,14 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
                 "supersession references unknown old claim {}",
                 event.old_claim_id
             ));
+        }
+        if let Some(status) = claim_statuses.get(event.old_claim_id.as_str()) {
+            if !matches!(*status, "SUPERSEDED" | "RETRACTED") {
+                problems.push(format!(
+                    "supersession source {} must be marked SUPERSEDED or RETRACTED",
+                    event.old_claim_id
+                ));
+            }
         }
         if !history_sources.insert(event.old_claim_id.as_str()) {
             problems.push(format!(
@@ -1748,12 +1764,47 @@ mod tests {
         );
 
         let acyclic = changed(LUANTI, |v| {
+            v["rights_claims"][0]["status"] = json!("SUPERSEDED");
             v["review"]["claim_history"] = json!([{
                 "old_claim_id":"code-lgpl", "new_claim_id":"media-default",
                 "reason":"valid direct link", "at":"2026-10-08T00:00:00Z"
             }]);
         });
         assert!(validate_manifest(&acyclic).is_ok());
+    }
+
+    #[test]
+    fn claim_history_cannot_present_superseded_predecessor_as_current() {
+        let coherent = changed(LUANTI, |v| {
+            v["rights_claims"][0]["status"] = json!("SUPERSEDED");
+            v["review"]["claim_history"] = json!([{
+                "old_claim_id": "code-lgpl",
+                "new_claim_id": "media-default",
+                "reason": "historical replacement",
+                "at": "2026-10-08T00:00:00Z"
+            }]);
+        });
+        validate_manifest(&coherent).expect("labeled supersession must remain admissible");
+
+        for status in ["OBSERVED_AT", "UNKNOWN"] {
+            let inconsistent = changed(&coherent, |v| {
+                v["rights_claims"][0]["status"] = json!(status);
+            });
+            let errors = validate_manifest(&inconsistent)
+                .expect_err("supersession must not preserve a current/unknown source");
+            assert!(
+                errors.iter().any(|error| error.contains(
+                    "supersession source code-lgpl must be marked SUPERSEDED or RETRACTED"
+                )),
+                "missing predecessor-status guard for {status}: {errors:?}"
+            );
+        }
+
+        let retracted = changed(&coherent, |v| {
+            v["rights_claims"][0]["status"] = json!("RETRACTED");
+            v["review"]["claim_history"][0]["new_claim_id"] = Value::Null;
+        });
+        validate_manifest(&retracted).expect("reasoned retraction without successor is valid");
     }
 
     fn assert_url_fixture(source: &str, expected_key: &str) {
