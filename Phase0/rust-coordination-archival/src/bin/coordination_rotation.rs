@@ -85,6 +85,17 @@ fn assess(o: Observation) -> Result<Decision, &'static str> {
         return Ok(Decision::Exhausted);
     }
 
+    // An unavailable standby must not block a safe bounded write batch on
+    // the still-healthy active slot. Require successor capacity only when
+    // the projected batch reaches the proactive switch or physical limit.
+    let near_switch = o
+        .active_count
+        .checked_add(budget)
+        .is_none_or(|projected| projected >= o.switch_at);
+    if !near_switch && remaining > budget {
+        return Ok(Decision::Headroom { remaining });
+    }
+
     // Never advertise a rotation while the other issue is still DRAINING
     // or has not been compacted within its configured standby headroom.
     // Rotation must leave enough capacity for the entire declared write batch
@@ -99,18 +110,9 @@ fn assess(o: Observation) -> Result<Decision, &'static str> {
         return Ok(Decision::MaintenanceRequired { remaining });
     }
 
-    // Predict the entire bounded pending batch, not just current count.
-    // Rotate BEFORE the batch would consume the switch threshold or the
-    // remaining physical limit. This is not an authorization to rotate.
-    let near_switch = o
-        .active_count
-        .checked_add(budget)
-        .is_none_or(|projected| projected >= o.switch_at);
-    if near_switch || remaining <= budget {
-        Ok(Decision::RotationReadyModelOnly { remaining })
-    } else {
-        Ok(Decision::Headroom { remaining })
-    }
+    // The projected batch has reached a switch boundary and the successor
+    // is ready. This remains advisory, never provider-side rotation authority.
+    Ok(Decision::RotationReadyModelOnly { remaining })
 }
 
 fn unsigned(label: &str, input: &str) -> Result<u64, String> {
@@ -230,20 +232,48 @@ mod tests {
 
     #[test]
     fn standby_must_be_a_bounded_standby_not_a_draining_slot() {
-        let mut o = snapshot(1900);
+        let mut o = snapshot(1990);
         o.other_count = 501;
         assert_eq!(
             assess(o),
-            Ok(Decision::MaintenanceRequired { remaining: 600 })
+            Ok(Decision::MaintenanceRequired { remaining: 510 })
         );
         o.other_count = 300;
         o.other_state = OtherState::Draining;
         assert_eq!(
             assess(o),
-            Ok(Decision::MaintenanceRequired { remaining: 600 })
+            Ok(Decision::MaintenanceRequired { remaining: 510 })
         );
         o.other_state = OtherState::Standby;
-        assert_eq!(assess(o), Ok(Decision::Headroom { remaining: 600 }));
+        assert_eq!(
+            assess(o),
+            Ok(Decision::RotationReadyModelOnly { remaining: 510 })
+        );
+    }
+
+    #[test]
+    fn unavailable_standby_does_not_block_safe_active_slot_headroom() {
+        let mut o = snapshot(1800);
+        o.other_state = OtherState::Draining;
+        o.other_count = 2400;
+        assert_eq!(assess(o), Ok(Decision::Headroom { remaining: 700 }));
+
+        o.active_count = 1989;
+        assert_eq!(assess(o), Ok(Decision::Headroom { remaining: 511 }));
+
+        // The next proposed batch crosses the switch threshold.
+        o.active_count = 1990;
+        assert_eq!(
+            assess(o),
+            Ok(Decision::MaintenanceRequired { remaining: 510 })
+        );
+
+        o.other_state = OtherState::Standby;
+        o.other_count = 300;
+        assert_eq!(
+            assess(o),
+            Ok(Decision::RotationReadyModelOnly { remaining: 510 })
+        );
     }
 
     #[test]
