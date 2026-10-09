@@ -65,8 +65,13 @@ struct Fixture {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Decision {
     id: String,
+    // Historical fixture-only observation. It is not used by the decision
+    // function but must remain typed so a misspelling cannot vanish silently.
+    #[serde(default, rename = "backlog_size")]
+    _backlog_size: Option<u64>,
     #[serde(default = "yes")]
     policy_compatible: bool,
     #[serde(default)]
@@ -144,8 +149,13 @@ enum Scheduler {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Workload {
     id: String,
+    // Retain the legacy correlation label for schema validation only;
+    // assigning causal meaning here would invent runtime proof.
+    #[serde(default, rename = "correlation_group")]
+    _correlation_group: Option<String>,
     #[serde(default)]
     authority_current: bool,
     #[serde(default)]
@@ -320,6 +330,7 @@ fn simulate(c: &Workload) -> Result<Value, String> {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Planning {
     id: String,
     worker_count: u64,
@@ -550,6 +561,46 @@ mod tests {
     fn mutated(value: Value) -> Result<usize, Vec<String>> {
         let typed: Fixture = serde_json::from_value(value).expect("typed mutation");
         validate(&typed)
+    }
+
+    #[test]
+    fn fixture_case_shapes_reject_unknown_keys_without_erasing_legacy_metadata() {
+        let baseline: Fixture = serde_json::from_str(BASELINE).expect("typed historical fixture");
+        assert_eq!(baseline.decision_cases[0]._backlog_size, Some(50));
+        assert_eq!(
+            baseline.workload_cases[1]._correlation_group.as_deref(),
+            Some("batch-1")
+        );
+
+        // All three case families previously discarded unknown JSON members.
+        // A typographical error can otherwise leave defaulted fields in force
+        // while the original scenario still reports a false PASS.
+        for (family, typo) in [
+            ("decision_cases", "policy_compatibile"),
+            ("workload_cases", "fail_safe_escalate"),
+            ("planning_cases", "expected_alrets"),
+        ] {
+            let mut value = original();
+            value[family][0][typo] = json!(true);
+            assert!(
+                serde_json::from_value::<Fixture>(value).is_err(),
+                "{family}: silently admitted unknown case key {typo}"
+            );
+        }
+
+        let mut invalid_backlog = original();
+        invalid_backlog["decision_cases"][0]["backlog_size"] = json!("50");
+        assert!(
+            serde_json::from_value::<Fixture>(invalid_backlog).is_err(),
+            "legacy backlog observation must remain unsigned typed"
+        );
+
+        let mut invalid_group = original();
+        invalid_group["workload_cases"][1]["correlation_group"] = json!(42);
+        assert!(
+            serde_json::from_value::<Fixture>(invalid_group).is_err(),
+            "legacy correlation label must remain typed text"
+        );
     }
 
     #[test]
