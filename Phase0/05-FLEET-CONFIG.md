@@ -11,6 +11,10 @@ FLEET_SIZE=5
 AGENTS=A1,A2,A3,A4,A5
 COORDINATION_ISSUE_TITLE=[fleet-control] coordination
 COORDINATION_BODY_MARKER=FLEET_COORDINATION_V1
+COORDINATION_TRUSTED_AUTHORS=geromet
+COORDINATION_SWITCH_AT=2000
+COORDINATION_STANDBY_MAX=500
+COORDINATION_COMPACT_ABOVE=1500
 MISSION_TITLE_PREFIX=[fleet-mission]
 DEFAULT_BRANCH_POLICY=HUMAN_MERGE_ONLY
 STALE_OWNERSHIP_MINUTES=90
@@ -33,7 +37,7 @@ The IDs are identities, not permanent job titles.
 
 ## Coordination issue
 
-There must be exactly one live coordination issue carrying `COORDINATION_BODY_MARKER`.
+There are exactly two trusted open coordination issues carrying `COORDINATION_BODY_MARKER`, one per slot A and B. `COORDINATION_TRUSTED_AUTHORS` defaults to `geromet`; the switch threshold defaults to 2,000 and must not exceed 2,400. See `160-COORDINATION-SLOTS.md`.
 
 Do not depend on a fixed issue number.
 

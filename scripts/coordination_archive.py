@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 import urllib.error
@@ -20,6 +21,9 @@ API = "https://api.github.com"
 ACTIVE_STATES = {"OWNED", "WORKING"}
 VALID_STATES = {"INTENT", "OWNED", "WORKING", "HANDOFF", "RELEASE", "YIELD", "RECOVERED"}
 SCHEMA = 1
+HARD_COMMENT_CAP = 2500
+MAX_SWITCH_AT = 2400
+DEFAULT_TRUSTED_AUTHORS = {"geromet"}
 
 
 def sha256(raw: bytes) -> str:
@@ -152,10 +156,131 @@ def configured_agents(config_path: Path) -> set[str]:
     raise RuntimeError(f"AGENTS not found in {config_path}")
 
 
-def trusted_authors(args: argparse.Namespace) -> set[str] | None:
-    raw = getattr(args, "trusted_authors", None) or os.environ.get("COORDINATION_TRUSTED_AUTHORS", "")
-    names = {item.strip().lower() for item in raw.split(",") if item.strip()}
-    return names or None
+def trusted_authors(args: argparse.Namespace) -> set[str]:
+    configured = getattr(args, "trusted_authors", None)
+    if configured is not None:
+        raw = configured
+    elif "COORDINATION_TRUSTED_AUTHORS" in os.environ:
+        raw = os.environ["COORDINATION_TRUSTED_AUTHORS"]
+    else:
+        return set(DEFAULT_TRUSTED_AUTHORS)
+    parts = [item.strip() for item in raw.split(",")]
+    if not parts or any(not item for item in parts):
+        raise RuntimeError("COORDINATION_TRUSTED_AUTHORS must be a non-empty comma-separated list of logins")
+    return {item.lower() for item in parts}
+
+
+def coordination_config(config_path: Path) -> dict[str, str]:
+    wanted = {"COORDINATION_ISSUE_TITLE", "COORDINATION_BODY_MARKER"}
+    values = {}
+    for line in config_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        for key in wanted:
+            if line.startswith(key + "="):
+                values[key] = line.split("=", 1)[1]
+    if wanted - values.keys():
+        raise RuntimeError("coordination title or body marker missing from config")
+    return values
+
+
+def slot_fields(body: str) -> dict[str, str]:
+    result = {}
+    for line in (body or "").splitlines():
+        match = re.fullmatch(r"(COORDINATION_SLOT|COORDINATION_STATE|COORDINATION_EPOCH)=(.*)", line.strip())
+        if match:
+            if match.group(1) in result:
+                raise RuntimeError(f"duplicate {match.group(1)} coordination field")
+            result[match.group(1)] = match.group(2)
+    return result
+
+
+def discover_slots(repo: str, config_path: Path, trusted: set[str] | None = None) -> dict[str, dict[str, Any]]:
+    config = coordination_config(config_path)
+    trusted = {x.lower() for x in (trusted if trusted is not None else DEFAULT_TRUSTED_AUTHORS)}
+    if not trusted:
+        raise RuntimeError("COORDINATION_TRUSTED_AUTHORS must contain at least one author")
+    candidates = fetch_open_issues(repo)
+    slots: dict[str, dict[str, Any]] = {}
+    for issue in candidates:
+        body = issue.get("body") or ""
+        author = ((issue.get("user") or issue.get("author") or {}).get("login") or "").lower()
+        if (issue.get("state") != "open" or issue.get("title") != config["COORDINATION_ISSUE_TITLE"]
+                or body.splitlines()[:1] != [config["COORDINATION_BODY_MARKER"]]
+                or author not in trusted):
+            continue
+        info = slot_fields(body)
+        slot, state, epoch = info.get("COORDINATION_SLOT"), info.get("COORDINATION_STATE"), info.get("COORDINATION_EPOCH", "")
+        if slot not in {"A", "B"} or state not in {"ACTIVE", "DRAINING", "STANDBY"} or not epoch.isdigit():
+            raise RuntimeError(f"trusted coordination issue #{issue.get('number')} has invalid slot metadata")
+        if slot in slots:
+            raise RuntimeError(f"multiple trusted coordination issues claim slot {slot}")
+        slots[slot] = {**issue, "slot": slot, "slot_state": state, "epoch": int(epoch)}
+    if set(slots) != {"A", "B"}:
+        raise RuntimeError(f"expected trusted open coordination slots A and B; found {', '.join(sorted(slots)) or 'none'}")
+    active = [x for x in slots.values() if x["slot_state"] == "ACTIVE"]
+    if not active:
+        raise RuntimeError("no ACTIVE coordination slot; refusing to proceed")
+    if len(active) == 2 and active[0]["epoch"] == active[1]["epoch"]:
+        raise RuntimeError("two ACTIVE coordination slots have the same epoch")
+    return slots
+
+
+def fetch_open_issues(repo: str) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    page = 1
+    while True:
+        batch, headers = api_request(repo, "GET", f"/repos/{repo}/issues?state=open&per_page=100&page={page}")
+        if not isinstance(batch, list):
+            raise RuntimeError(f"unsupported open issues response on page {page}")
+        if not batch:
+            if re.search(r'<[^>]+>;\s*rel="next"', headers.get("Link", "")):
+                raise RuntimeError(f"pagination gap: empty issue page {page} advertises a next page")
+            break
+        result.extend(x for x in batch if "pull_request" not in x)
+        if len(batch) < 100:
+            if re.search(r'<[^>]+>;\s*rel="next"', headers.get("Link", "")):
+                raise RuntimeError(f"pagination gap: short issue page {page} advertises a next page")
+            break
+        page += 1
+    return result
+
+
+def live_slot(slots: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    return max((x for x in slots.values() if x["slot_state"] == "ACTIVE"), key=lambda x: x["epoch"])
+
+
+def issue_archive_dir(base: Path, issue: int) -> Path:
+    name = f"issue-{issue}"
+    if base.name == name:
+        return base
+    if re.fullmatch(r"issue-\d+", base.name):
+        raise RuntimeError(f"archive-dir {base} is scoped to a different issue; pass the coordination archive base directory")
+    return base / name
+
+
+def replace_body_fields(body: str, updates: dict[str, str]) -> str:
+    # Split only at LF. splitlines() also treats CR, U+2028, form feed, and
+    # other characters as line boundaries and would rewrite operator text.
+    lines = (body or "").split("\n")
+    for key, value in updates.items():
+        prefix = key + "="
+        indexes = [i for i, line in enumerate(lines) if line.startswith(prefix)]
+        if len(indexes) != 1:
+            raise RuntimeError(f"coordination body must contain exactly one {key} line")
+        old = lines[indexes[0]]
+        if "\r" in old[:-1]:
+            raise RuntimeError(f"coordination body {key} line has ambiguous lone-CR separators; refusing to edit")
+        lines[indexes[0]] = prefix + value + ("\r" if old.endswith("\r") else "")
+    return "\n".join(lines)
+
+
+def patch_issue_body(repo: str, issue: dict[str, Any], updates: dict[str, str]) -> None:
+    body = replace_body_fields(issue.get("body") or "", updates)
+    api_request(repo, "PATCH", f"/repos/{repo}/issues/{issue['number']}", {"body": body})
+    issue["body"] = body
+    info = slot_fields(body)
+    issue["slot_state"] = info["COORDINATION_STATE"]
+    issue["epoch"] = int(info["COORDINATION_EPOCH"])
 
 
 def record_info(comments: list[dict[str, Any]], issue_body: str, tail_min: int,
@@ -330,11 +455,8 @@ def write_manifest(archive_dir: Path, manifest: dict[str, Any]) -> None:
     path = manifest_path(archive_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = (json.dumps(manifest, sort_keys=True, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
-    if path.exists() and path.read_bytes() != payload:
-        # Manifest is a versioned index and may grow; only segments are immutable.
-        path.write_bytes(payload)
-    else:
-        path.write_bytes(payload)
+    # Manifest is a versioned index and may grow; only segments are immutable.
+    path.write_bytes(payload)
 
 
 def append_segments(archive_dir: Path, manifest: dict[str, Any], comments: list[dict[str, Any]],
@@ -373,6 +495,7 @@ def prepare_online(args: argparse.Namespace) -> int:
         return 0
     agents = configured_agents(args.config)
     protected, summary = record_info(comments, issue_obj.get("body") or "", args.tail_min, agents, trusted_authors(args))
+    args.archive_dir = issue_archive_dir(args.archive_dir, args.issue)
     manifest = load_manifest(args.archive_dir, args.issue)
     raw_lines = [line for line in encode_api_records(comments).splitlines(keepends=True)]
     created = append_segments(args.archive_dir, manifest, comments, raw_lines, args.segment_size)
@@ -405,7 +528,9 @@ def prepare_offline(args: argparse.Namespace) -> int:
 
 def remote_file_bytes(repo: str, path: str, ref: str) -> bytes:
     query = urllib.parse.urlencode({"ref": ref})
-    obj, _ = api_request(repo, "GET", f"/repos/{repo}/contents/{urllib.parse.quote(path)}?{query}")
+    obj, _ = api_request(repo, "GET", f"/repos/{repo}/contents/{urllib.parse.quote(path)}?{query}", allow_not_found=True)
+    if obj is None:
+        raise FileNotFoundError(f"remote archive file not found: {path}@{ref}")
     if not isinstance(obj, dict) or obj.get("encoding") != "base64" or not isinstance(obj.get("content"), str):
         raise RuntimeError(f"remote archive file unavailable or unsupported: {path}@{ref}")
     try:
@@ -415,22 +540,125 @@ def remote_file_bytes(repo: str, path: str, ref: str) -> bytes:
         raise RuntimeError(f"invalid base64 from archive read-back: {path}@{ref}") from exc
 
 
-def verify_remote(repo: str, archive_dir: Path, manifest: dict[str, Any], ref: str) -> None:
-    local_manifest = manifest_path(archive_dir).read_bytes()
-    remote_manifest = remote_file_bytes(repo, (archive_dir / "manifest.json").as_posix(), ref)
-    if remote_manifest != local_manifest:
-        raise RuntimeError("remote manifest is not byte-identical; refusing deletion")
-    for segment in manifest["segments"]:
-        remote = remote_file_bytes(repo, segment["path"], ref)
-        local = local_segment_path(archive_dir, segment["path"]).read_bytes()
-        if remote != local or sha256(remote) != segment["sha256"]:
+def remote_manifest_path(archive_dir: Path, manifest: dict[str, Any]) -> str:
+    if manifest.get("segments"):
+        return (Path(manifest["segments"][0]["path"]).parent / "manifest.json").as_posix()
+    return (archive_dir / "manifest.json").as_posix()
+
+
+def remote_manifest(repo: str, archive_dir: Path, ref: str,
+                    manifest: dict[str, Any] | None = None) -> dict[str, Any]:
+    raw = remote_file_bytes(repo, remote_manifest_path(archive_dir, manifest or {}), ref)
+    try:
+        obj = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("remote archive manifest is invalid; refusing deletion") from exc
+    if not isinstance(obj, dict) or not isinstance(obj.get("segments"), list):
+        raise RuntimeError("remote archive manifest is unsupported; refusing deletion")
+    return obj
+
+
+def matching_remote_segments(local_manifest: dict[str, Any], remote: dict[str, Any], ids: set[int]) -> list[dict[str, Any]]:
+    selected = []
+    for segment in local_manifest["segments"]:
+        if not any(segment["first_comment_id"] <= cid <= segment["last_comment_id"] for cid in ids):
+            continue
+        other = next((item for item in remote["segments"] if item.get("path") == segment["path"]), None)
+        if other is None:
+            continue
+        if other != segment:
+            raise RuntimeError(f"remote manifest entry differs from local segment metadata: {segment['path']}")
+        selected.append(segment)
+    return selected
+
+
+def verify_remote(repo: str, archive_dir: Path, manifest: dict[str, Any], ref: str,
+                  required_ids: set[int]) -> None:
+    remote = remote_manifest(repo, archive_dir, ref, manifest)
+    segments = matching_remote_segments(manifest, remote, required_ids)
+    covered = {cid for segment in segments
+               for cid in range(segment["first_comment_id"], segment["last_comment_id"] + 1)}
+    missing = required_ids - covered
+    if missing:
+        raise RuntimeError(f"remote archive does not contain segment entries for comments {sorted(missing)[:10]}")
+    for segment in segments:
+        remote_bytes = remote_file_bytes(repo, segment["path"], ref)
+        local_bytes = local_segment_path(archive_dir, segment["path"]).read_bytes()
+        if remote_bytes != local_bytes or sha256(remote_bytes) != segment["sha256"]:
             raise RuntimeError(f"remote segment is not byte-identical or hash mismatched: {segment['path']}")
 
 
+def verify_archive_append(args: argparse.Namespace) -> int:
+    repo_dir = args.repo_dir
+    archive_rel = args.archive_dir.as_posix().rstrip("/")
+    listing = subprocess.run(["git", "-C", str(repo_dir), "ls-tree", "-r", "--name-only", "HEAD", "--", archive_rel],
+                             check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if listing.returncode and not args.allow_empty:
+        raise RuntimeError("could not inspect existing archive branch HEAD; refusing append")
+    if listing.returncode == 0:
+        manifest_paths = [name for name in listing.stdout.splitlines()
+                          if name.startswith(archive_rel + "/") and Path(name).name == "manifest.json"]
+    else:
+        manifest_paths = []
+    if manifest_paths:
+        for manifest_rel in manifest_paths:
+            existing = subprocess.run(["git", "-C", str(repo_dir), "show", f"HEAD:{manifest_rel}"],
+                                      check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            try:
+                previous = json.loads(existing.stdout)
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise RuntimeError(f"existing archive manifest is invalid: {manifest_rel}") from exc
+            current_path = repo_dir / manifest_rel
+            try:
+                current = json.loads(current_path.read_bytes())
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise RuntimeError(f"working archive manifest is missing or invalid: {manifest_rel}") from exc
+            current_by_path = {item.get("path"): item for item in current.get("segments", [])}
+            for segment in previous.get("segments", []):
+                path = repo_dir / segment["path"]
+                if not path.is_file() or sha256(path.read_bytes()) != segment["sha256"]:
+                    raise RuntimeError(f"existing archive segment missing or hash mismatched: {segment['path']}")
+                if current_by_path.get(segment["path"]) != segment:
+                    raise RuntimeError(f"working manifest removed or changed existing segment: {segment['path']}")
+    staged = subprocess.run(["git", "-C", str(repo_dir), "diff", "--cached", "--name-status"],
+                            check=True, stdout=subprocess.PIPE, text=True).stdout.splitlines()
+    forbidden = []
+    for row in staged:
+        fields = row.split("\t")
+        status, paths = fields[0], fields[1:]
+        path = paths[-1] if paths else ""
+        allowed_segment_add = (status == "A" and path.startswith(archive_rel + "/")
+                               and path.endswith(".jsonl") and Path(path).name.startswith("comments-"))
+        allowed_manifest_update = (status in {"A", "M"} and path.startswith(archive_rel + "/")
+                                   and Path(path).name == "manifest.json")
+        if not (allowed_segment_add or allowed_manifest_update):
+            forbidden.append(row)
+    if forbidden:
+        raise RuntimeError("append-only archive update permits only new segments and manifest updates; refused: "
+                           + ", ".join(forbidden))
+    print("verify-archive-append: existing segments verified; staged update is append-only")
+    return 0
+
+
+def switch_at_value(raw: str) -> int:
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("switch-at must be an integer from 100 through 2400") from exc
+    if not 100 <= value <= MAX_SWITCH_AT:
+        raise RuntimeError(f"switch-at must be from 100 through {MAX_SWITCH_AT}")
+    return value
+
+
 def compact(args: argparse.Namespace) -> int:
-    if args.confirm_delete and trusted_authors(args) is None:
-        raise SystemExit("compact --confirm-delete requires --trusted-authors (or COORDINATION_TRUSTED_AUTHORS): "
-                         "protection state must come from trusted authors only")
+    explicit_authors = (getattr(args, "trusted_authors", None) is not None
+                        or "COORDINATION_TRUSTED_AUTHORS" in os.environ)
+    if args.confirm_delete:
+        if os.environ.get("ARCHIVE_DELETE_ENABLED") != "true":
+            raise SystemExit("compact deletion refused: set ARCHIVE_DELETE_ENABLED=true after verifying archive read-back")
+        if not explicit_authors or not trusted_authors(args):
+            raise SystemExit("compact deletion refused: provide explicit non-empty --trusted-authors or COORDINATION_TRUSTED_AUTHORS")
+    args.archive_dir = issue_archive_dir(args.archive_dir, args.issue)
     manifest = load_manifest(args.archive_dir, args.issue)
     if not manifest["segments"]:
         print("compact: no archive segments")
@@ -446,6 +674,16 @@ def compact(args: argparse.Namespace) -> int:
     protected, summary = record_info(comments, issue_obj.get("body") or "", args.tail_min,
                                     configured_agents(args.config), trusted_authors(args))
     delete_ids = [cid for cid in candidates if cid not in protected]
+    if args.confirm_delete and delete_ids:
+        try:
+            remote = remote_manifest(args.repo, args.archive_dir, args.archive_ref, manifest)
+        except FileNotFoundError as exc:
+            print(f"compact: skipping deletion for issue #{args.issue}; remote archive manifest is not available yet ({exc})")
+            return 0
+        remote_segments = matching_remote_segments(manifest, remote, set(delete_ids))
+        remotely_archived = {cid for segment in remote_segments
+                             for cid in range(segment["first_comment_id"], segment["last_comment_id"] + 1)}
+        delete_ids = [cid for cid in delete_ids if cid in remotely_archived]
     print(f"compact: live={len(comments)} archived_live={len(candidates)} keep={len(candidates)-len(delete_ids)} would_delete={len(delete_ids)}")
     print("compact: keep_rule_counts=" + json.dumps(summary, sort_keys=True))
     if not args.confirm_delete:
@@ -462,8 +700,6 @@ def compact(args: argparse.Namespace) -> int:
         if estimated_calls + calls_for_delete > args.request_budget:
             print(f"compact: request budget reached; deferred={len(delete_ids) - deleted} estimated_calls={estimated_calls} budget={args.request_budget}")
             break
-        # Revalidate exact manifest and every listed segment directly before each effect.
-        verify_remote(args.repo, args.archive_dir, manifest, args.archive_ref)
         current = fetch_comments(args.repo, args.issue)
         current_issue = fetch_issue(args.repo, args.issue)
         match = next((item for item in current if item["id"] == cid), None)
@@ -475,6 +711,12 @@ def compact(args: argparse.Namespace) -> int:
                                        configured_agents(args.config), trusted_authors(args))
         if cid in now_protected:
             raise RuntimeError(f"comment {cid} became protected before deletion")
+        # Read back the relevant immutable evidence directly before each effect.
+        try:
+            verify_remote(args.repo, args.archive_dir, manifest, args.archive_ref, {cid})
+        except FileNotFoundError as exc:
+            print(f"compact: remote archive manifest disappeared; skipping remaining deletions for issue #{args.issue} ({exc})")
+            break
         api_request(args.repo, "DELETE", f"/repos/{args.repo}/issues/comments/{cid}", allow_not_found=True)
         estimated_calls += calls_for_delete
         deleted += 1
@@ -484,20 +726,161 @@ def compact(args: argparse.Namespace) -> int:
     return 0
 
 
+def status(args: argparse.Namespace) -> int:
+    slots = discover_slots(args.repo, args.config, trusted_authors(args))
+    active = live_slot(slots)
+    print(f"active=slot-{active['slot']} issue=#{active['number']} epoch={active['epoch']}")
+    counts = {}
+    for slot in ("A", "B"):
+        issue = slots[slot]
+        count = len(fetch_comments(args.repo, issue["number"]))
+        counts[slot] = count
+        print(f"slot={slot} issue=#{issue['number']} state={issue['slot_state']} epoch={issue['epoch']} comments={count} switch_at={args.switch_at} compact_above={args.compact_above} standby_max={args.standby_max} hard_cap={HARD_COMMENT_CAP}")
+    if any(issue["slot_state"] == "DRAINING" for issue in slots.values()) and os.environ.get("ARCHIVE_DELETE_ENABLED") != "true":
+        print("WARNING: deletion is disabled; a DRAINING slot cannot be compacted to STANDBY, so the next rotation will block until deletion is enabled and maintenance drains it")
+    if os.environ.get("ARCHIVE_DELETE_ENABLED") != "true":
+        remaining = sum(max(0, HARD_COMMENT_CAP - count) for count in counts.values())
+        active_remaining = max(0, HARD_COMMENT_CAP - counts[active["slot"]])
+        standby = slots["B" if active["slot"] == "A" else "A"]
+        standby_remaining = max(0, args.standby_max - counts[standby["slot"]])
+        print(f"WARNING: deletion is disabled; finite remaining comment capacity is {remaining} across both slots "
+              f"(active cap headroom={active_remaining}, standby headroom to standby-max={standby_remaining}); "
+              "rotation will block when the active slot reaches switch-at and standby is not below standby-max")
+    return 0
+
+
+def rotate(args: argparse.Namespace) -> int:
+    slots = discover_slots(args.repo, args.config, trusted_authors(args))
+    active = live_slot(slots)
+    other = slots["B" if active["slot"] == "A" else "A"]
+    # An ACTIVE+ACTIVE pair is the recoverable crash point: the higher epoch is
+    # already the writer, so finish draining the lower epoch without another flip.
+    if active["slot_state"] == "ACTIVE" and other["slot_state"] == "ACTIVE":
+        patch_issue_body(args.repo, other, {"COORDINATION_STATE": "DRAINING"})
+        print(f"rotate: resumed flip; slot {active['slot']} issue #{active['number']} remains ACTIVE epoch={active['epoch']}")
+        return 0
+    active_count = len(fetch_comments(args.repo, active["number"]))
+    if active_count < args.switch_at:
+        print(f"rotate: below switch threshold; active={active_count} switch_at={args.switch_at}")
+        return 0
+    standby_count = len(fetch_comments(args.repo, other["number"]))
+    if other["slot_state"] != "STANDBY":
+        remedy = (" Enable ARCHIVE_DELETE_ENABLED after verifying archive read-back, or compact manually." if
+                  os.environ.get("ARCHIVE_DELETE_ENABLED") != "true" else " Verify archive read-back and compact the draining slot manually.")
+        raise RuntimeError(f"expected inactive slot {other['slot']} to be STANDBY, found {other['slot_state']}; "
+                           f"rotation cannot safely flip into a non-empty standby.{remedy}")
+    if standby_count > args.standby_max:
+        print(f"rotate: standby slot {other['slot']} has {standby_count} comments (> {args.standby_max}); attempting archive/compaction before flip")
+        maintenance = argparse.Namespace(**vars(args))
+        maintenance.issue = other["number"]
+        maintenance.trigger_count = 0
+        prepare_online(maintenance)
+        compact(maintenance)
+        standby_count = len(fetch_comments(args.repo, other["number"]))
+        if standby_count > args.standby_max:
+            remedy = ("Enable ARCHIVE_DELETE_ENABLED after verifying archive read-back, or compact manually." if
+                      os.environ.get("ARCHIVE_DELETE_ENABLED") != "true" else "Verify archive read-back and compact the standby manually.")
+            raise RuntimeError(f"rotation refused: standby still has {standby_count} comments (> {args.standby_max}); "
+                               f"it will not flip into a non-empty standby. {remedy}")
+    # Writer availability is maintained by making the new ACTIVE visible first.
+    next_epoch = max(active["epoch"], other["epoch"]) + 1
+    patch_issue_body(args.repo, other, {"COORDINATION_STATE": "ACTIVE", "COORDINATION_EPOCH": str(next_epoch)})
+    patch_issue_body(args.repo, active, {"COORDINATION_STATE": "DRAINING"})
+    print(f"rotate: slot {other['slot']} issue #{other['number']} ACTIVE epoch={next_epoch}; slot {active['slot']} is DRAINING")
+    return 0
+
+
+def maintain_slots(args: argparse.Namespace) -> int:
+    """Archive draining slots and eligible active history; re-enable drained slots."""
+    slots = discover_slots(args.repo, args.config, trusted_authors(args))
+    active = live_slot(slots)
+    for issue in slots.values():
+        count = len(fetch_comments(args.repo, issue["number"]))
+        if (issue["slot_state"] == "DRAINING"
+                or (issue["number"] == active["number"] and count > args.compact_above)
+                or (issue["slot_state"] == "STANDBY" and count > args.standby_max)):
+            maintenance = argparse.Namespace(**vars(args))
+            maintenance.archive_dir = args.archive_dir
+            maintenance.issue = issue["number"]
+            maintenance.trigger_count = 0
+            prepare_online(maintenance)
+            compact(maintenance)
+            count = len(fetch_comments(args.repo, issue["number"]))
+            if issue["slot_state"] == "DRAINING" and count <= args.standby_max:
+                patch_issue_body(args.repo, issue, {"COORDINATION_STATE": "STANDBY"})
+                print(f"maintain: slot {issue['slot']} issue #{issue['number']} is now STANDBY")
+    return 0
+
+
+def prepare_slots(args: argparse.Namespace) -> int:
+    """Create archive evidence for any issue eligible for this maintenance pass."""
+    slots = discover_slots(args.repo, args.config, trusted_authors(args))
+    active = live_slot(slots)
+    for issue in slots.values():
+        count = len(fetch_comments(args.repo, issue["number"]))
+        if (issue["slot_state"] == "DRAINING"
+                or (issue["number"] == active["number"] and count > args.compact_above)
+                or (issue["slot_state"] == "STANDBY" and count > args.standby_max)):
+            maintenance = argparse.Namespace(**vars(args))
+            maintenance.archive_dir = args.archive_dir
+            maintenance.issue = issue["number"]
+            maintenance.trigger_count = 0
+            prepare_online(maintenance)
+    return 0
+
+
+def migrate_layout(source_dir: Path, target_dir: Path, issue: int) -> dict[str, Any]:
+    """Move a legacy flat archive, rewriting only manifest paths, never segment bytes."""
+    manifest_file = source_dir / "manifest.json"
+    if not manifest_file.exists():
+        raise RuntimeError(f"legacy manifest missing: {manifest_file}")
+    manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+    if manifest.get("issue") != issue or not isinstance(manifest.get("segments"), list):
+        raise RuntimeError(f"legacy manifest does not describe issue #{issue}")
+    target_dir.mkdir(parents=True, exist_ok=True)
+    rewritten = dict(manifest)
+    rewritten["segments"] = []
+    for segment in manifest["segments"]:
+        old_rel = Path(segment["path"])
+        filename = old_rel.name
+        old_file = source_dir / filename
+        if sha256(old_file.read_bytes()) != segment["sha256"]:
+            raise RuntimeError(f"legacy segment hash mismatch: {old_file}")
+        new_file = target_dir / filename
+        if new_file.exists():
+            raise RuntimeError(f"refusing to overwrite existing segment {new_file}")
+        new_file.write_bytes(old_file.read_bytes())
+        new_segment = dict(segment)
+        new_segment["path"] = (old_rel.parent / target_dir.name / filename).as_posix()
+        rewritten["segments"].append(new_segment)
+    write_manifest(target_dir, rewritten)
+    # Source files are only removed after every copied byte and manifest is validated.
+    archived_index(target_dir, load_manifest(target_dir, issue))
+    for segment in manifest["segments"]:
+        (source_dir / Path(segment["path"]).name).unlink()
+    manifest_file.unlink()
+    return rewritten
+
+
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=("prepare", "compact"))
+    parser.add_argument("mode", choices=("prepare", "compact", "status", "rotate", "maintain", "prepare-slots", "migrate-layout", "verify-archive-append"))
     parser.add_argument("--repo")
     parser.add_argument("--issue", type=int)
     parser.add_argument("--archive-dir", type=Path, default=Path("Phase0/archives/coordination"))
     parser.add_argument("--archive-ref", default="main")
     parser.add_argument("--trigger-count", type=int, default=1500)
-    parser.add_argument("--tail-min", type=int, default=750)
+    parser.add_argument("--switch-at", type=int, default=os.environ.get("COORDINATION_SWITCH_AT", "2000"))
+    parser.add_argument("--standby-max", type=int, default=int(os.environ.get("COORDINATION_STANDBY_MAX", "500")))
+    parser.add_argument("--compact-above", type=int, default=int(os.environ.get("COORDINATION_COMPACT_ABOVE", "1500")))
+    # Must fit below the 500-comment standby target so a fully compacted
+    # draining slot can become a standby again.
+    parser.add_argument("--tail-min", type=int, default=300)
     parser.add_argument("--segment-size", type=int, default=200)
     parser.add_argument("--delete-delay", type=float, default=0.4)
     parser.add_argument("--request-budget", type=int, default=3000,
                         help="maximum estimated REST calls for this compaction run")
-    parser.add_argument("--trusted-authors", default="",
+    parser.add_argument("--trusted-authors", default=None,
                         help="comma-separated GitHub logins whose PHASE0 records are authoritative "
                              "(or env COORDINATION_TRUSTED_AUTHORS); REQUIRED for compact --confirm-delete")
     parser.add_argument("--confirm-delete", action="store_true")
@@ -505,6 +888,10 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input-jsonl", type=Path)
     parser.add_argument("--out-dir", type=Path)
     parser.add_argument("--issue-body", type=Path)
+    parser.add_argument("--source-dir", type=Path)
+    parser.add_argument("--target-dir", type=Path)
+    parser.add_argument("--repo-dir", type=Path, default=Path("."))
+    parser.add_argument("--allow-empty", action="store_true", help="allow an archive repo with no existing HEAD")
     return parser
 
 
@@ -512,6 +899,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = make_parser()
     args = parser.parse_args(argv)
     try:
+        args.switch_at = switch_at_value(args.switch_at)
         if not 1 <= args.segment_size <= 500:
             raise RuntimeError("segment-size out of range")
         if args.tail_min < 0 or args.trigger_count < 0:
@@ -522,7 +910,28 @@ def main(argv: list[str] | None = None) -> int:
             if not args.out_dir:
                 raise RuntimeError("offline prepare requires --out-dir")
             return prepare_offline(args)
-        if not args.repo or not args.issue:
+        if args.switch_at < 1 or args.standby_max < 0 or args.compact_above < 0:
+            raise RuntimeError("invalid slot thresholds")
+        if args.switch_at > MAX_SWITCH_AT:
+            raise RuntimeError(f"switch-at must be <= {MAX_SWITCH_AT} (hard comment cap is {HARD_COMMENT_CAP})")
+        if args.mode == "migrate-layout":
+            if not args.source_dir or not args.target_dir or not args.issue:
+                raise RuntimeError("migrate-layout requires --source-dir, --target-dir, and --issue")
+            migrate_layout(args.source_dir, args.target_dir, args.issue)
+            return 0
+        if args.mode == "verify-archive-append":
+            return verify_archive_append(args)
+        if not args.repo:
+            raise RuntimeError("online modes require --repo")
+        if args.mode in {"status", "rotate", "maintain", "prepare-slots"}:
+            if args.mode == "status":
+                return status(args)
+            if args.mode == "rotate":
+                return rotate(args)
+            if args.mode == "prepare-slots":
+                return prepare_slots(args)
+            return maintain_slots(args)
+        if not args.issue:
             raise RuntimeError("online modes require --repo and --issue")
         if args.mode == "prepare":
             return prepare_online(args)
