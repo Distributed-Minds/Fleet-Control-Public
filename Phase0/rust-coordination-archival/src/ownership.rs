@@ -96,9 +96,7 @@ struct Last {
 ///
 /// The model is deliberately stricter than a permissive best-effort log parser.
 /// A failure means the caller must investigate the history, not skip records.
-pub fn reduce_model_only(
-    transitions: &[Transition],
-) -> Result<Vec<ActiveLease>, ReductionFailure> {
+pub fn reduce_model_only(transitions: &[Transition]) -> Result<Vec<ActiveLease>, ReductionFailure> {
     use ReductionFailure::*;
     use State::*;
 
@@ -180,7 +178,10 @@ pub fn reduce_model_only(
                 }) {
                     return Err(EarlierCompetingIntent);
                 }
-                if active.values().any(|lease| lease.scope.overlaps(&event.scope)) {
+                if active
+                    .values()
+                    .any(|lease| lease.scope.overlaps(&event.scope))
+                {
                     return Err(OverlappingOwner);
                 }
                 active.insert(
@@ -197,7 +198,9 @@ pub fn reduce_model_only(
                 if !previous.is_some_and(|old| matches!(old.state, Owned | Working)) {
                     return Err(InvalidTransition);
                 }
-                let lease = active.get_mut(event.run.as_str()).ok_or(InvalidTransition)?;
+                let lease = active
+                    .get_mut(event.run.as_str())
+                    .ok_or(InvalidTransition)?;
                 lease.state = Working;
                 lease.latest_comment_id = event.comment_id;
             }
@@ -317,13 +320,22 @@ mod tests {
             event(2, 102, "a", 2, State::Owned, Some(101), "ref-a"),
         ];
         records[1].prev = Some(999);
-        assert_eq!(reduce_model_only(&records), Err(ReductionFailure::InvalidChain));
+        assert_eq!(
+            reduce_model_only(&records),
+            Err(ReductionFailure::InvalidChain)
+        );
         records[1].prev = Some(101);
         records[1].scope.branch = Some("other-branch".to_owned());
-        assert_eq!(reduce_model_only(&records), Err(ReductionFailure::InvalidChain));
+        assert_eq!(
+            reduce_model_only(&records),
+            Err(ReductionFailure::InvalidChain)
+        );
         records[1].scope.branch = Some("ref-a".to_owned());
         records[1].seq = 4;
-        assert_eq!(reduce_model_only(&records), Err(ReductionFailure::InvalidChain));
+        assert_eq!(
+            reduce_model_only(&records),
+            Err(ReductionFailure::InvalidChain)
+        );
     }
 
     #[test]
@@ -341,7 +353,10 @@ mod tests {
             event(1, 101, "a", 1, State::Intent, None, "ref-a"),
             event(2, 101, "b", 1, State::Intent, None, "ref-b"),
         ];
-        assert_eq!(reduce_model_only(&records), Err(ReductionFailure::DuplicateComment));
+        assert_eq!(
+            reduce_model_only(&records),
+            Err(ReductionFailure::DuplicateComment)
+        );
         records[1].comment_id = 102;
         records[1].position = 1;
         assert_eq!(
@@ -394,6 +409,9 @@ mod tests {
     #[test]
     fn incomplete_run_prefix_is_not_inferred_from_the_tail() {
         let records = [event(2, 102, "a", 2, State::Owned, Some(101), "shared")];
-        assert_eq!(reduce_model_only(&records), Err(ReductionFailure::InvalidChain));
+        assert_eq!(
+            reduce_model_only(&records),
+            Err(ReductionFailure::InvalidChain)
+        );
     }
 }
