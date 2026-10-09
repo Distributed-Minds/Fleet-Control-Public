@@ -106,14 +106,16 @@ fn compiled_binary_rejects_nonregular_symlink_and_oversized_fixture_files() {
         .unwrap();
     assert!(HISTORICAL.len() < LIMIT);
     exact.write_all(HISTORICAL.as_bytes()).unwrap();
-    exact.write_all(&vec![b' '; LIMIT - HISTORICAL.len()])
+    exact
+        .write_all(&vec![b' '; LIMIT - HISTORICAL.len()])
         .unwrap();
     drop(exact);
     let accepted = run_path(&exact_path);
-    assert!(accepted.status.success(), "8 MiB historical JSON was rejected: {accepted:?}");
     assert!(
-        String::from_utf8_lossy(&accepted.stdout).contains("26 cases passed")
+        accepted.status.success(),
+        "8 MiB historical JSON was rejected: {accepted:?}"
     );
+    assert!(String::from_utf8_lossy(&accepted.stdout).contains("26 cases passed"));
 
     // Directory and sparse oversized inputs must fail before JSON decoding.
     assert_denied(&run_path(&scratch));
