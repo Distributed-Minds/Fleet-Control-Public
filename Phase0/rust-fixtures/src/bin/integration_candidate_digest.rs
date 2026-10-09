@@ -306,8 +306,74 @@ fn admit_candidate_envelope(
     Ok(())
 }
 
+/// Admit the complete fixture shell before issuing a plausible identity
+/// receipt. The identity hash covers only the candidate envelope; it is not
+/// permission to omit surrounding fixture fields required by the semantic CLI.
+fn exact_fields(value: &Value, context: &str, fields: &[&str]) -> Result<(), String> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| format!("{context}: expected object"))?;
+    if object.len() != fields.len() || fields.iter().any(|field| !object.contains_key(*field)) {
+        return Err(format!("{context}: missing or undeclared field"));
+    }
+    Ok(())
+}
+
+fn admit_fixture_shell(root: &Value) -> Result<(), String> {
+    exact_fields(
+        root,
+        "fixture",
+        &["schema_version", "digest", "cases", "stale_head_cases"],
+    )?;
+    let stale = root["stale_head_cases"]
+        .as_array()
+        .ok_or("stale_head_cases must be an array")?;
+    if stale.len() != 2 {
+        return Err("missing or extra stale-head cases".to_owned());
+    }
+    let mut seen = HashSet::new();
+    for case in stale {
+        exact_fields(
+            case,
+            "stale-head case",
+            &[
+                "name",
+                "predicted_target",
+                "live_target",
+                "predicted_source",
+                "live_source",
+                "expect",
+            ],
+        )?;
+        let name = case["name"]
+            .as_str()
+            .ok_or("stale-head case name must be a string")?;
+        if !["target-moved", "source-moved"].contains(&name) || !seen.insert(name) {
+            return Err(format!("unknown or duplicate stale-head case: {name}"));
+        }
+        for field in [
+            "predicted_target",
+            "live_target",
+            "predicted_source",
+            "live_source",
+        ] {
+            if !case[field].as_str().is_some_and(git_object_id) {
+                return Err(format!("{name}: malformed stale-head Git ID: {field}"));
+            }
+        }
+        if !matches!(
+            case["expect"].as_str(),
+            Some("CURRENT" | "STALE_OR_INCOMPATIBLE")
+        ) {
+            return Err(format!("{name}: invalid stale-head expectation"));
+        }
+    }
+    Ok(())
+}
+
 fn candidate_ids(fixture_text: &str) -> Result<Vec<(String, String)>, String> {
     let StrictJson(root) = serde_json::from_str(fixture_text).map_err(|e| e.to_string())?;
+    admit_fixture_shell(&root)?;
     if root.get("schema_version").and_then(Value::as_str)
         != Some("integration-candidate-fixture-v1")
         || root.get("digest").and_then(Value::as_str) != Some("sha256")
@@ -330,6 +396,34 @@ fn candidate_ids(fixture_text: &str) -> Result<Vec<(String, String)>, String> {
     let mut seen = HashSet::new();
     let mut ids = Vec::with_capacity(cases.len());
     for case in cases {
+        exact_fields(
+            case,
+            "candidate case",
+            &["name", "constructor_support", "candidate", "expect"],
+        )?;
+        let support = case["constructor_support"]
+            .as_array()
+            .ok_or("constructor_support must be an array")?;
+        let mut seen_counts = HashSet::new();
+        if support.is_empty()
+            || support.iter().any(|value| {
+                value.as_u64().is_none_or(|count| count == 0)
+                    || !seen_counts.insert(value.as_u64().unwrap_or(0))
+            })
+        {
+            return Err("empty, invalid, or duplicate constructor cardinality".to_owned());
+        }
+        if !matches!(
+            case["expect"].as_str(),
+            Some(
+                "SUPPORTED"
+                    | "UNSUPPORTED_PARENT_CARDINALITY"
+                    | "SUPPORTED_DISTINCT_FROM:normal-two-parent"
+                    | "SUPPORTED_COMPATIBLE_WITH:normal-two-parent"
+            )
+        ) {
+            return Err("missing or unknown candidate expectation".to_owned());
+        }
         let name = case
             .get("name")
             .and_then(Value::as_str)
@@ -403,6 +497,58 @@ mod tests {
             sha256_hex(&vec![b'a'; 1_000_000]),
             "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0"
         );
+    }
+
+    #[test]
+    fn incomplete_or_forged_fixture_shell_cannot_receive_digest_receipts() {
+        let baseline: Value = serde_json::from_str(HISTORICAL).unwrap();
+        assert!(candidate_ids(HISTORICAL).is_ok());
+
+        let mut mutations = Vec::new();
+
+        let mut missing_stale = baseline.clone();
+        missing_stale
+            .as_object_mut()
+            .unwrap()
+            .remove("stale_head_cases");
+        mutations.push(("missing stale-head family", missing_stale));
+
+        let mut extra_root = baseline.clone();
+        extra_root["unreviewed"] = Value::Bool(true);
+        mutations.push(("unknown root field", extra_root));
+
+        let mut missing_expectation = baseline.clone();
+        missing_expectation["cases"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("expect");
+        mutations.push(("missing case verdict", missing_expectation));
+
+        let mut invalid_support = baseline.clone();
+        invalid_support["cases"][0]["constructor_support"] =
+            Value::Array(vec![Value::String("2".to_owned())]);
+        mutations.push(("coerced constructor cardinality", invalid_support));
+
+        let mut duplicated_stale = baseline.clone();
+        duplicated_stale["stale_head_cases"][1]["name"] =
+            duplicated_stale["stale_head_cases"][0]["name"].clone();
+        mutations.push(("duplicate stale-head ID", duplicated_stale));
+
+        let mut invalid_stale_git_id = baseline.clone();
+        invalid_stale_git_id["stale_head_cases"][0]["predicted_target"] =
+            Value::String("not-a-git-object-id".to_owned());
+        mutations.push(("invalid stale-head Git ID", invalid_stale_git_id));
+
+        let mut unexpected_case = baseline;
+        unexpected_case["cases"][0]["undeclared"] = Value::Bool(true);
+        mutations.push(("unknown candidate case field", unexpected_case));
+
+        for (name, mutation) in mutations {
+            assert!(
+                candidate_ids(&mutation.to_string()).is_err(),
+                "{name}: malformed fixture received candidate digests"
+            );
+        }
     }
 
     #[test]
