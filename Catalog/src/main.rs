@@ -106,8 +106,8 @@ where
 /// checked-in page must not follow an untracked filesystem symlink out of the
 /// project source directory (or silently accept a JSON-named directory).
 fn read_render_manifest(path: &Path) -> Result<String, String> {
-    let metadata =
-        fs::symlink_metadata(path).map_err(|error| format!("{}: {error}", diagnostic_path(&path)))?;
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| format!("{}: {error}", diagnostic_path(&path)))?;
     if !metadata.file_type().is_file() {
         return Err(format!(
             "{}: render source must be a regular file (symlinks prohibited)",
@@ -123,8 +123,8 @@ fn read_render_manifest(path: &Path) -> Result<String, String> {
 fn collect_render_manifests(project_dir: &Path) -> Result<Vec<std::path::PathBuf>, String> {
     validate_output_directory(project_dir)
         .map_err(|error| format!("{}: {error}", diagnostic_path(&project_dir)))?;
-    let entries =
-        fs::read_dir(project_dir).map_err(|error| format!("{}: {error}", diagnostic_path(&project_dir)))?;
+    let entries = fs::read_dir(project_dir)
+        .map_err(|error| format!("{}: {error}", diagnostic_path(&project_dir)))?;
     let mut paths = Vec::new();
     for entry in entries {
         let entry = entry.map_err(|error| format!("project directory entry: {error}"))?;
@@ -285,13 +285,17 @@ fn main() -> ExitCode {
                                     count += 1;
                                 }
                             }
-                            Err(error) => {
-                                errors.push(format!("{}: directory entry: {error}", diagnostic_path(&path)))
-                            }
+                            Err(error) => errors.push(format!(
+                                "{}: directory entry: {error}",
+                                diagnostic_path(&path)
+                            )),
                         }
                     }
                     if count == 0 {
-                        errors.push(format!("{}: no JSON manifests found", diagnostic_path(&path)));
+                        errors.push(format!(
+                            "{}: no JSON manifests found",
+                            diagnostic_path(&path)
+                        ));
                     }
                 }
                 Err(error) => errors.push(format!("{}: {error}", diagnostic_path(&path))),
@@ -308,7 +312,10 @@ fn main() -> ExitCode {
         // admission rule. This does not prevent concurrent path replacement.
         match fs::symlink_metadata(&path) {
             Ok(metadata) if metadata.file_type().is_symlink() => {
-                errors.push(format!("{}: symlinked manifest prohibited", diagnostic_path(&path)));
+                errors.push(format!(
+                    "{}: symlinked manifest prohibited",
+                    diagnostic_path(&path)
+                ));
                 continue;
             }
             Ok(metadata) if !metadata.file_type().is_file() => {
