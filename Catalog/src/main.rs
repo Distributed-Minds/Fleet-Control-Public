@@ -117,8 +117,8 @@ fn read_render_manifest(path: &Path) -> Result<String, String> {
 fn collect_render_manifests(project_dir: &Path) -> Result<Vec<std::path::PathBuf>, String> {
     validate_output_directory(project_dir)
         .map_err(|error| format!("{}: {error}", project_dir.display()))?;
-    let entries = fs::read_dir(project_dir)
-        .map_err(|error| format!("{}: {error}", project_dir.display()))?;
+    let entries =
+        fs::read_dir(project_dir).map_err(|error| format!("{}: {error}", project_dir.display()))?;
     let mut paths = Vec::new();
     for entry in entries {
         let entry = entry.map_err(|error| format!("project directory entry: {error}"))?;
@@ -499,7 +499,10 @@ mod render_manifest_file_admission_tests {
         fs::write(projects.join("a.json"), PILOT).expect("write first manifest");
         fs::write(projects.join("notes.txt"), "not a manifest").expect("write unrelated file");
         let files = super::collect_render_manifests(&projects).expect("admit real directory");
-        assert_eq!(files, vec![projects.join("a.json"), projects.join("z.json")]);
+        assert_eq!(
+            files,
+            vec![projects.join("a.json"), projects.join("z.json")]
+        );
     }
 
     #[test]
