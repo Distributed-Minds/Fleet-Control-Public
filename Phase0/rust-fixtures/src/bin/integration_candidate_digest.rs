@@ -206,17 +206,34 @@ fn admit_candidate_envelope(
     candidate: &serde_json::Map<String, Value>,
 ) -> Result<(), String> {
     const FIELDS: &[&str] = &[
-        "schema_version", "operation_kind", "target_commit", "source_commit",
-        "parents", "parent_count", "tree", "metadata", "constructor_version",
+        "schema_version",
+        "operation_kind",
+        "target_commit",
+        "source_commit",
+        "parents",
+        "parent_count",
+        "tree",
+        "metadata",
+        "constructor_version",
         "compatibility_basis",
     ];
     const TEXT: &[&str] = &[
-        "schema_version", "operation_kind", "target_commit", "source_commit",
-        "tree", "constructor_version", "compatibility_basis",
+        "schema_version",
+        "operation_kind",
+        "target_commit",
+        "source_commit",
+        "tree",
+        "constructor_version",
+        "compatibility_basis",
     ];
     const META: &[&str] = &[
-        "author", "author_time", "committer", "committer_time",
-        "message", "encoding", "signature_policy",
+        "author",
+        "author_time",
+        "committer",
+        "committer_time",
+        "message",
+        "encoding",
+        "signature_policy",
     ];
     if candidate.len() != FIELDS.len()
         || candidate.keys().any(|key| !FIELDS.contains(&key.as_str()))
@@ -237,7 +254,9 @@ fn admit_candidate_envelope(
         .as_array()
         .ok_or_else(|| format!("{name}: parents must be an array"))?;
     if parents.is_empty() || parents.iter().any(|parent| parent.as_str().is_none()) {
-        return Err(format!("{name}: parent identities must be nonempty strings"));
+        return Err(format!(
+            "{name}: parent identities must be nonempty strings"
+        ));
     }
     if candidate["parent_count"].as_u64() != Some(parents.len() as u64) {
         return Err(format!("{name}: parent_count does not match parents"));
@@ -251,7 +270,9 @@ fn admit_candidate_envelope(
             .iter()
             .any(|key| metadata.get(*key).and_then(Value::as_str).is_none())
     {
-        return Err(format!("{name}: missing, invalid, or undeclared metadata field"));
+        return Err(format!(
+            "{name}: missing, invalid, or undeclared metadata field"
+        ));
     }
     Ok(())
 }
@@ -465,17 +486,24 @@ mod tests {
         };
         let invalid: [fn(&mut Value); 9] = [
             |c| c["unexpected"] = Value::String("extra".into()),
-            |c| { c.as_object_mut().unwrap().remove("tree"); },
+            |c| {
+                c.as_object_mut().unwrap().remove("tree");
+            },
             |c| c["source_commit"] = Value::from(42),
             |c| c["schema_version"] = Value::String("not-supported".into()),
             |c| c["operation_kind"] = Value::String("fast-forward".into()),
             |c| c["parents"] = Value::String("not-an-array".into()),
             |c| c["parent_count"] = Value::from(1),
             |c| c["metadata"]["unexpected"] = Value::String("extra".into()),
-            |c| { c["metadata"].as_object_mut().unwrap().remove("author"); },
+            |c| {
+                c["metadata"].as_object_mut().unwrap().remove("author");
+            },
         ];
         for (index, edit) in invalid.into_iter().enumerate() {
-            assert!(mutate(edit).is_err(), "invalid envelope {index} received a digest");
+            assert!(
+                mutate(edit).is_err(),
+                "invalid envelope {index} received a digest"
+            );
         }
         assert!(candidate_ids(HISTORICAL).is_ok());
     }
