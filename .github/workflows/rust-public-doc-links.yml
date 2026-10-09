@@ -11,6 +11,7 @@ on:
       - README.md
       - CONTRIBUTING.md
       - GETTING-STARTED.md
+      - GLOSSARY.md
       - HELP-A-PROJECT.md
       - WORKFLOW-GUIDES.md
       - TROUBLESHOOTING.md
@@ -26,6 +27,7 @@ on:
       - README.md
       - CONTRIBUTING.md
       - GETTING-STARTED.md
+      - GLOSSARY.md
       - HELP-A-PROJECT.md
       - WORKFLOW-GUIDES.md
       - TROUBLESHOOTING.md
@@ -71,7 +73,7 @@ jobs:
           trap 'rm -rf -- "$fixture"; rm -f -- "$outside"' EXIT
           mkdir -p "$fixture/release-kit"
           for doc in \
-            README.md CONTRIBUTING.md GETTING-STARTED.md HELP-A-PROJECT.md WORKFLOW-GUIDES.md \
+            README.md CONTRIBUTING.md GETTING-STARTED.md GLOSSARY.md HELP-A-PROJECT.md WORKFLOW-GUIDES.md \
             TROUBLESHOOTING.md BRANDING.md \
             release-kit/README-FIRST.md release-kit/INSTALL-CHECKLIST.md; do
             : > "$fixture/$doc"
@@ -100,7 +102,7 @@ jobs:
           printf '%s\n' 'present' > "$fixture/target.md"
           printf '%s\n' '[valid](target.md)' '[external](https://example.org)' > "$fixture/README.md"
           "$binary" --root "$fixture" > "$fixture/cli-output.txt" 2>&1
-          grep -Fq 'Checked 2 local links across 9 documents; 0 errors' "$fixture/cli-output.txt"
+          grep -Fq 'Checked 2 local links across 10 documents; 0 errors' "$fixture/cli-output.txt"
 
           expect_rejected() {
             local label="$1" expected="$2" exit_code=0
@@ -126,6 +128,11 @@ jobs:
           printf '%s\n' '[broken-contributing](missing-contributing.md)' > "$fixture/CONTRIBUTING.md"
           expect_rejected missing-contributor-guide-target 'target missing'
           : > "$fixture/CONTRIBUTING.md"
+
+          # The existing public glossary is a required checked document.
+          printf '%s\n' '[missing-glossary](missing-glossary.md)' > "$fixture/GLOSSARY.md"
+          expect_rejected missing-glossary-target 'target missing'
+          : > "$fixture/GLOSSARY.md"
 
           printf '%s\n' '[missing](missing.md)' > "$fixture/README.md"
           expect_rejected missing-target 'target missing'

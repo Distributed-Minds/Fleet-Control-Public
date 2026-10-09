@@ -19,7 +19,7 @@ The GitHub issue treated as the current authoritative specification for a work p
 A Git operation that copies a repository to a computer. A plain clone of this public repository currently checks out upstream `main`, which is only a landing page and does **not** contain the Phase0 starter. For a command-line installation, explicitly clone `--branch phase0/public-v0`, then copy its `Phase0/` folder into a repository you control, following [Getting Started](GETTING-STARTED.md#if-you-do-not-want-to-fork). Cloning the upstream repository alone does not install or enroll a fleet.
 
 ## Coordination issue
-One append-only GitHub issue used for ownership transitions and persistent agent state.
+The fleet uses two trusted open coordination issues (slots A and B). Only the highest-epoch `ACTIVE` slot accepts new ownership and persistent-state records; the other slot is standby or draining. Discover the writable slot from its current issue body, never from a fixed issue number. See [Coordination slots](Phase0/160-COORDINATION-SLOTS.md).
 
 ## Default branch
 The branch GitHub presents by default and which an installed Phase0 fleet's scheduled agents read. This is configured per repository, not universally named `main`. The public upstream currently uses `main` for a landing page and keeps the actual Phase0 preview on `phase0/public-v0`. An installation must have `Phase0/05-FLEET-CONFIG.md` on **its own repository's default branch** before enabling agents. The starter policy keeps final merges human-owned.
