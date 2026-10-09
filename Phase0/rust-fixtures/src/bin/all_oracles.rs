@@ -79,7 +79,10 @@ enum Selection {
 // Aggregate status messages must not replay terminal-control characters from
 // untrusted arguments or child stderr. Bound raw scalar count before escaping.
 fn log_safe(raw: &str) -> String {
-    raw.chars().take(256).flat_map(char::escape_default).collect()
+    raw.chars()
+        .take(256)
+        .flat_map(char::escape_default)
+        .collect()
 }
 
 fn parse_args(args: &[String]) -> Result<(Selection, PathBuf), String> {
@@ -114,7 +117,12 @@ fn parse_args(args: &[String]) -> Result<(Selection, PathBuf), String> {
                 }
                 root = PathBuf::from(value);
             }
-            unknown => return Err(format!("unknown or repeated argument: {}", log_safe(unknown))),
+            unknown => {
+                return Err(format!(
+                    "unknown or repeated argument: {}",
+                    log_safe(unknown)
+                ))
+            }
         }
         i += 1;
     }
@@ -518,15 +526,15 @@ mod tests {
         assert!(rendered.contains(r"\u{202e}"));
         assert!(!rendered.chars().any(char::is_control));
 
-        let error = options(&["--unknown\nPASS forged\r\u{1b}"])
-            .expect_err("malicious option must fail");
+        let error =
+            options(&["--unknown\nPASS forged\r\u{1b}"]).expect_err("malicious option must fail");
         assert!(error.contains(r"\nPASS forged"));
         assert!(!error.contains('\n'));
         assert!(!error.contains('\r'));
         assert!(!error.contains('\u{1b}'));
 
-        let family_error = options(&["--family", "bogus\nPASS forged"])
-            .expect_err("unknown family must fail");
+        let family_error =
+            options(&["--family", "bogus\nPASS forged"]).expect_err("unknown family must fail");
         assert!(family_error.contains(r"\nPASS forged"));
         assert!(!family_error.contains('\n'));
         assert_eq!(log_safe(&"X".repeat(400)).len(), 256);
