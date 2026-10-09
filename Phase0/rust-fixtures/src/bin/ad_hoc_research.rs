@@ -623,7 +623,7 @@ fn read_fixture_with_metadata(path: &Path, before: &fs::Metadata) -> Result<Stri
 
 fn read_fixture_bounded(path: &Path) -> Result<String, String> {
     let before =
-        fs::symlink_metadata(path).map_err(|error| format!("cannot stat {path:?}: {error}"))?;
+        fs::symlink_metadata(path).map_err(|error| format!("cannot read {path:?}: {error}"))?;
     read_fixture_with_metadata(path, &before)
 }
 
