@@ -292,8 +292,14 @@ mod tests {
         // These chars are not all Rust control characters. Keep expected
         // transitions unchanged while mutating only one identifier at a time.
         for hidden in [
-            "\u{00AD}", "\u{034F}", "\u{061C}", "\u{200B}",
-            "\u{202E}", "\u{2060}", "\u{FE0F}", "\u{FEFF}",
+            "\u{00AD}",
+            "\u{034F}",
+            "\u{061C}",
+            "\u{200B}",
+            "\u{202E}",
+            "\u{2060}",
+            "\u{FE0F}",
+            "\u{FEFF}",
             "\u{E0100}",
         ] {
             let base = [
