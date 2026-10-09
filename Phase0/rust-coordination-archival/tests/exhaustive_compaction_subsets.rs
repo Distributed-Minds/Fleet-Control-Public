@@ -129,8 +129,7 @@ fn witness(record: &ReplayRecord) -> DeleteWitness {
 
 #[test]
 fn every_candidate_subset_retains_exactly_the_unselected_live_records() {
-    let expected_history: Vec<_> =
-        (FIRST..=FIRST + OVERLAP as u64 + 1).map(record).collect();
+    let expected_history: Vec<_> = (FIRST..=FIRST + OVERLAP as u64 + 1).map(record).collect();
     for mask in 0..(1_usize << OVERLAP) {
         let selected: Vec<_> = (0..OVERLAP)
             .filter(|index| mask & (1_usize << *index) != 0)
