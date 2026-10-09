@@ -10,11 +10,11 @@
 use std::env;
 use std::fs;
 use std::io::Read;
-use std::process::ExitCode;
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
 #[cfg(target_os = "linux")]
 use std::os::unix::fs::OpenOptionsExt;
+use std::process::ExitCode;
 
 const TITLE: &str = "[fleet-control] coordination";
 const MARKER: &str = "FLEET_COORDINATION_V1";
@@ -174,10 +174,7 @@ fn select_active(records: [Observation<'_>; 2], trusted: &str) -> Result<SlotRec
     }
 }
 
-fn read_body_with_observed_metadata(
-    path: &str,
-    metadata: &fs::Metadata,
-) -> Result<String, String> {
+fn read_body_with_observed_metadata(path: &str, metadata: &fs::Metadata) -> Result<String, String> {
     if !metadata.file_type().is_file() {
         return Err("coordination body must be a regular, non-symlink file".to_owned());
     }
@@ -457,10 +454,8 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn renamed_regular_file_after_observation_is_not_trusted() {
-        let scratch = std::env::temp_dir().join(format!(
-            "free-energy-slot-open-swap-{}",
-            std::process::id()
-        ));
+        let scratch =
+            std::env::temp_dir().join(format!("free-energy-slot-open-swap-{}", std::process::id()));
         fs::create_dir_all(&scratch).expect("create isolated test directory");
         let source = scratch.join("slot-body");
         let replacement = scratch.join("replacement-body");
