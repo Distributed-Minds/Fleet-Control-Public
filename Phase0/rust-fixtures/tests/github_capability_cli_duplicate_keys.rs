@@ -45,16 +45,9 @@ fn compiled_cli_rejects_duplicate_decoded_json_members_at_every_depth() {
         r#"{{"spec":5,{}"#,
         canonical.strip_prefix('{').expect("fixture object")
     );
-    let nested = canonical.replacen(
-        r#""lineage":"#,
-        r#""lineage":"unknown","lineage":"#,
-        1,
-    );
-    let escaped_alias = canonical.replacen(
-        r#""lineage":"#,
-        r#""\u006cineage":"unknown","lineage":"#,
-        1,
-    );
+    let nested = canonical.replacen(r#""lineage":"#, r#""lineage":"unknown","lineage":"#, 1);
+    let escaped_alias =
+        canonical.replacen(r#""lineage":"#, r#""\u006cineage":"unknown","lineage":"#, 1);
 
     for (label, raw) in [
         ("top-level", top_level),
