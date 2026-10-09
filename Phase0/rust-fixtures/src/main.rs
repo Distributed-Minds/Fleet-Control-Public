@@ -323,6 +323,32 @@ const REQUIRED_TRACE_CASE_IDS: &[&str] = &[
     "secondary-harm-preserved",
 ];
 
+// Fixture identities are machine tokens and may appear in diagnostics.
+// Keep visible international text, but reject record separators and invisible
+// formatting that would make two different case IDs look identical.
+fn valid_case_id(id: &str) -> bool {
+    !id.is_empty()
+        && !id.chars().any(|ch| {
+            ch.is_control()
+                || ch.is_whitespace()
+                || matches!(
+                    ch,
+                    '\u{00ad}'
+                        | '\u{034f}'
+                        | '\u{061c}'
+                        | '\u{180e}'
+                        | '\u{200b}'..='\u{200f}'
+                        | '\u{202a}'..='\u{202e}'
+                        | '\u{2060}'..='\u{206f}'
+                        | '\u{fe00}'..='\u{fe0f}'
+                        | '\u{feff}'
+                        | '\u{e0001}'
+                        | '\u{e0020}'..='\u{e007f}'
+                        | '\u{e0100}'..='\u{e01ef}'
+                )
+        })
+}
+
 fn require_historical_case_ids<'a>(
     family: &str,
     expected_ids: &[&str],
@@ -380,8 +406,8 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
     let mut ids = HashSet::new();
 
     for c in &f.decision_cases {
-        if c.id.trim().is_empty() || !ids.insert(c.id.as_str()) {
-            failures.push(format!("duplicate or empty case id: {}", c.id));
+        if !valid_case_id(&c.id) || !ids.insert(c.id.as_str()) {
+            failures.push(format!("invalid or duplicate case id: {:?}", c.id));
         }
         match decide(c) {
             Ok(actual) if actual == c.expected => {}
@@ -393,8 +419,8 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
         }
     }
     for c in &f.recovery_cases {
-        if c.id.trim().is_empty() || !ids.insert(c.id.as_str()) {
-            failures.push(format!("duplicate or empty case id: {}", c.id));
+        if !valid_case_id(&c.id) || !ids.insert(c.id.as_str()) {
+            failures.push(format!("invalid or duplicate case id: {:?}", c.id));
         }
         let actual = recover(c);
         if actual != c.expected {
@@ -405,8 +431,8 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
         }
     }
     for c in &f.trace_cases {
-        if c.id.trim().is_empty() || !ids.insert(c.id.as_str()) {
-            failures.push(format!("duplicate or empty case id: {}", c.id));
+        if !valid_case_id(&c.id) || !ids.insert(c.id.as_str()) {
+            failures.push(format!("invalid or duplicate case id: {:?}", c.id));
         }
         match trace(c) {
             Ok(actual) if actual == c.expected => {}
@@ -467,6 +493,45 @@ mod tests {
 
     fn original() -> Value {
         serde_json::from_str(BASELINE).expect("historical fixture is valid JSON")
+    }
+
+    #[test]
+    fn hostile_case_ids_fail_closed_without_injected_log_records() {
+        for family in ["decision_cases", "recovery_cases", "trace_cases"] {
+            for hostile_id in [
+                "new\nPASS forged",
+                "new\rPASS forged",
+                "new\u{200b}hidden",
+                "new\u{202e}reversed",
+                "new\u{e0020}tagged",
+            ] {
+                let mut changed = original();
+                let mut additional = changed[family][0].clone();
+                additional["id"] = json!(hostile_id);
+                changed[family].as_array_mut().unwrap().push(additional);
+                let errors = validate(&fixture(changed)).expect_err("hostile ID was accepted");
+                assert!(
+                    errors.iter().any(|error| error.contains("invalid or duplicate case id")),
+                    "{family}: missing explicit identity denial: {errors:?}"
+                );
+                assert!(
+                    errors.iter().all(|error| !error.contains('\n') && !error.contains('\r')),
+                    "{family}: diagnostic injected a second line: {errors:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn visible_international_case_ids_remain_valid() {
+        let mut changed = original();
+        let mut additional = changed["decision_cases"][0].clone();
+        additional["id"] = json!("zusätzlicher-fall");
+        changed["decision_cases"]
+            .as_array_mut()
+            .unwrap()
+            .push(additional);
+        assert_eq!(validate(&fixture(changed)), Ok(36));
     }
 
     #[test]
