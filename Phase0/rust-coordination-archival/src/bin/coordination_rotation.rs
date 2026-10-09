@@ -50,8 +50,12 @@ fn assess(o: Observation) -> Result<Decision, &'static str> {
     if o.hard_limit == 0 {
         return Err("hard limit must be positive");
     }
-    if o.switch_at == 0 || o.switch_at >= o.hard_limit {
-        return Err("switch threshold must precede the hard limit");
+    // The installed two-slot policy permits proactive switches only in the
+    // inclusive 100..=2400 window (GitHub hard limit: 2,500 comments).
+    // Accepting a later caller-supplied threshold would advertise headroom
+    // after the configured safe rotation window had already expired.
+    if !(100..=2400).contains(&o.switch_at) || o.switch_at >= o.hard_limit {
+        return Err("switch threshold must be 100..=2400 and precede the hard limit");
     }
     if o.standby_max >= o.hard_limit {
         return Err("standby maximum must be below the hard limit");
@@ -299,6 +303,42 @@ mod tests {
             assert!(preflight(&argv(input)).is_err());
         }
         assert!(preflight(&[]).is_err());
+    }
+
+    #[test]
+    fn installed_switch_window_rejects_unsafe_caller_thresholds() {
+        // The provider limit is not a license to defer the configured
+        // switch beyond the installed policy's 2,400-comment maximum.
+        for threshold in [0, 1, 99, 2401, 2499, u64::MAX] {
+            let mut o = snapshot(0);
+            o.switch_at = threshold;
+            o.standby_max = 0;
+            o.other_count = 0;
+            assert!(
+                assess(o).is_err(),
+                "out-of-policy switch threshold {threshold} was admitted"
+            );
+        }
+
+        // Both inclusive policy boundaries remain valid with a suitably
+        // empty successor slot and a bounded write batch.
+        for threshold in [100, 2400] {
+            let mut o = snapshot(0);
+            o.switch_at = threshold;
+            o.standby_max = 0;
+            o.other_count = 0;
+            o.pending_upper_bound = 1;
+            o.reserve = 0;
+            assert_eq!(assess(o), Ok(Decision::Headroom { remaining: 2500 }));
+        }
+
+        // The provider's observed hard limit must still exceed the switch.
+        let mut o = snapshot(0);
+        o.hard_limit = 100;
+        o.switch_at = 100;
+        o.standby_max = 0;
+        o.other_count = 0;
+        assert!(assess(o).is_err());
     }
 
     #[test]
