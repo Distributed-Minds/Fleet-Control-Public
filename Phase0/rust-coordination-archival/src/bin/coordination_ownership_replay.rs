@@ -15,7 +15,13 @@
 //! Exit 1 means the input or reduction is invalid. No files are modified.
 
 use free_energy_coordination_archival::ownership::{reduce_model_only, Scope, State, Transition};
-use std::{env, fs::File, io::Read, path::Path, process::ExitCode};
+use std::{
+    env,
+    fs::{self, File},
+    io::Read,
+    path::Path,
+    process::ExitCode,
+};
 
 const MAX_INPUT_BYTES: u64 = 16 * 1024 * 1024;
 
@@ -98,7 +104,35 @@ fn parse_transcript(input: &str) -> Result<Vec<Transition>, String> {
 }
 
 fn read_bounded(path: &Path) -> Result<String, String> {
+    // A byte limit does not protect an offline CLI from opening a FIFO, device,
+    // directory or caller-controlled symlink. This is not provider admission.
+    let before = fs::symlink_metadata(path)
+        .map_err(|error| format!("cannot inspect {path:?}: {error}"))?;
+    if !before.file_type().is_file() {
+        return Err("transcript must be a regular non-symlink file".to_owned());
+    }
+    if before.len() > MAX_INPUT_BYTES {
+        return Err("transcript exceeds the 16 MiB model limit".to_owned());
+    }
+
     let file = File::open(path).map_err(|error| format!("cannot open {path:?}: {error}"))?;
+    let opened = file
+        .metadata()
+        .map_err(|error| format!("cannot inspect opened {path:?}: {error}"))?;
+    if !opened.is_file() {
+        return Err("opened transcript is not a regular file".to_owned());
+    }
+    // An attacker may replace the directory entry after the preflight. Bind
+    // the opened descriptor to the observed inode on Unix, failing closed on
+    // replacement. This is not a general atomic/no-follow open guarantee.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if before.dev() != opened.dev() || before.ino() != opened.ino() {
+            return Err("transcript identity changed between inspection and open".to_owned());
+        }
+    }
+
     let mut bytes = Vec::new();
     file.take(MAX_INPUT_BYTES + 1)
         .read_to_end(&mut bytes)
@@ -238,4 +272,54 @@ mod tests {
             Err(ReductionFailure::DuplicateComment)
         );
     }
+    #[test]
+    fn reader_admits_only_bounded_regular_transcripts() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock")
+            .as_nanos();
+        let directory = env::temp_dir().join(format!(
+            "free-energy-ownership-replay-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir(&directory).expect("temporary directory");
+        let regular = directory.join("valid.tsv");
+        fs::write(&regular, TRANSCRIPT).expect("regular transcript");
+        assert_eq!(
+            read_bounded(&regular).expect("regular bounded transcript"),
+            TRANSCRIPT
+        );
+        let events = parse_transcript(&read_bounded(&regular).unwrap()).unwrap();
+        assert_eq!(reduce_model_only(&events).unwrap().len(), 1);
+
+        assert!(
+            read_bounded(&directory)
+                .expect_err("directory must be denied")
+                .contains("regular non-symlink")
+        );
+
+        let oversized = directory.join("oversized.tsv");
+        File::create(&oversized)
+            .expect("sparse fixture")
+            .set_len(MAX_INPUT_BYTES + 1)
+            .expect("oversized sparse fixture");
+        assert!(
+            read_bounded(&oversized)
+                .expect_err("oversized file must be denied")
+                .contains("16 MiB")
+        );
+
+        #[cfg(unix)]
+        {
+            let alias = directory.join("alias.tsv");
+            std::os::unix::fs::symlink(&regular, &alias).expect("symlink fixture");
+            assert!(
+                read_bounded(&alias)
+                    .expect_err("symlink must be denied")
+                    .contains("regular non-symlink")
+            );
+        }
+        fs::remove_dir_all(directory).expect("cleanup temporary fixtures");
+    }
+
 }
