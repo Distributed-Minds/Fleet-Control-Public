@@ -23,6 +23,7 @@ fn event(position: u64, kind: u8) -> ReplayRecord {
         payload_digest: [kind; 32],
         order_basis: order_basis(),
         source_incarnation: "live-provider-incarnation-4".to_owned(),
+        source_version: "fixture-version-v1".to_owned(),
     }
 }
 

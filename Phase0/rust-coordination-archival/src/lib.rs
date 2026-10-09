@@ -269,6 +269,8 @@ pub struct ReplayRecord {
     pub payload_digest: [u8; 32],
     pub order_basis: Basis,
     pub source_incarnation: String,
+    /// Exact source-record version/ETag, separate from the payload digest.
+    pub source_version: String,
 }
 
 #[derive(Debug, Clone)]
@@ -319,6 +321,7 @@ pub fn replay(
     let mut by_identity = HashMap::<&str, u64>::new();
     for record in archived.iter().chain(live) {
         if !named(&record.stable_id)
+            || !named(&record.source_version)
             || record.order_basis != cut.ordering
             || record.source_incarnation != cut.source_incarnation
         {
@@ -1009,6 +1012,7 @@ mod tests {
             payload_digest: [sequence as u8; 32],
             order_basis: basis("order-O1"),
             source_incarnation: "live-1".into(),
+            source_version: "fixture-version-v1".to_owned(),
         }
     }
 

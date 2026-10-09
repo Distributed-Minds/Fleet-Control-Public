@@ -113,6 +113,7 @@ pub fn plan_compaction(
         }
         let record = &live[index];
         if record.source_incarnation != source.incarnation
+            || record.source_version != source.version
             || record.payload_digest != source.content_digest
             || record.order_basis != cut.ordering
             || witness.ordering.basis != cut.ordering
@@ -203,6 +204,7 @@ mod tests {
             payload_digest: [sequence as u8; 32],
             order_basis: basis("provider-order"),
             source_incarnation: "live-v2".into(),
+            source_version: "fixture-version-v1".to_owned(),
         }
     }
 
@@ -225,7 +227,7 @@ mod tests {
         let source = Source {
             record_id: record.stable_id.clone(),
             incarnation: record.source_incarnation.clone(),
-            version: format!("etag-{}", record.sequence),
+            version: record.source_version.clone(),
             content_digest: record.payload_digest,
         };
         let manifest = basis("manifest-current");
@@ -321,6 +323,43 @@ mod tests {
         );
         assert_eq!(live.len(), 3);
         assert_eq!(archived.len(), 3);
+    }
+
+    #[test]
+    fn source_version_replacement_blocks_replay_and_archival_removal() {
+        let (archived, live) = histories();
+        let mut forged = witness(&live[0]);
+        // All witness copies agree on the forged version. Source-history
+        // equality must still reject a same-bytes record replacement.
+        forged.observed_source.version = "etag-replaced-with-same-bytes".into();
+        forged.archive.source.version = forged.observed_source.version.clone();
+        forged.authority.source.version = forged.observed_source.version.clone();
+        assert_eq!(evaluate(&forged), Verdict::EligibleModelOnly);
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[forged]),
+            Err(PlanFailure::InconsistentWitness)
+        );
+
+        let mut replaced_live = live.clone();
+        replaced_live[0].source_version = "etag-replaced-with-same-bytes".into();
+        assert_eq!(
+            replay(&archived, &replaced_live, &cut()),
+            Err(ReplayFailure::ConflictingDuplicate),
+            "same digest and incarnation cannot conceal source version movement"
+        );
+        assert_eq!(
+            plan_compaction(&archived, &replaced_live, &cut(), &[]),
+            Err(PlanFailure::UntrustedHistory(
+                ReplayFailure::ConflictingDuplicate
+            ))
+        );
+
+        let mut missing_version = live.clone();
+        missing_version[0].source_version.clear();
+        assert_eq!(
+            replay(&archived, &missing_version, &cut()),
+            Err(ReplayFailure::UntrustedCut)
+        );
     }
 
     #[test]

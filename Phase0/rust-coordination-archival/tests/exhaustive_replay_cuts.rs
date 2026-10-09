@@ -26,6 +26,7 @@ fn record(index: usize) -> ReplayRecord {
         payload_digest: [(index + 1) as u8; 32],
         order_basis: basis(),
         source_incarnation: "source-generation-9".to_owned(),
+        source_version: "fixture-version-v1".to_owned(),
     }
 }
 

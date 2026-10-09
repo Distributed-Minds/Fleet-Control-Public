@@ -20,6 +20,7 @@ fn record(id: &str, sequence: u64) -> ReplayRecord {
         payload_digest: [sequence as u8; 32],
         order_basis: basis("authoritative-order"),
         source_incarnation: "live-generation-2".into(),
+        source_version: "fixture-version-v1".to_owned(),
     }
 }
 
@@ -49,7 +50,7 @@ fn witness(record: &ReplayRecord) -> DeleteWitness {
     let source = Source {
         record_id: record.stable_id.clone(),
         incarnation: record.source_incarnation.clone(),
-        version: format!("etag-{}", record.sequence),
+        version: record.source_version.clone(),
         content_digest: record.payload_digest,
     };
     let manifest = basis("unique-manifest");

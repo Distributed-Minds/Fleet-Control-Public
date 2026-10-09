@@ -14,6 +14,7 @@ fn record(sequence: u64) -> ReplayRecord {
             generation: 9,
         },
         source_incarnation: "live-store-incarnation-4".into(),
+        source_version: "fixture-version-v1".to_owned(),
     }
 }
 

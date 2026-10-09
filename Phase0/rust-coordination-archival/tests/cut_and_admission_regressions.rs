@@ -347,6 +347,7 @@ fn record(id: &str, position: u64) -> ReplayRecord {
         payload_digest: [(position & 255) as u8; 32],
         order_basis: basis("ordered", 7),
         source_incarnation: "live-1".into(),
+        source_version: "fixture-version-v1".to_owned(),
     }
 }
 

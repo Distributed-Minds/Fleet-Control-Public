@@ -21,6 +21,7 @@ fn record(sequence: u64) -> ReplayRecord {
         payload_digest: [sequence as u8; 32],
         order_basis: basis(),
         source_incarnation: "live-incarnation-9".to_owned(),
+        source_version: "fixture-version-v1".to_owned(),
     }
 }
 
