@@ -1,8 +1,8 @@
 # Phase0 Coordination Protocol
 
-The fleet coordinates through exactly one append-only GitHub issue.
+The fleet coordinates through two designated GitHub issues; exactly one is ACTIVE for writing. Follow [the two-slot protocol](160-COORDINATION-SLOTS.md) to discover the live issue and understand rotation and archival.
 
-Find it by title and body marker from `05-FLEET-CONFIG.md`; do not hard-code an issue number.
+Find both by title, first-line body marker, and trusted issue author from `05-FLEET-CONFIG.md`; do not hard-code issue numbers. During a flip, if both say ACTIVE, the higher epoch is live.
 
 ## Bootstrap
 
