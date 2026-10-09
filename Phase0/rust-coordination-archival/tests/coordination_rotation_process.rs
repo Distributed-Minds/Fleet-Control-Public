@@ -150,7 +150,11 @@ fn malformed_arguments_and_overflow_fail_at_real_process_boundary() {
     overflow[8] = "18446744073709551616";
     assert_denied(&overflow, 2, "CAPACITY_UNKNOWN pending-upper-bound exceeds");
     overflow[8] = "18446744073709551615";
-    assert_denied(&overflow, 2, "CAPACITY_UNKNOWN pending and reserve budget overflow;");
+    assert_denied(
+        &overflow,
+        2,
+        "CAPACITY_UNKNOWN pending and reserve budget overflow;",
+    );
 }
 
 #[test]
@@ -158,7 +162,10 @@ fn raising_the_declared_batch_budget_never_recovers_success() {
     for pending in ["8", "10", "100", "2000", "18446744073709551615"] {
         let args = snapshot("1990", "STANDBY", "300", pending, "2");
         let result = run(&args);
-        assert!(!result.status.success(), "budget restored success: {pending}");
+        assert!(
+            !result.status.success(),
+            "budget restored success: {pending}"
+        );
         assert!(
             result.stdout.is_empty(),
             "budget emitted success text: {pending}"
