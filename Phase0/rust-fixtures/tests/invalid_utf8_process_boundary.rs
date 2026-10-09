@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 static NEXT_FILE: AtomicUsize = AtomicUsize::new(0);
 
-const FILE_CLIS: [(&str, &str); 9] = [
+const FILE_CLIS: [(&str, &str); 10] = [
     (
         "containment",
         env!("CARGO_BIN_EXE_free-energy-phase0-fixtures"),
@@ -28,6 +28,10 @@ const FILE_CLIS: [(&str, &str); 9] = [
     ),
     ("github_capability", env!("CARGO_BIN_EXE_github_capability")),
     (
+        "merge_base_topology",
+        env!("CARGO_BIN_EXE_merge_base_topology"),
+    ),
+    (
         "integration_candidate",
         env!("CARGO_BIN_EXE_integration_candidate"),
     ),
@@ -38,13 +42,16 @@ const FILE_CLIS: [(&str, &str); 9] = [
 ];
 
 #[test]
-fn all_nine_external_fixture_clis_reject_non_utf8_input_without_success_output() {
+fn every_external_fixture_cli_rejects_malformed_input_without_false_success() {
     for (family, binary) in FILE_CLIS {
-        // A raw invalid byte and an incomplete multibyte sequence must each
-        // fail before a semantic fixture can be accepted as historical proof.
+        // Cover all ten file-driven binaries, including merge-base-topology.
+        // Reject broken encoding, incomplete JSON and trailing junk before
+        // accepting any fixture as historical evidence.
         for (label, data) in [
             ("invalid-byte", &[b'{', 0xff, b'}'][..]),
             ("truncated-sequence", &[b'{', 0xc3][..]),
+            ("truncated-json", &b"{\"cases\":["[..]),
+            ("trailing-garbage", &b"{}unexpected"[..]),
         ] {
             let index = NEXT_FILE.fetch_add(1, Ordering::Relaxed);
             let path = std::env::temp_dir().join(format!(
@@ -67,7 +74,7 @@ fn all_nine_external_fixture_clis_reject_non_utf8_input_without_success_output()
 
             assert!(
                 !output.status.success(),
-                "{family}/{label} accepted invalid UTF-8; stdout: {}",
+                "{family}/{label} accepted malformed fixture bytes; stdout: {}",
                 String::from_utf8_lossy(&output.stdout)
             );
             assert!(
