@@ -5,12 +5,8 @@
 //! Inputs are synthetic, not authenticated GitHub evidence. Successful tests
 //! do NOT authorize a provider mutation or prove historical Python parity.
 
-use free_energy_coordination_archival::ownership::{
-    reduce_model_only, Scope, State, Transition,
-};
-use free_energy_coordination_archival::{
-    replay, Basis, ReplayCut, ReplayFailure, ReplayRecord,
-};
+use free_energy_coordination_archival::ownership::{reduce_model_only, Scope, State, Transition};
+use free_energy_coordination_archival::{replay, Basis, ReplayCut, ReplayFailure, ReplayRecord};
 
 fn transition(
     position: u64,
