@@ -156,7 +156,7 @@ fn rust_recomputes_topology_and_rejects_mutated_witnesses() {
     check_rust("false history drift", &bad_drift, false);
 
     let mut duplicate_base = original.clone();
-    case(&mut duplicate_base, "multiple-complete")["bases"] = json!(["b1", "b1"]);
+    case(&mut duplicate_base, "multiple-complete")["bases"] = json!(["b2", "b1", "b1"]);
     check_rust("duplicate base identity", &duplicate_base, false);
 
     let mut truncated = original;
@@ -200,7 +200,7 @@ fn historical_python_and_rust_expose_shared_semantics_and_strict_admission_diffe
     // Historical Python deduplicates bases and never pins case cardinality.
     // Rust deliberately rejects these while retaining the original valid suite.
     let mut duplicate_base = original.clone();
-    case(&mut duplicate_base, "multiple-complete")["bases"] = json!(["b1", "b1"]);
+    case(&mut duplicate_base, "multiple-complete")["bases"] = json!(["b2", "b1", "b1"]);
     check_both("duplicate base", &duplicate_base, true, false);
 
     let mut truncated = original.clone();
