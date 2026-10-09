@@ -394,9 +394,11 @@ mod tests {
     fn incomplete_order_or_duplicate_comment_is_not_authoritative() {
         let repeated_position =
             format!("{TRANSCRIPT}3\t104\trun-b\t1\tINTENT\t-\t22\t-\tbranch-b\tseam-b\n");
-        assert_eq!(
-            reduce_model_only(&parse_transcript(&repeated_position).unwrap()),
-            Err(ReductionFailure::UnorderedOrIncomplete)
+        assert!(
+            parse_transcript(&repeated_position)
+                .unwrap_err()
+                .contains("expected contiguous certified position 4"),
+            "missing or repeated transcript position must fail at the input boundary"
         );
         let repeated_id =
             format!("{TRANSCRIPT}4\t103\trun-b\t1\tINTENT\t-\t22\t-\tbranch-b\tseam-b\n");
