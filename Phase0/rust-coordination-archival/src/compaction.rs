@@ -427,7 +427,9 @@ mod tests {
         live.push(record("r11", 11));
         assert_eq!(
             plan_compaction(&archived, &live, &cut(), &[first]),
-            Err(PlanFailure::MissingOrAmbiguousLiveRecord)
+            Err(PlanFailure::UntrustedHistory(
+                ReplayFailure::ConflictingDuplicate
+            ))
         );
     }
 
