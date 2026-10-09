@@ -13,6 +13,7 @@ use serde_json::{json, Value};
 use std::{
     collections::HashSet,
     env, fs,
+    io::Read,
     path::{Path, PathBuf},
     process::ExitCode,
 };
@@ -187,6 +188,13 @@ where
         .collect())
 }
 
+// Match the 1 MiB per-manifest input budget of the catalog validate/render CLI.
+// This limits an individual explain input, not aggregate memory across a batch.
+const MAX_EXPLAIN_MANIFEST_BYTES: u64 = 1024 * 1024;
+// Bound retained input memory and argument fan-out independently of per-file size.
+const MAX_EXPLAIN_BATCH_BYTES: usize = 16 * 1024 * 1024;
+const MAX_EXPLAIN_BATCH_FILES: usize = 256;
+
 /// Reject symlinks and directories before reading. This does not pretend to
 /// defend against a privileged concurrent replacement of the same pathname.
 fn read_file(path: &Path) -> Result<String, String> {
@@ -211,7 +219,36 @@ fn read_file(path: &Path) -> Result<String, String> {
             "{path:?}: expected a regular non-symlink JSON file"
         ));
     }
-    fs::read_to_string(path).map_err(|error| format!("{path:?}: {error}"))
+    if metadata.len() > MAX_EXPLAIN_MANIFEST_BYTES {
+        return Err(format!("{path:?}: manifest exceeds 1 MiB input limit"));
+    }
+    let file = fs::File::open(path).map_err(|error| format!("{path:?}: {error}"))?;
+    let opened = file
+        .metadata()
+        .map_err(|error| format!("{path:?}: {error}"))?;
+    if !opened.file_type().is_file() {
+        return Err(format!("{path:?}: opened manifest is not a regular file"));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if metadata.dev() != opened.dev() || metadata.ino() != opened.ino() {
+            return Err(format!(
+                "{path:?}: manifest changed between preflight and open"
+            ));
+        }
+    }
+    if opened.len() > MAX_EXPLAIN_MANIFEST_BYTES {
+        return Err(format!("{path:?}: manifest exceeds 1 MiB input limit"));
+    }
+    let mut bytes = Vec::new();
+    file.take(MAX_EXPLAIN_MANIFEST_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("{path:?}: {error}"))?;
+    if bytes.len() as u64 > MAX_EXPLAIN_MANIFEST_BYTES {
+        return Err(format!("{path:?}: manifest exceeds 1 MiB input limit"));
+    }
+    String::from_utf8(bytes).map_err(|error| format!("{path:?}: {error}"))
 }
 
 fn execute(args: Vec<PathBuf>) -> Result<String, Vec<String>> {
@@ -221,12 +258,29 @@ fn execute(args: Vec<PathBuf>) -> Result<String, Vec<String>> {
         ]);
     }
 
+    if args.len() > MAX_EXPLAIN_BATCH_FILES {
+        return Err(vec![format!(
+            "manifest batch has {} inputs (maximum {MAX_EXPLAIN_BATCH_FILES})",
+            args.len()
+        )]);
+    }
+
     let mut files = Vec::new();
     let mut errors = Vec::new();
+    let mut batch_bytes = 0usize;
     for path in args {
         let filename = path.to_string_lossy().into_owned();
         match read_file(&path) {
-            Ok(text) => files.push((filename, text)),
+            Ok(text) => {
+                if text.len() > MAX_EXPLAIN_BATCH_BYTES.saturating_sub(batch_bytes) {
+                    errors.push(format!(
+                        "{path:?}: manifest batch exceeds 16 MiB cumulative input limit"
+                    ));
+                    break;
+                }
+                batch_bytes += text.len();
+                files.push((filename, text));
+            }
             Err(error) => errors.push(error),
         }
     }
