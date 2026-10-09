@@ -217,6 +217,38 @@ fn evaluate(case: &Map<String, Value>) -> Result<(String, Value), String> {
     if no(case, "lineage_protocol_compatible") && yes(case, "mutation_requested") {
         return Ok(verdict("FAIL_CLOSED_UNTIL_COMPATIBLE"));
     }
+    // Explicit denials and reconciliation obligations outrank independent
+    // positive composition, handoff, cycle and closure claims. A mixed input
+    // must never mint BOUNDED_AUTHORITY from revoked or fenced roots.
+    if yes(case, "cancel_ack_lost") && no(case, "authoritative_state_known") {
+        return Ok(verdict("READBACK_FIRST"));
+    }
+    if yes(case, "locator_reused") && no(case, "same_incarnation") {
+        return Ok(verdict("DO_NOT_CANCEL_REPLACEMENT"));
+    }
+    if yes(case, "external_deletion") && no(case, "closure_caused_deletion") {
+        return Ok(verdict("NO_CAUSAL_CLAIM"));
+    }
+    if yes(case, "cleanup_consequential") && no(case, "recovery_authority") {
+        return Ok(verdict("DENY"));
+    }
+    if yes(case, "grandchild_created_after_fence") {
+        return Ok(verdict("NO_AUTHORITY"));
+    }
+    if yes(case, "job_started_after_cutoff") && no(case, "current_authority") {
+        return Ok(verdict("DENY_OR_UNRESOLVED"));
+    }
+    if yes(case, "provider_credential_valid") && yes(case, "fleet_authority_revoked") {
+        return Ok(verdict(if no(case, "external_invalidation_complete") {
+            "DENY_AND_RECORD_REVOCATION_DEBT"
+        } else {
+            "DENY"
+        }));
+    }
+    if yes(case, "ancestor_cutoff") && yes(case, "child_effect_after_cutoff") {
+        return Ok(verdict("DENY"));
+    }
+
     if string(case, "provider_access") == Some("ERROR") {
         return Ok(result("expected_closure", "ERROR"));
     }
@@ -475,6 +507,72 @@ mod tests {
         assert_eq!(
             evaluate(&complete).unwrap(),
             result("expected_closure", "ERROR")
+        );
+    }
+
+    #[test]
+    fn explicit_denials_preempt_unrelated_positive_authority_claims() {
+        check(
+            json!({
+                "composition":"ALL_REQUIRED","surviving_roots":1,"required_roots":1,
+                "provider_credential_valid":true,"fleet_authority_revoked":true,
+                "external_invalidation_complete":false
+            }),
+            "DENY_AND_RECORD_REVOCATION_DEBT",
+        );
+        check(
+            json!({
+                "composition":"ANY_OF_DECLARED","surviving_roots":1,"required_roots":1,
+                "ancestor_cutoff":true,"child_effect_after_cutoff":true
+            }),
+            "DENY",
+        );
+        check(
+            json!({
+                "cycle":true,"external_root":true,
+                "job_started_after_cutoff":true,"current_authority":false
+            }),
+            "DENY_OR_UNRESOLVED",
+        );
+        check(
+            json!({
+                "handoff_independent":true,"retained_scope_exact":true,
+                "grandchild_created_after_fence":true
+            }),
+            "NO_AUTHORITY",
+        );
+        check(
+            json!({
+                "declared_surfaces_complete":true,
+                "undeclared_external_surfaces_unknown":true,
+                "cleanup_consequential":true,"recovery_authority":false
+            }),
+            "DENY",
+        );
+        check(
+            json!({
+                "composition":"ALL_REQUIRED","surviving_roots":1,"required_roots":1,
+                "locator_reused":true,"same_incarnation":false
+            }),
+            "DO_NOT_CANCEL_REPLACEMENT",
+        );
+        check(
+            json!({
+                "composition":"ALL_REQUIRED","surviving_roots":1,"required_roots":1,
+                "cancel_ack_lost":true,"authoritative_state_known":false
+            }),
+            "READBACK_FIRST",
+        );
+        check(
+            json!({
+                "composition":"ALL_REQUIRED","surviving_roots":1,"required_roots":1,
+                "external_deletion":true,"closure_caused_deletion":false
+            }),
+            "NO_CAUSAL_CLAIM",
+        );
+        check(
+            json!({"composition":"ALL_REQUIRED","surviving_roots":1,"required_roots":1}),
+            "BOUNDED_AUTHORITY",
         );
     }
 
