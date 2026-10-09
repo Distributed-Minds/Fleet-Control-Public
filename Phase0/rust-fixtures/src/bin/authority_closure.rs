@@ -217,6 +217,12 @@ fn evaluate(case: &Map<String, Value>) -> Result<(String, Value), String> {
     if no(case, "lineage_protocol_compatible") && yes(case, "mutation_requested") {
         return Ok(verdict("FAIL_CLOSED_UNTIL_COMPATIBLE"));
     }
+    if string(case, "provider_access") == Some("ERROR") {
+        return Ok(result("expected_closure", "ERROR"));
+    }
+    if no(case, "inventory_complete") {
+        return Ok(result("expected_closure", "UNKNOWN"));
+    }
     // Explicit denials and reconciliation obligations outrank independent
     // positive composition, handoff, cycle and closure claims. A mixed input
     // must never mint BOUNDED_AUTHORITY from revoked or fenced roots.
@@ -249,12 +255,6 @@ fn evaluate(case: &Map<String, Value>) -> Result<(String, Value), String> {
         return Ok(verdict("DENY"));
     }
 
-    if string(case, "provider_access") == Some("ERROR") {
-        return Ok(result("expected_closure", "ERROR"));
-    }
-    if no(case, "inventory_complete") {
-        return Ok(result("expected_closure", "UNKNOWN"));
-    }
     if number(case, "failed_descendants") > 0 {
         return Ok(result("expected_closure", "PARTIAL"));
     }
@@ -573,6 +573,20 @@ mod tests {
         check(
             json!({"composition":"ALL_REQUIRED","surviving_roots":1,"required_roots":1}),
             "BOUNDED_AUTHORITY",
+        );
+    }
+
+    #[test]
+    fn provider_unavailable_is_preserved_even_with_complete_revocation_evidence() {
+        let case = input(json!({
+            "provider_access": "ERROR",
+            "provider_credential_valid": true,
+            "fleet_authority_revoked": true,
+            "external_invalidation_complete": false
+        }));
+        assert_eq!(
+            evaluate(&case).unwrap(),
+            result("expected_closure", "ERROR")
         );
     }
 
