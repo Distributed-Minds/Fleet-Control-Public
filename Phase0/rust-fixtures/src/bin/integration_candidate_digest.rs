@@ -198,6 +198,64 @@ impl<'de> Deserialize<'de> for StrictJson {
     }
 }
 
+/// Reject malformed or undeclared envelope fields *before* hashing. Hashing a
+/// serde_json::Value without typed shape admission would assign plausible IDs
+/// to unknown/missing fields that the structural oracle would never accept.
+fn admit_candidate_envelope(
+    name: &str,
+    candidate: &serde_json::Map<String, Value>,
+) -> Result<(), String> {
+    const FIELDS: &[&str] = &[
+        "schema_version", "operation_kind", "target_commit", "source_commit",
+        "parents", "parent_count", "tree", "metadata", "constructor_version",
+        "compatibility_basis",
+    ];
+    const TEXT: &[&str] = &[
+        "schema_version", "operation_kind", "target_commit", "source_commit",
+        "tree", "constructor_version", "compatibility_basis",
+    ];
+    const META: &[&str] = &[
+        "author", "author_time", "committer", "committer_time",
+        "message", "encoding", "signature_policy",
+    ];
+    if candidate.len() != FIELDS.len()
+        || candidate.keys().any(|key| !FIELDS.contains(&key.as_str()))
+    {
+        return Err(format!("{name}: missing or undeclared candidate field"));
+    }
+    for field in TEXT {
+        if candidate.get(*field).and_then(Value::as_str).is_none() {
+            return Err(format!("{name}: candidate field {field} is not a string"));
+        }
+    }
+    if candidate["schema_version"] != "integration-candidate-v1"
+        || candidate["operation_kind"] != "explicit-merge"
+    {
+        return Err(format!("{name}: unsupported candidate schema/operation"));
+    }
+    let parents = candidate["parents"]
+        .as_array()
+        .ok_or_else(|| format!("{name}: parents must be an array"))?;
+    if parents.is_empty() || parents.iter().any(|parent| parent.as_str().is_none()) {
+        return Err(format!("{name}: parent identities must be nonempty strings"));
+    }
+    if candidate["parent_count"].as_u64() != Some(parents.len() as u64) {
+        return Err(format!("{name}: parent_count does not match parents"));
+    }
+    let metadata = candidate["metadata"]
+        .as_object()
+        .ok_or_else(|| format!("{name}: metadata must be an object"))?;
+    if metadata.len() != META.len()
+        || metadata.keys().any(|key| !META.contains(&key.as_str()))
+        || META
+            .iter()
+            .any(|key| metadata.get(*key).and_then(Value::as_str).is_none())
+    {
+        return Err(format!("{name}: missing, invalid, or undeclared metadata field"));
+    }
+    Ok(())
+}
+
 fn candidate_ids(fixture_text: &str) -> Result<Vec<(String, String)>, String> {
     let StrictJson(root) = serde_json::from_str(fixture_text).map_err(|e| e.to_string())?;
     if root.get("schema_version").and_then(Value::as_str)
@@ -236,6 +294,7 @@ fn candidate_ids(fixture_text: &str) -> Result<Vec<(String, String)>, String> {
         if candidate.is_empty() {
             return Err(format!("{name}: empty candidate envelope"));
         }
+        admit_candidate_envelope(name, candidate)?;
         // serde_json's default Map is a BTreeMap: object keys serialize in
         // lexical order, arrays retain their order, non-ASCII stays UTF-8.
         // This matches historical Python json.dumps(sort_keys=True,
@@ -394,6 +453,31 @@ mod tests {
         assert_ne!(input, HISTORICAL);
         assert!(serde_json::from_str::<Value>(&input).is_ok());
         assert!(candidate_ids(&input).is_err());
+    }
+
+    #[test]
+    fn digest_rejects_undeclared_missing_and_wrong_typed_envelope_fields() {
+        let original: Value = serde_json::from_str(HISTORICAL).unwrap();
+        let mutate = |edit: fn(&mut Value)| {
+            let mut fixture = original.clone();
+            edit(&mut fixture["cases"][0]["candidate"]);
+            candidate_ids(&fixture.to_string())
+        };
+        let invalid: [fn(&mut Value); 9] = [
+            |c| c["unexpected"] = Value::String("extra".into()),
+            |c| { c.as_object_mut().unwrap().remove("tree"); },
+            |c| c["source_commit"] = Value::from(42),
+            |c| c["schema_version"] = Value::String("not-supported".into()),
+            |c| c["operation_kind"] = Value::String("fast-forward".into()),
+            |c| c["parents"] = Value::String("not-an-array".into()),
+            |c| c["parent_count"] = Value::from(1),
+            |c| c["metadata"]["unexpected"] = Value::String("extra".into()),
+            |c| { c["metadata"].as_object_mut().unwrap().remove("author"); },
+        ];
+        for (index, edit) in invalid.into_iter().enumerate() {
+            assert!(mutate(edit).is_err(), "invalid envelope {index} received a digest");
+        }
+        assert!(candidate_ids(HISTORICAL).is_ok());
     }
 
     #[test]
