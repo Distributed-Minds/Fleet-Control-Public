@@ -376,5 +376,4 @@ mod tests {
 
         fs::remove_dir_all(&scratch).expect("remove isolated scratch root");
     }
-
 }
