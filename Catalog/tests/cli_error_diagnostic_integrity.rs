@@ -24,12 +24,28 @@ fn hostile_path(tag: &str) -> std::path::PathBuf {
 }
 
 fn assert_failure_is_one_diagnostic(output: &std::process::Output) {
-    assert!(!output.status.success(), "failure unexpectedly admitted: {output:?}");
-    assert!(output.stdout.is_empty(), "rejected batch emitted success: {output:?}");
+    assert!(
+        !output.status.success(),
+        "failure unexpectedly admitted: {output:?}"
+    );
+    assert!(
+        output.stdout.is_empty(),
+        "rejected batch emitted success: {output:?}"
+    );
     let stderr = String::from_utf8(output.stderr.clone()).expect("UTF-8 diagnostics");
-    assert_eq!(stderr.lines().count(), 1, "path injected extra lines: {stderr:?}");
-    assert!(stderr.contains(r"\nTYPED-BOUNDARY-ONLY"), "missing escaped filename: {stderr:?}");
-    assert!(!stderr.contains("\nTYPED-BOUNDARY-ONLY"), "forged log line: {stderr:?}");
+    assert_eq!(
+        stderr.lines().count(),
+        1,
+        "path injected extra lines: {stderr:?}"
+    );
+    assert!(
+        stderr.contains(r"\nTYPED-BOUNDARY-ONLY"),
+        "missing escaped filename: {stderr:?}"
+    );
+    assert!(
+        !stderr.contains("\nTYPED-BOUNDARY-ONLY"),
+        "forged log line: {stderr:?}"
+    );
 }
 
 #[test]
