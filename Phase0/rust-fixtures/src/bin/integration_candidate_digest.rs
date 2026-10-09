@@ -198,6 +198,15 @@ impl<'de> Deserialize<'de> for StrictJson {
     }
 }
 
+// Match the structural candidate oracle's Git object identity admission:
+// malformed bytes must never be assigned plausible SHA-256 candidate IDs.
+fn git_object_id(value: &str) -> bool {
+    value.len() == 40
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}
+
 /// Reject malformed or undeclared envelope fields *before* hashing. Hashing a
 /// serde_json::Value without typed shape admission would assign plausible IDs
 /// to unknown/missing fields that the structural oracle would never accept.
@@ -250,12 +259,32 @@ fn admit_candidate_envelope(
     {
         return Err(format!("{name}: unsupported candidate schema/operation"));
     }
+    for field in ["target_commit", "source_commit", "tree"] {
+        let value = candidate[field]
+            .as_str()
+            .expect("required text fields were already validated");
+        if !git_object_id(value) {
+            return Err(format!("{name}: malformed Git object identity: {field}"));
+        }
+    }
+    for field in ["constructor_version", "compatibility_basis"] {
+        let value = candidate[field]
+            .as_str()
+            .expect("required text fields were already validated");
+        if value.trim().is_empty() {
+            return Err(format!("{name}: blank constructor identity field: {field}"));
+        }
+    }
     let parents = candidate["parents"]
         .as_array()
         .ok_or_else(|| format!("{name}: parents must be an array"))?;
-    if parents.is_empty() || parents.iter().any(|parent| parent.as_str().is_none()) {
+    if parents.is_empty()
+        || parents
+            .iter()
+            .any(|parent| !parent.as_str().is_some_and(git_object_id))
+    {
         return Err(format!(
-            "{name}: parent identities must be nonempty strings"
+            "{name}: malformed ordered parent Git object identity"
         ));
     }
     if candidate["parent_count"].as_u64() != Some(parents.len() as u64) {
@@ -520,5 +549,59 @@ mod tests {
         fixture["cases"][1]["name"] = Value::String("reversed-parents-same-tree".to_owned());
         fixture["cases"][0]["candidate"] = Value::Null;
         assert!(candidate_ids(&fixture.to_string()).is_err());
+    }
+
+    #[test]
+    fn candidate_digest_refuses_malformed_git_object_ids_and_blank_constructor_identity() {
+        let original: Value = serde_json::from_str(HISTORICAL).unwrap();
+        let baseline = candidate_ids(HISTORICAL).unwrap();
+
+        for field in ["target_commit", "source_commit", "tree"] {
+            for invalid in [
+                "".to_owned(),
+                "abc".to_owned(),
+                "A".repeat(40),
+                "g".repeat(40),
+            ] {
+                let mut fixture = original.clone();
+                fixture["cases"][0]["candidate"][field] = Value::String(invalid.clone());
+                assert!(
+                    candidate_ids(&fixture.to_string()).is_err(),
+                    "{field} accepted malformed Git object ID: {invalid:?}"
+                );
+            }
+        }
+
+        for invalid in [
+            "".to_owned(),
+            "abc".to_owned(),
+            "A".repeat(40),
+            "g".repeat(40),
+        ] {
+            let mut fixture = original.clone();
+            fixture["cases"][0]["candidate"]["parents"][0] = Value::String(invalid.clone());
+            assert!(
+                candidate_ids(&fixture.to_string()).is_err(),
+                "accepted malformed parent Git object ID: {invalid:?}"
+            );
+        }
+
+        for field in ["constructor_version", "compatibility_basis"] {
+            for invalid in ["", " ", "\n\t"] {
+                let mut fixture = original.clone();
+                fixture["cases"][0]["candidate"][field] = Value::String(invalid.to_owned());
+                assert!(
+                    candidate_ids(&fixture.to_string()).is_err(),
+                    "{field} accepted blank constructor identity"
+                );
+            }
+        }
+
+        // Historical reversed order and the unsupported three-parent candidate
+        // retain distinct hashes: identity computation never grants merge authority.
+        assert_eq!(candidate_ids(HISTORICAL).unwrap(), baseline);
+        assert_eq!(baseline.len(), 4);
+        assert_ne!(baseline[0].1, baseline[1].1);
+        assert_ne!(baseline[0].1, baseline[2].1);
     }
 }
