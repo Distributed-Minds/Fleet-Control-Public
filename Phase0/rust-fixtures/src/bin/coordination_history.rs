@@ -350,7 +350,9 @@ mod tests {
         suite.cases.push(new_case);
         let failures = validate(&suite).expect_err("unproved additive case must fail");
         assert!(
-            failures.iter().any(|error| error.contains("additive scenario must explicitly")),
+            failures
+                .iter()
+                .any(|error| error.contains("additive scenario must explicitly")),
             "{failures:?}"
         );
 
