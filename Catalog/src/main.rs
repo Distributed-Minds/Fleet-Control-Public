@@ -71,8 +71,9 @@ fn read_regular_generated_page(output: &Path, expected_len: usize) -> io::Result
             "generated catalog page must be a regular file (symlink prohibited)",
         ));
     }
-    let limit = u64::try_from(expected_len)
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "expected HTML length overflow"))?;
+    let limit = u64::try_from(expected_len).map_err(|_| {
+        io::Error::new(io::ErrorKind::InvalidInput, "expected HTML length overflow")
+    })?;
     if before.len() > limit {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
