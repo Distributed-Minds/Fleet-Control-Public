@@ -182,13 +182,22 @@ fn projection(packet: &Value) -> Result<Value, String> {
         .ok_or_else(|| "packet must be an object".to_owned())?;
     let mut result = Map::new();
     for key in SEMANTIC_FIELDS {
-        result.insert(
-            key.to_owned(),
-            object
-                .get(key)
-                .ok_or_else(|| format!("missing semantic packet field: {key}"))?
-                .clone(),
-        );
+        let value = object
+            .get(key)
+            .ok_or_else(|| format!("missing semantic packet field: {key}"))?;
+        // All historical scalar coordinates are strings; packet collections
+        // are string arrays (including intentionally empty arrays). Presence
+        // alone must not make null, booleans or forged objects authoritative.
+        let valid_shape = match key {
+            "packet_schema" | "topic" | "authoritative_baseline" => value.is_string(),
+            _ => value
+                .as_array()
+                .is_some_and(|items| items.iter().all(Value::is_string)),
+        };
+        if !valid_shape {
+            return Err(format!("invalid semantic packet field type: {key}"));
+        }
+        result.insert(key.to_owned(), value.clone());
     }
     Ok(Value::Object(result))
 }
@@ -477,7 +486,11 @@ fn packet_fields(case: &Value) -> Value {
         "useful_next_actions",
     ]
     .iter()
-    .all(|key| case.get(*key).is_some())
+    .all(|key| {
+        case.get(*key)
+            .and_then(Value::as_array)
+            .is_some_and(|items| items.iter().all(Value::is_string))
+    })
     {
         json!("PRESERVE_REQUIRED_FIELDS")
     } else {
@@ -683,5 +696,79 @@ mod cli_semantic_tests {
             .remove("packet_ref");
         modified["publication_cases"][0]["packet"] = packet;
         assert_eq!(validate(&modified), Ok(47));
+    }
+
+    #[test]
+    fn required_handoff_fields_must_be_text_arrays_not_just_present() {
+        let baseline: Value = serde_json::from_str(BASELINE).expect("valid baseline");
+        assert_eq!(
+            packet_fields(&baseline["packet_field_cases"][0]),
+            json!("PRESERVE_REQUIRED_FIELDS")
+        );
+        for field in [
+            "stale_source_warnings",
+            "discovery_vocabulary",
+            "useful_next_actions",
+        ] {
+            for invalid in [
+                Value::Null,
+                json!(false),
+                json!("not-a-list"),
+                json!({ "forged": "list" }),
+                json!([null]),
+                json!(["valid", 7]),
+            ] {
+                let mut mutated = baseline.clone();
+                mutated["packet_field_cases"][0][field] = invalid;
+                assert_eq!(
+                    packet_fields(&mutated["packet_field_cases"][0]),
+                    json!("REJECT_INCOMPLETE_PACKET"),
+                    "field {field} with non-text-list content was accepted"
+                );
+                assert!(
+                    validate(&mutated).is_err(),
+                    "forged accepted disposition must fail fixture validation for {field}"
+                );
+            }
+        }
+        // Empty arrays deliberately represent truthful absence, not an
+        // omitted field; retain this historical positive control.
+        assert_eq!(
+            packet_fields(&baseline["packet_field_cases"][1]),
+            json!("PRESERVE_REQUIRED_FIELDS")
+        );
+    }
+
+    #[test]
+    fn packet_identity_projection_rejects_invalid_semantic_field_types() {
+        let baseline: Value = serde_json::from_str(BASELINE).expect("valid baseline");
+        let packet = &baseline["packet_templates"]["base"];
+        assert!(projection(packet).is_ok());
+        for field in SEMANTIC_FIELDS {
+            let mut mutated = packet.clone();
+            mutated[field] = if matches!(
+                field,
+                "packet_schema" | "topic" | "authoritative_baseline"
+            ) {
+                json!(["not-a-scalar"])
+            } else {
+                json!(["legitimate", null])
+            };
+            let result = projection(&mutated);
+            assert!(
+                result
+                    .unwrap_err()
+                    .contains(&format!("invalid semantic packet field type: {field}")),
+                "invalid semantic field was not rejected: {field}"
+            );
+        }
+        let mut mutated = baseline;
+        mutated["packet_templates"]["base"]["observations"] = json!(["real", false]);
+        assert!(
+            validate(&mutated)
+                .expect_err("invalid packet template must fail the historical oracle")
+                .iter()
+                .any(|error| error.contains("invalid semantic packet field type: observations"))
+        );
     }
 }
