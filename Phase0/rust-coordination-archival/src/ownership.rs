@@ -70,8 +70,7 @@ impl Scope {
     /// provider object, even when separately encoded with different seams.
     /// Sharing a branch, PR or explicit seam also collides.
     fn overlaps(&self, other: &Self) -> bool {
-        (self.pr.is_some()
-            && (self.pr == other.pr || self.pr == other.issue))
+        (self.pr.is_some() && (self.pr == other.pr || self.pr == other.issue))
             || (self.issue.is_some() && self.issue == other.pr)
             || (self.branch.is_some() && self.branch == other.branch)
             || self.seam == other.seam
