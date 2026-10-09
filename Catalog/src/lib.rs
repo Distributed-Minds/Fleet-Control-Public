@@ -448,7 +448,7 @@ fn is_inadmissible_decoded(ch: char) -> bool {
 /// not resolve DNS, follow redirects, authenticate a host or prove its rights.
 /// IP literals, ports, userinfo and non-ASCII DNS names are intentionally out
 /// of scope until their admission/normalization semantics are specified.
-fn is_public_https_url(url: &str) -> bool {
+pub fn is_public_https_url(url: &str) -> bool {
     if url.chars().count() > 2048
         || !url.starts_with("https://")
         || url

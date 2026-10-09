@@ -2,7 +2,7 @@
 //! Input must pass the current typed admission boundary before rendering.
 //! This is NOT rights clearance, complete Draft 2020-12 schema validation,
 //! hosted play, or proof that upstream links/redirects remain safe.
-use free_energy_catalog::{PermissionStatus, PlayStatus, Project};
+use free_energy_catalog::{is_public_https_url, PermissionStatus, PlayStatus, Project};
 
 fn escape(value: &str) -> String {
     let mut out = String::new();
@@ -25,6 +25,20 @@ fn push_link(out: &mut String, url: &str, label: &str) {
     out.push_str("\" rel=\"noopener noreferrer\">");
     out.push_str(label);
     out.push_str("</a>");
+}
+
+// Recheck the exact same conservative URL policy at the final HTML link
+// sink. Typed Project values are public and can be modified after admission;
+// a caller must not turn a formerly safe record into an executable or
+// internal-host link simply by bypassing the manifest reader.
+fn push_admitted_link(out: &mut String, url: &str, label: &str) {
+    if is_public_https_url(url) {
+        push_link(out, url, label);
+    } else {
+        out.push_str("<span>");
+        out.push_str(label);
+        out.push_str(" (link withheld: unsafe or unverified URL)</span>");
+    }
 }
 
 fn play_label(status: &PlayStatus) -> &'static str {
@@ -63,13 +77,13 @@ pub fn render_catalog(records: &[Project]) -> String {
         out.push_str("</code></p>\n<p><strong>Play:</strong> ");
         out.push_str(play_label(&project.play.status));
         out.push_str("</p>\n<p>");
-        push_link(
+        push_admitted_link(
             &mut out,
             &project.upstream.canonical_source_url,
             "Source upstream (external)",
         );
         out.push_str(" | ");
-        push_link(
+        push_admitted_link(
             &mut out,
             &project.upstream.contribution_url,
             "Contribute upstream (external)",
@@ -77,7 +91,7 @@ pub fn render_catalog(records: &[Project]) -> String {
         out.push_str("</p>\n");
         if let Some(download) = &project.play.upstream_download_url {
             out.push_str("<p>");
-            push_link(
+            push_admitted_link(
                 &mut out,
                 download,
                 "Open upstream download (unverified by FREE ENERGY)",
@@ -145,7 +159,7 @@ pub fn render_catalog(records: &[Project]) -> String {
         evidence.sort_by(|a, b| a.evidence_id.cmp(&b.evidence_id));
         for item in evidence {
             out.push_str("<li>");
-            push_link(&mut out, &item.url, &escape(&item.evidence_id));
+            push_admitted_link(&mut out, &item.url, &escape(&item.evidence_id));
             out.push_str(" — observed ");
             out.push_str(&escape(&item.observed_at));
             out.push_str(" — ");
@@ -181,6 +195,42 @@ mod tests {
             .map(|json| validate_manifest(json).expect("valid pilot manifest"))
             .collect();
         assert_eq!(render_catalog(&records), include_str!("../site/index.html"));
+    }
+
+    #[test]
+    fn typed_records_cannot_bypass_url_admission_at_html_link_sink() {
+        let mut record = validate_manifest(LUANTI).expect("valid pilot");
+        // A public, mutable typed record may be changed after JSON admission.
+        // Keep the final href sink fail-closed even for those callers.
+        record.upstream.canonical_source_url = "javascript:alert(1)".to_owned();
+        record.upstream.contribution_url = "https://127.0.0.1/private".to_owned();
+        record.play.upstream_download_url = Some("https://valid.org/%2fprivate".to_owned());
+        record.evidence[0].url = "https://localhost/evidence".to_owned();
+
+        let html = render_catalog(&[record]);
+        assert_eq!(
+            html.matches("link withheld: unsafe or unverified URL").count(),
+            4,
+            "every mutated outbound URL must become non-clickable"
+        );
+        for forbidden in [
+            "href=\\"javascript:",
+            "href=\\"https://127.0.0.1",
+            "href=\\"https://valid.org/%2f",
+            "href=\\"https://localhost",
+        ] {
+            assert!(!html.contains(forbidden), "unsafe rendered link: {forbidden}");
+        }
+        assert!(html.contains("Source upstream (external) (link withheld:"));
+        assert!(html.contains("Open upstream download (unverified by FREE ENERGY) (link withheld:"));
+    }
+
+    #[test]
+    fn admitted_pilot_urls_remain_clickable_in_the_static_renderer() {
+        let project = validate_manifest(LUANTI).expect("valid pilot");
+        let html = render_catalog(&[project]);
+        assert!(html.contains("<a href=\\"https://"));
+        assert!(!html.contains("link withheld:"));
     }
 
     #[test]
