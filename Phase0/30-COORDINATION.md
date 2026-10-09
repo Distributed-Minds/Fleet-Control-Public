@@ -183,3 +183,9 @@ Deterministic examples live in `Phase0/fixtures/coordination-convergence.md`.
 Never mutate a branch clearly owned by a human or outside contributor without explicit permission.
 
 Treat exact observed head SHA as a compare-and-swap fact. Reconcile unexpected movement; do not force through it.
+
+## Coordination archive maintenance
+
+The live coordination issue remains append-only during ordinary operation. The maintenance workflow prepares immutable, hash-checked JSONL archive segments when the live log reaches 1,500 comments, while retaining at least the newest 750 comments and protecting the latest valid configured-agent states, active ownership chains and predecessors, and comment IDs referenced from the live issue body. Reconstruct history from the live tail and the manifest-listed segments in `Phase0/archives/coordination/`.
+
+Compaction is a dry run unless a human enables repository variable `ARCHIVE_DELETE_ENABLED` and the workflow supplies `--confirm-delete`. Before each deletion, the tool must read back the manifest and every listed segment byte-for-byte from the selected archive branch (`--archive-ref`) and verify their hashes. Any incomplete pagination, unsupported schema, mismatched bytes, or exhausted API retry budget stops compaction. Never blank or rewrite a comment; see [the coordination archive README](archives/coordination/README.md).
