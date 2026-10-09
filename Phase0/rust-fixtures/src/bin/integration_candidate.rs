@@ -353,30 +353,25 @@ mod tests {
         let file = fs::File::create(&oversized).expect("create sparse oversized fixture");
         file.set_len(MAX_FIXTURE_BYTES + 1)
             .expect("size oversized fixture without allocating 8 MiB");
-        assert!(
-            read_fixture_file(oversized.to_str().unwrap())
-                .unwrap_err()
-                .contains("maximum input size")
-        );
+        assert!(read_fixture_file(oversized.to_str().unwrap())
+            .unwrap_err()
+            .contains("maximum input size"));
 
-        assert!(
-            read_fixture_file(scratch.to_str().unwrap())
-                .unwrap_err()
-                .contains("regular non-symlink")
-        );
+        assert!(read_fixture_file(scratch.to_str().unwrap())
+            .unwrap_err()
+            .contains("regular non-symlink"));
 
         #[cfg(unix)]
         {
             let alias = scratch.join("alias-to-valid.json");
             std::os::unix::fs::symlink(fixture_path, &alias)
                 .expect("create untrusted fixture path alias");
-            assert!(
-                read_fixture_file(alias.to_str().unwrap())
-                    .unwrap_err()
-                    .contains("regular non-symlink")
-            );
+            assert!(read_fixture_file(alias.to_str().unwrap())
+                .unwrap_err()
+                .contains("regular non-symlink"));
         }
 
+        drop(file);
         fs::remove_dir_all(&scratch).expect("remove isolated fixture test directory");
     }
 
