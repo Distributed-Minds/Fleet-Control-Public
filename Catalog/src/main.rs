@@ -309,22 +309,22 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
                     break;
                 }
                 match free_energy_catalog::validate_manifest(&text) {
-                Ok(record) => {
-                    if !ids.insert(record.id.clone()) {
-                        problems.push(format!(
-                            "{}: duplicate project ID: {}",
-                            diagnostic_path(&path),
-                            record.id
-                        ));
-                    } else {
-                        records.push(record);
+                    Ok(record) => {
+                        if !ids.insert(record.id.clone()) {
+                            problems.push(format!(
+                                "{}: duplicate project ID: {}",
+                                diagnostic_path(&path),
+                                record.id
+                            ));
+                        } else {
+                            records.push(record);
+                        }
                     }
-                }
-                Err(errors) => {
-                    for error in errors {
-                        problems.push(format!("{}: {error}", diagnostic_path(&path)));
+                    Err(errors) => {
+                        for error in errors {
+                            problems.push(format!("{}: {error}", diagnostic_path(&path)));
+                        }
                     }
-                }
                 }
             }
             Err(error) => problems.push(format!("{}: {error}", diagnostic_path(&path))),
@@ -435,7 +435,8 @@ fn main() -> ExitCode {
                                 let child = entry.path();
                                 if child.extension().and_then(|ext| ext.to_str()) == Some("json") {
                                     if let Err(error) = path_budget.note_file() {
-                                        errors.push(format!("{}: {error}", diagnostic_path(&child)));
+                                        errors
+                                            .push(format!("{}: {error}", diagnostic_path(&child)));
                                         over_limit = true;
                                         break;
                                     }
@@ -608,7 +609,11 @@ mod tests {
         for _ in 0..MAX_BATCH_MANIFESTS {
             budget.note_file().expect("bounded manifest");
         }
-        assert!(budget.note_file().unwrap_err().to_string().contains("256 manifests"));
+        assert!(budget
+            .note_file()
+            .unwrap_err()
+            .to_string()
+            .contains("256 manifests"));
 
         budget.note_bytes(MAX_BATCH_BYTES).expect("exactly 16 MiB");
         assert!(budget
