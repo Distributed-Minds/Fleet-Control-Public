@@ -136,15 +136,43 @@ fn has_verification_output(oracle: &Oracle, stdout: &[u8]) -> bool {
     }
     match oracle.name {
         "ad_hoc_research" => exact_count(line, "ad-hoc research fixtures (Rust): ", " passed", 47),
-        "adaptive_stress" => exact_count(line, "adaptive-stress semantic fixtures (Rust): ", " passed", 23),
-        "authority_closure" => exact_count(line, "authority closure Rust semantic fixtures: ", " cases passed", 26),
+        "adaptive_stress" => exact_count(
+            line,
+            "adaptive-stress semantic fixtures (Rust): ",
+            " passed",
+            23,
+        ),
+        "authority_closure" => exact_count(
+            line,
+            "authority closure Rust semantic fixtures: ",
+            " cases passed",
+            26,
+        ),
         "containment" => exact_count(line, "containment fixtures (Rust): ", " passed", 35),
-        "containment_capacity" => {
-            exact_count(line, "containment-capacity fixtures (Rust): ", " passed", 17)
-        }
-        "coordination_history" => exact_count(line, "PASS: ", " independently evaluated coordination-history cases", 18),
-        "github_capability" => exact_count(line, "GitHub capability invariant fixtures (Rust): ", " checked", 28),
-        "integration_candidate" => exact_count(line, "integration candidate fixture envelope: ", " passed; SHA-256 identity parity NOT checked", 6),
+        "containment_capacity" => exact_count(
+            line,
+            "containment-capacity fixtures (Rust): ",
+            " passed",
+            17,
+        ),
+        "coordination_history" => exact_count(
+            line,
+            "PASS: ",
+            " independently evaluated coordination-history cases",
+            18,
+        ),
+        "github_capability" => exact_count(
+            line,
+            "GitHub capability invariant fixtures (Rust): ",
+            " checked",
+            28,
+        ),
+        "integration_candidate" => exact_count(
+            line,
+            "integration candidate fixture envelope: ",
+            " passed; SHA-256 identity parity NOT checked",
+            6,
+        ),
         "integration_candidate_digest" => {
             // An arbitrary or truncated list of plausible SHA-256 strings is
             // not evidence that all four historical candidate identities ran.
@@ -169,7 +197,12 @@ fn has_verification_output(oracle: &Oracle, stdout: &[u8]) -> bool {
                             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
                 })
         }
-        "merge_base_topology" => exact_count(line, "merge-base-topology: ", " read-only model fixtures PASS", 12),
+        "merge_base_topology" => exact_count(
+            line,
+            "merge-base-topology: ",
+            " read-only model fixtures PASS",
+            12,
+        ),
         _ => false,
     }
 }
@@ -386,27 +419,75 @@ mod tests {
     #[test]
     fn partial_or_forged_nonzero_counts_never_qualify_as_completed_fixture_families() {
         let expected = [
-            ("ad_hoc_research", "ad-hoc research fixtures (Rust): ", " passed", 47),
-            ("adaptive_stress", "adaptive-stress semantic fixtures (Rust): ", " passed", 23),
-            ("authority_closure", "authority closure Rust semantic fixtures: ", " cases passed", 26),
-            ("containment", "containment fixtures (Rust): ", " passed", 35),
-            ("containment_capacity", "containment-capacity fixtures (Rust): ", " passed", 17),
-            ("coordination_history", "PASS: ", " independently evaluated coordination-history cases", 18),
-            ("github_capability", "GitHub capability invariant fixtures (Rust): ", " checked", 28),
-            ("integration_candidate", "integration candidate fixture envelope: ", " passed; SHA-256 identity parity NOT checked", 6),
-            ("merge_base_topology", "merge-base-topology: ", " read-only model fixtures PASS", 12),
+            (
+                "ad_hoc_research",
+                "ad-hoc research fixtures (Rust): ",
+                " passed",
+                47,
+            ),
+            (
+                "adaptive_stress",
+                "adaptive-stress semantic fixtures (Rust): ",
+                " passed",
+                23,
+            ),
+            (
+                "authority_closure",
+                "authority closure Rust semantic fixtures: ",
+                " cases passed",
+                26,
+            ),
+            (
+                "containment",
+                "containment fixtures (Rust): ",
+                " passed",
+                35,
+            ),
+            (
+                "containment_capacity",
+                "containment-capacity fixtures (Rust): ",
+                " passed",
+                17,
+            ),
+            (
+                "coordination_history",
+                "PASS: ",
+                " independently evaluated coordination-history cases",
+                18,
+            ),
+            (
+                "github_capability",
+                "GitHub capability invariant fixtures (Rust): ",
+                " checked",
+                28,
+            ),
+            (
+                "integration_candidate",
+                "integration candidate fixture envelope: ",
+                " passed; SHA-256 identity parity NOT checked",
+                6,
+            ),
+            (
+                "merge_base_topology",
+                "merge-base-topology: ",
+                " read-only model fixtures PASS",
+                12,
+            ),
         ];
         for (name, prefix, suffix, count) in expected {
             let oracle = ORACLES.iter().find(|oracle| oracle.name == name).unwrap();
             for incomplete in [1, count - 1, count + 1] {
-                let output = format!("{prefix}{incomplete}{suffix}\\n");
+                let output = format!("{prefix}{incomplete}{suffix}\n");
                 assert!(
                     !has_verification_output(oracle, output.as_bytes()),
                     "{name} accepted incorrect count {incomplete}"
                 );
             }
-            let padded = format!("{prefix}0{count}{suffix}\\n");
-            assert!(!has_verification_output(oracle, padded.as_bytes()), "{name}");
+            let padded = format!("{prefix}0{count}{suffix}\n");
+            assert!(
+                !has_verification_output(oracle, padded.as_bytes()),
+                "{name}"
+            );
         }
     }
 
