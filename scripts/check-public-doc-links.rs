@@ -175,6 +175,26 @@ fn decode_once(value: &str) -> Result<String, String> {
     String::from_utf8(out).map_err(|_| "invalid UTF-8 after percent decoding".into())
 }
 
+// Only Markdown-escaped parentheses are supported inside bare paths.
+// Other backslashes remain unsafe/ambiguous, including doubled escapes and
+// percent-decoded filesystem separators. Decode percent escapes just once.
+fn decode_markdown_path(path: &str) -> Result<String, String> {
+    let mut unescaped = String::with_capacity(path.len());
+    let mut chars = path.chars();
+    while let Some(ch) = chars.next() {
+        if ch == '\\' {
+            match chars.next() {
+                Some('(') => unescaped.push('('),
+                Some(')') => unescaped.push(')'),
+                _ => return Err("ambiguous backslash path".into()),
+            }
+        } else {
+            unescaped.push(ch);
+        }
+    }
+    decode_once(&unescaped)
+}
+
 /// None means a deliberately ignored fragment or external URI.
 fn parse_destination(raw: &str) -> Result<Option<String>, String> {
     let value = raw.trim();
@@ -192,7 +212,14 @@ fn parse_destination(raw: &str) -> Result<Option<String>, String> {
             .map(|(i, _)| i)
             .unwrap_or(value.len());
         let (path, rest) = value.split_at(split);
-        if path.contains('(') || path.contains(')') || path.contains('<') || path.contains('>') {
+        let has_unescaped_paren = path
+            .as_bytes()
+            .iter()
+            .enumerate()
+            .any(|(index, byte)| {
+                matches!(*byte, b'(' | b')') && !preceded_by_escape(path.as_bytes(), index)
+            });
+        if has_unescaped_paren || path.contains('<') || path.contains('>') {
             return Err("unsupported nested/angle destination syntax".into());
         }
         (path, rest.trim())
@@ -229,7 +256,7 @@ fn parse_destination(raw: &str) -> Result<Option<String>, String> {
     if path.is_empty() {
         return Ok(None);
     }
-    let decoded = decode_once(path)?;
+    let decoded = decode_markdown_path(path)?;
     if decoded.is_empty() || decoded.contains('\0') {
         return Err("empty or NUL destination".into());
     }
@@ -326,6 +353,12 @@ fn collect_links(markdown: &str, document: &str, report: &mut Report) -> Vec<Str
                         in_angle_destination = false;
                     }
                 } else {
+                    // An escaped parenthesis is path content, not a Markdown
+                    // delimiter. Even-numbered backslash runs still close it.
+                    if matches!(c, b'(' | b')') && preceded_by_escape(bytes, p) {
+                        p += 1;
+                        continue;
+                    }
                     match c {
                         b'<' if p == after + 2 => in_angle_destination = true,
                         b'"' | b'\'' => quote = Some(c),
@@ -604,6 +637,61 @@ mod tests {
         );
         assert_eq!(paths, vec!["present.md"]);
         assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn escaped_parentheses_in_bare_link_destinations_resolve_real_files() {
+        let sandbox = Sandbox::new();
+        sandbox.write("docs/a)b.md", "existing close parenthesis path");
+        sandbox.write("docs/(draft).md", "existing balanced parentheses path");
+        sandbox.write(
+            "README.md",
+            r#"[one](docs/a\)b.md) [two](docs/\(draft\).md) [encoded](docs/a%29b.md)"#,
+        );
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 3);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn escaped_parenthesis_does_not_hide_missing_file_or_unclosed_syntax() {
+        let sandbox = Sandbox::new();
+        sandbox.write("README.md", r#"[missing](docs/a\)b.md)"#);
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 1);
+        assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+        assert!(report.errors[0].contains("target missing"), "{:?}", report.errors);
+
+        sandbox.write("README.md", r#"[unterminated](docs/a\)b.md"#);
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 0);
+        assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+        assert!(
+            report.errors[0].contains("unsupported/unclosed link syntax"),
+            "{:?}",
+            report.errors
+        );
+    }
+
+    #[test]
+    fn unescaped_nested_parens_and_doubled_backslashes_remain_unsafe() {
+        let sandbox = Sandbox::new();
+        sandbox.write("docs/a)b.md", "real target must not excuse bad syntax");
+        sandbox.write(
+            "README.md",
+            r#"[nested](docs/a(b).md) [ambiguous](docs/a\\)b.md)"#,
+        );
+        let report = sandbox.scan();
+        assert!(
+            report.errors.iter().any(|error| error.contains("unsupported nested/angle")),
+            "{:?}",
+            report.errors
+        );
+        assert!(
+            report.errors.iter().any(|error| error.contains("ambiguous backslash")),
+            "{:?}",
+            report.errors
+        );
     }
 
     #[test]
