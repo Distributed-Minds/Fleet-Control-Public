@@ -15,7 +15,7 @@
 //! Exit 1 means the input or reduction is invalid. No files are modified.
 
 use free_energy_coordination_archival::ownership::{reduce_model_only, Scope, State, Transition};
-use std::{env, fs::File, io::Read, path::Path, process::ExitCode};
+use std::{env, fs, io::Read, path::Path, process::ExitCode};
 
 const MAX_INPUT_BYTES: u64 = 16 * 1024 * 1024;
 
@@ -97,8 +97,49 @@ fn parse_transcript(input: &str) -> Result<Vec<Transition>, String> {
     Ok(transitions)
 }
 
-fn read_bounded(path: &Path) -> Result<String, String> {
-    let file = File::open(path).map_err(|error| format!("cannot open {path:?}: {error}"))?;
+// Caller-supplied transcript paths are not trusted provider snapshots.
+// A bounded read alone can still block forever on a FIFO opened for reading.
+fn read_bounded_with_observed_metadata(
+    path: &Path,
+    expected: &fs::Metadata,
+) -> Result<String, String> {
+    if !expected.file_type().is_file() {
+        return Err("transcript must be a regular, non-symlink file".to_owned());
+    }
+    if expected.len() > MAX_INPUT_BYTES {
+        return Err("transcript exceeds the 16 MiB model limit".to_owned());
+    }
+
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // Refuse symlink substitutions and avoid blocking on swapped-in FIFOs.
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let file = options
+        .open(path)
+        .map_err(|error| format!("cannot open {path:?}: {error}"))?;
+    let opened = file
+        .metadata()
+        .map_err(|error| format!("cannot stat {path:?}: {error}"))?;
+    if !opened.file_type().is_file() {
+        return Err("opened transcript is not a regular file".to_owned());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if expected.dev() != opened.dev() || expected.ino() != opened.ino() {
+            return Err("transcript changed between metadata check and open".to_owned());
+        }
+    }
+    if opened.len() > MAX_INPUT_BYTES {
+        return Err("transcript exceeds the 16 MiB model limit".to_owned());
+    }
+
     let mut bytes = Vec::new();
     file.take(MAX_INPUT_BYTES + 1)
         .read_to_end(&mut bytes)
@@ -107,6 +148,12 @@ fn read_bounded(path: &Path) -> Result<String, String> {
         return Err("transcript exceeds the 16 MiB model limit".to_owned());
     }
     String::from_utf8(bytes).map_err(|_| "transcript must be UTF-8".to_owned())
+}
+
+fn read_bounded(path: &Path) -> Result<String, String> {
+    let metadata =
+        fs::symlink_metadata(path).map_err(|error| format!("cannot stat {path:?}: {error}"))?;
+    read_bounded_with_observed_metadata(path, &metadata)
 }
 
 fn main() -> ExitCode {
@@ -172,6 +219,66 @@ mod tests {
         "2\t102\trun-a\t2\tOWNED\t101\t22\t-\tbranch-a\tseam-a\n",
         "3\t103\trun-a\t3\tWORKING\t102\t22\t-\tbranch-a\tseam-a\n",
     );
+
+    #[test]
+    fn bounded_reader_accepts_regular_transcript_and_rejects_nonregular_input() {
+        let scratch = std::env::temp_dir().join(format!(
+            "free-energy-ownership-replay-read-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&scratch).unwrap();
+        let path = scratch.join("transcript.tsv");
+        fs::write(&path, TRANSCRIPT).unwrap();
+        assert_eq!(read_bounded(&path).unwrap(), TRANSCRIPT);
+        assert!(
+            read_bounded(&scratch).is_err(),
+            "directories are not transcripts"
+        );
+
+        let oversized = scratch.join("oversized.tsv");
+        fs::File::create(&oversized)
+            .unwrap()
+            .set_len(MAX_INPUT_BYTES + 1)
+            .unwrap();
+        assert!(
+            read_bounded(&oversized).unwrap_err().contains("16 MiB"),
+            "sparse oversized inputs must be rejected before allocation"
+        );
+        fs::remove_dir_all(&scratch).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn renamed_identical_inode_and_symlink_substitution_are_rejected() {
+        let scratch = std::env::temp_dir().join(format!(
+            "free-energy-ownership-replay-race-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&scratch).unwrap();
+        let path = scratch.join("transcript.tsv");
+        let replacement = scratch.join("replacement.tsv");
+        fs::write(&path, TRANSCRIPT).unwrap();
+        fs::write(&replacement, TRANSCRIPT).unwrap();
+        let observed = fs::symlink_metadata(&path).unwrap();
+        fs::rename(&replacement, &path).unwrap();
+        assert_eq!(
+            read_bounded_with_observed_metadata(&path, &observed).unwrap_err(),
+            "transcript changed between metadata check and open",
+            "byte-identical content must not hide inode replacement"
+        );
+
+        let before_symlink = fs::symlink_metadata(&path).unwrap();
+        let target = scratch.join("target.tsv");
+        fs::write(&target, TRANSCRIPT).unwrap();
+        fs::remove_file(&path).unwrap();
+        std::os::unix::fs::symlink(&target, &path).unwrap();
+        assert!(read_bounded_with_observed_metadata(&path, &before_symlink).is_err());
+        assert!(
+            read_bounded(&path).is_err(),
+            "preexisting symlinks are rejected"
+        );
+        fs::remove_dir_all(&scratch).unwrap();
+    }
 
     #[test]
     fn complete_chain_yields_only_model_active_state() {
