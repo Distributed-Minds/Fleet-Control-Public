@@ -6,8 +6,8 @@ use serde::{Deserialize, Deserializer};
 use serde_json::{Map, Value};
 use std::collections::HashSet;
 use std::env;
-use std::fs;
 use std::fmt;
+use std::fs;
 use std::process;
 
 // Reject conflicting raw object members before serde_json's normal struct
