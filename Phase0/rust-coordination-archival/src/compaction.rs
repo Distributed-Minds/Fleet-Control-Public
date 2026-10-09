@@ -381,9 +381,13 @@ mod tests {
         );
         archived.push(record("r11", 11));
         archived.push(record("r11", 11));
+        // The replay boundary rejects a repeated record inside one archive
+        // tier before the removal planner can mistake it for an overlap.
         assert_eq!(
             plan_compaction(&archived, &live, &cut(), &[candidate]),
-            Err(PlanFailure::MissingOrAmbiguousArchivedCopy)
+            Err(PlanFailure::UntrustedHistory(
+                ReplayFailure::ConflictingDuplicate
+            ))
         );
     }
 
@@ -423,7 +427,9 @@ mod tests {
         live.push(record("r11", 11));
         assert_eq!(
             plan_compaction(&archived, &live, &cut(), &[first]),
-            Err(PlanFailure::MissingOrAmbiguousLiveRecord)
+            Err(PlanFailure::UntrustedHistory(
+                ReplayFailure::ConflictingDuplicate
+            ))
         );
     }
 

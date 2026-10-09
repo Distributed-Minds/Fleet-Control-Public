@@ -6,7 +6,7 @@
 //! owned struct, local files, GitHub comments, or this model's test fixtures
 //! are NOT authority receipts. An Eligible model decision is not a DELETE token.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Source {
@@ -319,7 +319,15 @@ pub fn replay(
 
     let mut by_sequence = BTreeMap::<u64, ReplayRecord>::new();
     let mut by_identity = HashMap::<&str, u64>::new();
-    for record in archived.iter().chain(live) {
+    // Only overlap *across* archive and live may be deduplicated.
+    // Repeated identities within one tier indicate an ambiguous provider
+    // snapshot/pagination input even when their bytes match exactly.
+    let mut tier_seen = [HashSet::<&str>::new(), HashSet::<&str>::new()];
+    for (tier, record) in archived
+        .iter()
+        .map(|record| (0_usize, record))
+        .chain(live.iter().map(|record| (1_usize, record)))
+    {
         if !named(&record.stable_id)
             || !named(&record.source_version)
             || record.order_basis != cut.ordering
@@ -329,6 +337,9 @@ pub fn replay(
         }
         if record.sequence < cut.first_sequence || record.sequence > cut.last_sequence {
             return Err(ReplayFailure::IncompleteHistory);
+        }
+        if !tier_seen[tier].insert(record.stable_id.as_str()) {
+            return Err(ReplayFailure::ConflictingDuplicate);
         }
         if let Some(old_sequence) = by_identity.insert(&record.stable_id, record.sequence) {
             if old_sequence != record.sequence {
@@ -1042,6 +1053,27 @@ mod tests {
         assert_eq!(
             records.iter().map(|r| r.sequence).collect::<Vec<_>>(),
             vec![10, 11, 12]
+        );
+    }
+
+    #[test]
+    fn same_tier_duplicate_records_are_not_valid_archive_live_overlaps() {
+        let archive = [item("a", 10), item("b", 11)];
+        let live = [item("b", 11), item("c", 12)];
+        assert_eq!(replay(&archive, &live, &cut()).unwrap().len(), 3);
+
+        let mut duplicate_archive = archive.to_vec();
+        duplicate_archive.push(item("b", 11));
+        assert_eq!(
+            replay(&duplicate_archive, &live, &cut()),
+            Err(ReplayFailure::ConflictingDuplicate)
+        );
+
+        let mut duplicate_live = live.to_vec();
+        duplicate_live.push(item("b", 11));
+        assert_eq!(
+            replay(&archive, &duplicate_live, &cut()),
+            Err(ReplayFailure::ConflictingDuplicate)
         );
     }
 
