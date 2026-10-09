@@ -9,6 +9,12 @@ use std::{
     process::ExitCode,
 };
 
+/// Escape filesystem labels before writing error diagnostics. Paths are untrusted
+/// data; embedded newline and terminal controls must never forge log records.
+fn diagnostic_path(path: &Path) -> String {
+    format!("{path:?}")
+}
+
 /// Refuse symlinked render output directories, including links outside the
 /// project tree. This is a local input-admission check, not a race-free
 /// filesystem sandbox against concurrent untrusted directory replacement.
@@ -78,13 +84,13 @@ where
         match free_energy_catalog::validate_manifest(json) {
             Ok(record) => {
                 if !ids.insert(record.id.clone()) {
-                    problems.push(format!("{path}: duplicate project ID: {}", record.id));
+                    problems.push(format!("{path:?}: duplicate project ID: {}", record.id));
                 } else {
                     accepted.push((record.id, path.to_owned()));
                 }
             }
             Err(errors) => {
-                problems.extend(errors.into_iter().map(|error| format!("{path}: {error}")));
+                problems.extend(errors.into_iter().map(|error| format!("{path:?}: {error}")));
             }
         }
     }
@@ -100,15 +106,15 @@ where
 /// checked-in page must not follow an untracked filesystem symlink out of the
 /// project source directory (or silently accept a JSON-named directory).
 fn read_render_manifest(path: &Path) -> Result<String, String> {
-    let metadata =
-        fs::symlink_metadata(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| format!("{}: {error}", diagnostic_path(path)))?;
     if !metadata.file_type().is_file() {
         return Err(format!(
             "{}: render source must be a regular file (symlinks prohibited)",
-            path.display()
+            diagnostic_path(path)
         ));
     }
-    fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))
+    fs::read_to_string(path).map_err(|error| format!("{}: {error}", diagnostic_path(path)))
 }
 
 /// Collect the complete manifest set only from a real project directory.
@@ -116,9 +122,9 @@ fn read_render_manifest(path: &Path) -> Result<String, String> {
 /// renderer to unrelated JSON files before per-file admission takes place.
 fn collect_render_manifests(project_dir: &Path) -> Result<Vec<std::path::PathBuf>, String> {
     validate_output_directory(project_dir)
-        .map_err(|error| format!("{}: {error}", project_dir.display()))?;
-    let entries =
-        fs::read_dir(project_dir).map_err(|error| format!("{}: {error}", project_dir.display()))?;
+        .map_err(|error| format!("{}: {error}", diagnostic_path(project_dir)))?;
+    let entries = fs::read_dir(project_dir)
+        .map_err(|error| format!("{}: {error}", diagnostic_path(project_dir)))?;
     let mut paths = Vec::new();
     for entry in entries {
         let entry = entry.map_err(|error| format!("project directory entry: {error}"))?;
@@ -161,7 +167,7 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
                     if !ids.insert(record.id.clone()) {
                         problems.push(format!(
                             "{}: duplicate project ID: {}",
-                            path.display(),
+                            diagnostic_path(&path),
                             record.id
                         ));
                     } else {
@@ -170,11 +176,11 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
                 }
                 Err(errors) => {
                     for error in errors {
-                        problems.push(format!("{}: {error}", path.display()));
+                        problems.push(format!("{}: {error}", diagnostic_path(&path)));
                     }
                 }
             },
-            Err(error) => problems.push(format!("{}: {error}", path.display())),
+            Err(error) => problems.push(format!("{}: {error}", diagnostic_path(&path))),
         }
     }
     if !problems.is_empty() {
@@ -190,7 +196,7 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
         if let Err(error) =
             validate_output_directory(output.parent().expect("catalog output always has a parent"))
         {
-            eprintln!("{}: {error}", output.display());
+            eprintln!("{}: {error}", diagnostic_path(&output));
             return ExitCode::FAILURE;
         }
         match fs::read_to_string(&output) {
@@ -203,19 +209,19 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
             Ok(_) => {
                 eprintln!(
                     "{}: generated HTML differs; run render to regenerate",
-                    output.display()
+                    diagnostic_path(&output)
                 );
                 ExitCode::FAILURE
             }
             Err(error) => {
-                eprintln!("{}: {error}", output.display());
+                eprintln!("{}: {error}", diagnostic_path(&output));
                 ExitCode::FAILURE
             }
         }
     } else {
         if let Some(parent) = output.parent() {
             if let Err(error) = fs::create_dir_all(parent) {
-                eprintln!("{}: {error}", parent.display());
+                eprintln!("{}: {error}", diagnostic_path(parent));
                 return ExitCode::FAILURE;
             }
         }
@@ -228,7 +234,7 @@ fn render_command(args: Vec<std::ffi::OsString>) -> ExitCode {
                 ExitCode::SUCCESS
             }
             Err(error) => {
-                eprintln!("{}: {error}", output.display());
+                eprintln!("{}: {error}", diagnostic_path(&output));
                 ExitCode::FAILURE
             }
         }
@@ -263,7 +269,7 @@ fn main() -> ExitCode {
             if fs::symlink_metadata(&path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
                 errors.push(format!(
                     "{}: symlinked project directory prohibited",
-                    path.display()
+                    diagnostic_path(&path)
                 ));
                 continue;
             }
@@ -279,16 +285,20 @@ fn main() -> ExitCode {
                                     count += 1;
                                 }
                             }
-                            Err(error) => {
-                                errors.push(format!("{}: directory entry: {error}", path.display()))
-                            }
+                            Err(error) => errors.push(format!(
+                                "{}: directory entry: {error}",
+                                diagnostic_path(&path)
+                            )),
                         }
                     }
                     if count == 0 {
-                        errors.push(format!("{}: no JSON manifests found", path.display()));
+                        errors.push(format!(
+                            "{}: no JSON manifests found",
+                            diagnostic_path(&path)
+                        ));
                     }
                 }
-                Err(error) => errors.push(format!("{}: {error}", path.display())),
+                Err(error) => errors.push(format!("{}: {error}", diagnostic_path(&path))),
             }
         } else {
             manifest_paths.push(path);
@@ -302,25 +312,28 @@ fn main() -> ExitCode {
         // admission rule. This does not prevent concurrent path replacement.
         match fs::symlink_metadata(&path) {
             Ok(metadata) if metadata.file_type().is_symlink() => {
-                errors.push(format!("{}: symlinked manifest prohibited", path.display()));
+                errors.push(format!(
+                    "{}: symlinked manifest prohibited",
+                    diagnostic_path(&path)
+                ));
                 continue;
             }
             Ok(metadata) if !metadata.file_type().is_file() => {
                 errors.push(format!(
                     "{}: manifest is not a regular file",
-                    path.display()
+                    diagnostic_path(&path)
                 ));
                 continue;
             }
             Err(error) => {
-                errors.push(format!("{}: {error}", path.display()));
+                errors.push(format!("{}: {error}", diagnostic_path(&path)));
                 continue;
             }
             Ok(_) => {}
         }
         match fs::read_to_string(&path) {
             Ok(text) => loaded.push((path.to_string_lossy().into_owned(), text)),
-            Err(error) => errors.push(format!("{}: {error}", path.display())),
+            Err(error) => errors.push(format!("{}: {error}", diagnostic_path(&path))),
         }
     }
 
@@ -378,7 +391,7 @@ mod tests {
         assert!(
             failures
                 .iter()
-                .any(|error| error.contains("two.json: duplicate project ID:")),
+                .any(|error| error.contains("\"two.json\": duplicate project ID:")),
             "{failures:?}"
         );
     }
