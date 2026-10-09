@@ -191,6 +191,9 @@ where
 // Match the 1 MiB per-manifest input budget of the catalog validate/render CLI.
 // This limits an individual explain input, not aggregate memory across a batch.
 const MAX_EXPLAIN_MANIFEST_BYTES: u64 = 1024 * 1024;
+// Bound retained input memory and argument fan-out independently of per-file size.
+const MAX_EXPLAIN_BATCH_BYTES: usize = 16 * 1024 * 1024;
+const MAX_EXPLAIN_BATCH_FILES: usize = 256;
 
 /// Reject symlinks and directories before reading. This does not pretend to
 /// defend against a privileged concurrent replacement of the same pathname.
@@ -255,12 +258,29 @@ fn execute(args: Vec<PathBuf>) -> Result<String, Vec<String>> {
         ]);
     }
 
+    if args.len() > MAX_EXPLAIN_BATCH_FILES {
+        return Err(vec![format!(
+            "manifest batch has {} inputs (maximum {MAX_EXPLAIN_BATCH_FILES})",
+            args.len()
+        )]);
+    }
+
     let mut files = Vec::new();
     let mut errors = Vec::new();
+    let mut batch_bytes = 0usize;
     for path in args {
         let filename = path.to_string_lossy().into_owned();
         match read_file(&path) {
-            Ok(text) => files.push((filename, text)),
+            Ok(text) => {
+                if text.len() > MAX_EXPLAIN_BATCH_BYTES.saturating_sub(batch_bytes) {
+                    errors.push(format!(
+                        "{path:?}: manifest batch exceeds 16 MiB cumulative input limit"
+                    ));
+                    break;
+                }
+                batch_bytes += text.len();
+                files.push((filename, text));
+            }
             Err(error) => errors.push(error),
         }
     }
