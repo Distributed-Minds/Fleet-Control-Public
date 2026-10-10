@@ -1028,15 +1028,27 @@ mod tests {
     #[test]
     fn diagnostic_rendering_preserves_missing_target_failure() {
         let sandbox = Sandbox::new();
+        // A percent-decoded control is now rejected at destination parsing:
+        // it must never become a filesystem lookup or a forged diagnostic line.
         sandbox.write("README.md", "[bad](missing%0AFAIL%3A%20fake.md)\n");
-        let result = sandbox.scan();
-        assert_eq!(result.local_links, 1);
-        assert_eq!(result.errors.len(), 1, "{:?}", result.errors);
-        assert!(result.errors[0].contains("missing\nFAIL: fake.md"),
-            "missing target was not preserved: {:?}", result.errors);
-        let rendered = render_failure(&result.errors[0]);
+        let denied = sandbox.scan();
+        assert_eq!(denied.local_links, 0);
+        assert_eq!(denied.errors.len(), 1, "{:?}", denied.errors);
+        assert!(denied.errors[0].contains("unsafe percent-decoded control"),
+            "control destination was not rejected: {:?}", denied.errors);
+        let rendered = render_failure(&denied.errors[0]);
+        assert_eq!(rendered.lines().count(), 1, "{rendered:?}");
+
+        // Printable missing targets still use the normal existence check and
+        // produce one unforgeable, stable failure diagnostic.
+        sandbox.write("README.md", "[bad](missing-printable.md)\n");
+        let missing = sandbox.scan();
+        assert_eq!(missing.local_links, 1);
+        assert_eq!(missing.errors.len(), 1, "{:?}", missing.errors);
+        assert!(missing.errors[0].contains("target missing: missing-printable.md"),
+            "{:?}", missing.errors);
+        let rendered = render_failure(&missing.errors[0]);
         assert!(rendered.starts_with("FAIL: README.md:"));
-        assert!(rendered.contains("missing\\nFAIL: fake.md"), "{rendered:?}");
         assert_eq!(rendered.lines().count(), 1, "{rendered:?}");
     }
 
