@@ -9,7 +9,7 @@
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::env;
-use std::fs::{self, File};
+use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process;
@@ -349,8 +349,10 @@ const MAX_EXTERNAL_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
 
 // Model-only fixture CLI: bound caller-controlled IO; this is not an
 // atomic directory confinement protocol or a live provider authority check.
-fn read_fixture_bounded(input: &Path) -> Result<String, String> {
-    let before = fs::symlink_metadata(input).map_err(|e| format!("cannot read {input:?}: {e}"))?;
+fn read_fixture_bounded_with_metadata(
+    input: &Path,
+    before: &fs::Metadata,
+) -> Result<String, String> {
     if !before.file_type().is_file() {
         return Err(format!(
             "fixture {input:?} must be a regular file (no symlinks)"
@@ -362,7 +364,20 @@ fn read_fixture_bounded(input: &Path) -> Result<String, String> {
         ));
     }
 
-    let file = File::open(input).map_err(|e| format!("cannot open {input:?}: {e}"))?;
+    // On Linux, a FIFO installed after the metadata check must not block open.
+    // O_NOFOLLOW also rejects a symlink substituted at this boundary.
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let file = options
+        .open(input)
+        .map_err(|e| format!("cannot open {input:?}: {e}"))?;
     let opened = file
         .metadata()
         .map_err(|e| format!("cannot inspect opened fixture {input:?}: {e}"))?;
@@ -393,6 +408,11 @@ fn read_fixture_bounded(input: &Path) -> Result<String, String> {
         ));
     }
     Ok(json)
+}
+
+fn read_fixture_bounded(input: &Path) -> Result<String, String> {
+    let before = fs::symlink_metadata(input).map_err(|e| format!("cannot read {input:?}: {e}"))?;
+    read_fixture_bounded_with_metadata(input, &before)
 }
 
 fn run() -> Result<(), String> {
@@ -568,5 +588,50 @@ mod tests {
         // Case 1 previously had no input rule pinning this false outcome.
         let changed_outcome = mutate(1, "expected", json!("ACTION_BLOCKED"));
         assert!(checked(changed_outcome).is_err());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn swapped_fifo_and_symlink_cannot_bypass_open_time_admission() {
+        // Reproduce an adversarial replacement after the original lstat.
+        // Without O_NONBLOCK, opening the FIFO for reading can hang forever.
+        let scratch = std::env::temp_dir().join(format!(
+            "free-energy-ghcap-open-swap-{}",
+            process::id()
+        ));
+        fs::create_dir(&scratch).expect("create isolated fixture directory");
+        let input = scratch.join("fixture.json");
+        fs::write(&input, BASELINE).expect("create regular fixture");
+        let original = fs::symlink_metadata(&input).expect("observe regular fixture");
+        assert_eq!(
+            read_fixture_bounded_with_metadata(&input, &original).unwrap(),
+            BASELINE
+        );
+
+        fs::remove_file(&input).expect("remove original fixture");
+        let status = std::process::Command::new("mkfifo")
+            .arg(&input)
+            .status()
+            .expect("create substituted Linux FIFO");
+        assert!(status.success(), "mkfifo failed");
+        let fifo_error = read_fixture_bounded_with_metadata(&input, &original)
+            .expect_err("swapped FIFO must fail without blocking");
+        assert!(
+            fifo_error.contains("not a regular file"),
+            "unexpected FIFO rejection: {fifo_error}"
+        );
+
+        fs::remove_file(&input).expect("remove FIFO");
+        fs::write(&input, BASELINE).expect("restore regular fixture");
+        let observed = fs::symlink_metadata(&input).expect("observe new regular fixture");
+        fs::remove_file(&input).expect("remove before symlink substitution");
+        let canonical = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../fixtures/github-capability-spec5.json");
+        std::os::unix::fs::symlink(canonical, &input).expect("substitute symlink");
+        assert!(
+            read_fixture_bounded_with_metadata(&input, &observed).is_err(),
+            "swapped symlink cannot be followed"
+        );
+        fs::remove_dir_all(&scratch).expect("remove isolated fixture directory");
     }
 }
