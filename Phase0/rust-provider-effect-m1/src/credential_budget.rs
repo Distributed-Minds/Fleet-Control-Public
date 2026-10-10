@@ -64,6 +64,7 @@ pub enum Error {
     InvalidRequest,
     OperationIdentityConflict,
     QueueFull,
+    OperationHistoryFull,
     CircuitOpen,
     StaleBoundary,
 }
@@ -117,6 +118,12 @@ impl CredentialLane {
         }
     }
 }
+
+/// Maximum number of operation identities retained by this *offline simulation*.
+/// The journal never evicts completed identities: evicting one would allow a
+/// changed payload to reuse an old operation ID without a replay conflict.
+/// A real broker needs a durable, bounded receipt/reconciliation contract.
+pub const MAX_TRACKED_OPERATIONS: usize = 1024;
 
 /// All repositories sharing an effective credential group consume ONE budget.
 /// Different group keys in fixtures model separately proved credential buckets;
@@ -204,6 +211,13 @@ impl Scheduler {
         }
         if lane.pending_count >= lane.max_pending {
             return Err(Error::QueueFull);
+        }
+        // The pending queue bound is NOT a bound on the replay journal:
+        // completed operations remain in known_operations indefinitely.
+        // Fail closed when the simulation reaches its retained-history limit;
+        // never evict an old identity to admit an apparently fresh replay.
+        if self.known_operations.len() >= MAX_TRACKED_OPERATIONS {
+            return Err(Error::OperationHistoryFull);
         }
         let queues = match request.priority {
             Priority::Normal => &mut lane.normal,
@@ -834,5 +848,66 @@ mod tests {
             s.remaining_class("missing-group", "ref-update"),
             Err(Error::UnknownGroup)
         );
+    }
+
+    #[test]
+    fn completed_history_cannot_bypass_queue_bounds_or_reuse_operation_ids() {
+        let mut s = Scheduler::new();
+        let limit = (MAX_TRACKED_OPERATIONS + 1) as u32;
+        // A queue of one can still admit arbitrarily many distinct IDs over
+        // time unless completed-operation history is independently bounded.
+        s.register_group("group-history", limit, 0, 1).unwrap();
+        s.register_operation_class("group-history", "comment-create", limit)
+            .unwrap();
+        for index in 0..MAX_TRACKED_OPERATIONS {
+            let original = request(
+                &format!("history-{index:04}"),
+                "group-history",
+                "repo-a",
+                "tenant-a",
+                Priority::Normal,
+            );
+            assert_eq!(s.enqueue(original.clone()), Ok(true));
+            let selected = s
+                .simulate_candidate("group-history", CURRENT)
+                .unwrap()
+                .unwrap();
+            assert_eq!(selected.request, original);
+        }
+        assert_eq!(s.pending("group-history"), Ok(0));
+
+        // A historical identical operation is still a no-op at capacity.
+        let old = request(
+            "history-0000",
+            "group-history",
+            "repo-a",
+            "tenant-a",
+            Priority::Normal,
+        );
+        assert_eq!(s.enqueue(old.clone()), Ok(false));
+        let mut conflicting = old;
+        conflicting.target = "issue:changed".into();
+        assert_eq!(
+            s.enqueue(conflicting),
+            Err(Error::OperationIdentityConflict)
+        );
+
+        // Fresh IDs fail closed: no eviction, queue insertion, or budget use.
+        let fresh = request(
+            "history-over-capacity",
+            "group-history",
+            "repo-a",
+            "tenant-a",
+            Priority::Normal,
+        );
+        assert_eq!(
+            s.enqueue(fresh.clone()),
+            Err(Error::OperationHistoryFull)
+        );
+        assert_eq!(s.pending("group-history"), Ok(0));
+        assert_eq!(s.remaining("group-history"), Ok(1));
+        s.replenish("group-history").unwrap();
+        assert_eq!(s.enqueue(fresh), Err(Error::OperationHistoryFull));
+        assert_eq!(s.pending("group-history"), Ok(0));
     }
 }
