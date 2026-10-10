@@ -219,7 +219,10 @@ impl Registry {
         {
             return Err(Denied::WrongResource);
         }
-        if request.recovery_required && !request.recovery_authorized {
+        // Unresolved inherited obligations cannot be waived by a caller flag.
+        // This is conservative synthetic evidence, not provider recovery authority.
+        let recovery_needed = request.recovery_required || !self.obligations.is_empty();
+        if recovery_needed && !request.recovery_authorized {
             return Err(Denied::RecoveryHold);
         }
         Ok(Eligibility::SimulationOnly)
