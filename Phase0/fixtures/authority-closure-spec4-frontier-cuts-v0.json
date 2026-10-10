@@ -1,0 +1,1847 @@
+{
+  "schema_id": "free-energy.public.authority-closure.frontier-cut-v0",
+  "status": "NONEXECUTABLE_SYNTHETIC_TEST_DESIGN_NOT_INSTALLED",
+  "source": {
+    "issue": "https://github.com/Distributed-Minds/Fleet-Control-Public/issues/16",
+    "spec_version": 4,
+    "preview_base_commit": "7a104e112fdbf755f49c4b6c6778335630a271af"
+  },
+  "purpose": "Discriminating offline Rust test inputs for causal edge ordering; supplement C4-01/C4-02/C4-03 and effect-time currentness requirements. This data is not evidence of provider execution or a production closure algorithm.",
+  "interpretation": {
+    "logical_sequence_numbers": "Only synthetic provider-specific sequence positions; not wall clock times. The fixture assumes an independently verified ordering relation across edge emission, delivery and provider barriers. Without such a trustworthy relation, any apparent positive MUST be NOT_PROVEN.",
+    "barrier_rule": "Each source frontier must cover that edge's emission and each destination frontier must cover its delivery, inclusive; in a multi-hop chain a shared intermediate frontier must cover inbound delivery AND outbound emission.",
+    "positive_result": "SYNTHETIC_CUT_CANDIDATE is a prerequisite witness only, NEVER authorization to complete closure, release, cancel or issue new authority. Other Clause 4 ClosureCutBasis proofs and effect-time revalidation remain mandatory.",
+    "negative_result": "NOT_PROVEN means fail closed for completion; this fixture deliberately does not prescribe the full typed UNKNOWN/PARTIAL/ERROR taxonomy of the canonical spec.",
+    "assertion_rule": "Strip expected verdict from input before applying an independently written typed Rust reducer. No fixture label may be accepted as an authority proof.",
+    "execution_boundary": "No GitHub API effects, provider I/O, revocation, commit, release, or authorization semantics may be inferred from this model."
+  },
+  "baseline_preconditions": {
+    "root_cutoff_fenced": true,
+    "registry_issuer_authorized": true,
+    "registry_head_current": true,
+    "registry_non_aba": true,
+    "new_surface_registration_fenced": true,
+    "cause_ledger_complete": true,
+    "all_provider_generations_current": true,
+    "composition_supported": true,
+    "cross_edge_set_complete": true,
+    "unresolved_causes_absent": true,
+    "pending_retries_absent": true,
+    "lost_acks_reconciled": true,
+    "independent_roots_verified": true
+  },
+  "sets": [
+    {
+      "id": "AB_8X8",
+      "description": "64 exhaustive source/destination frontier pairs for one causal edge, including delayed arrival under a premature destination barrier",
+      "edges": [
+        {
+          "id": "edge-A-B-1",
+          "source": "A",
+          "target": "B",
+          "emission_seq": 4,
+          "delivery_seq": 6
+        }
+      ],
+      "cases": [
+        {
+          "case_id": "AB-A02-B02",
+          "barriers": {
+            "A": 2,
+            "B": 2
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A02-B03",
+          "barriers": {
+            "A": 2,
+            "B": 3
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A02-B04",
+          "barriers": {
+            "A": 2,
+            "B": 4
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A02-B05",
+          "barriers": {
+            "A": 2,
+            "B": 5
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A02-B06",
+          "barriers": {
+            "A": 2,
+            "B": 6
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A02-B07",
+          "barriers": {
+            "A": 2,
+            "B": 7
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A02-B08",
+          "barriers": {
+            "A": 2,
+            "B": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A02-B09",
+          "barriers": {
+            "A": 2,
+            "B": 9
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A03-B02",
+          "barriers": {
+            "A": 3,
+            "B": 2
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A03-B03",
+          "barriers": {
+            "A": 3,
+            "B": 3
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A03-B04",
+          "barriers": {
+            "A": 3,
+            "B": 4
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A03-B05",
+          "barriers": {
+            "A": 3,
+            "B": 5
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A03-B06",
+          "barriers": {
+            "A": 3,
+            "B": 6
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A03-B07",
+          "barriers": {
+            "A": 3,
+            "B": 7
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A03-B08",
+          "barriers": {
+            "A": 3,
+            "B": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A03-B09",
+          "barriers": {
+            "A": 3,
+            "B": 9
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A04-B02",
+          "barriers": {
+            "A": 4,
+            "B": 2
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A04-B03",
+          "barriers": {
+            "A": 4,
+            "B": 3
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A04-B04",
+          "barriers": {
+            "A": 4,
+            "B": 4
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A04-B05",
+          "barriers": {
+            "A": 4,
+            "B": 5
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A04-B06",
+          "barriers": {
+            "A": 4,
+            "B": 6
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A04-B07",
+          "barriers": {
+            "A": 4,
+            "B": 7
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A04-B08",
+          "barriers": {
+            "A": 4,
+            "B": 8
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A04-B09",
+          "barriers": {
+            "A": 4,
+            "B": 9
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A05-B02",
+          "barriers": {
+            "A": 5,
+            "B": 2
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A05-B03",
+          "barriers": {
+            "A": 5,
+            "B": 3
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A05-B04",
+          "barriers": {
+            "A": 5,
+            "B": 4
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A05-B05",
+          "barriers": {
+            "A": 5,
+            "B": 5
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A05-B06",
+          "barriers": {
+            "A": 5,
+            "B": 6
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A05-B07",
+          "barriers": {
+            "A": 5,
+            "B": 7
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A05-B08",
+          "barriers": {
+            "A": 5,
+            "B": 8
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A05-B09",
+          "barriers": {
+            "A": 5,
+            "B": 9
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A06-B02",
+          "barriers": {
+            "A": 6,
+            "B": 2
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A06-B03",
+          "barriers": {
+            "A": 6,
+            "B": 3
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A06-B04",
+          "barriers": {
+            "A": 6,
+            "B": 4
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A06-B05",
+          "barriers": {
+            "A": 6,
+            "B": 5
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A06-B06",
+          "barriers": {
+            "A": 6,
+            "B": 6
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A06-B07",
+          "barriers": {
+            "A": 6,
+            "B": 7
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A06-B08",
+          "barriers": {
+            "A": 6,
+            "B": 8
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A06-B09",
+          "barriers": {
+            "A": 6,
+            "B": 9
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A07-B02",
+          "barriers": {
+            "A": 7,
+            "B": 2
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A07-B03",
+          "barriers": {
+            "A": 7,
+            "B": 3
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A07-B04",
+          "barriers": {
+            "A": 7,
+            "B": 4
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A07-B05",
+          "barriers": {
+            "A": 7,
+            "B": 5
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A07-B06",
+          "barriers": {
+            "A": 7,
+            "B": 6
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A07-B07",
+          "barriers": {
+            "A": 7,
+            "B": 7
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A07-B08",
+          "barriers": {
+            "A": 7,
+            "B": 8
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A07-B09",
+          "barriers": {
+            "A": 7,
+            "B": 9
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A08-B02",
+          "barriers": {
+            "A": 8,
+            "B": 2
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A08-B03",
+          "barriers": {
+            "A": 8,
+            "B": 3
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A08-B04",
+          "barriers": {
+            "A": 8,
+            "B": 4
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A08-B05",
+          "barriers": {
+            "A": 8,
+            "B": 5
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A08-B06",
+          "barriers": {
+            "A": 8,
+            "B": 6
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A08-B07",
+          "barriers": {
+            "A": 8,
+            "B": 7
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A08-B08",
+          "barriers": {
+            "A": 8,
+            "B": 8
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A08-B09",
+          "barriers": {
+            "A": 8,
+            "B": 9
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A09-B02",
+          "barriers": {
+            "A": 9,
+            "B": 2
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A09-B03",
+          "barriers": {
+            "A": 9,
+            "B": 3
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A09-B04",
+          "barriers": {
+            "A": 9,
+            "B": 4
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A09-B05",
+          "barriers": {
+            "A": 9,
+            "B": 5
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "AB-A09-B06",
+          "barriers": {
+            "A": 9,
+            "B": 6
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A09-B07",
+          "barriers": {
+            "A": 9,
+            "B": 7
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A09-B08",
+          "barriers": {
+            "A": 9,
+            "B": 8
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "AB-A09-B09",
+          "barriers": {
+            "A": 9,
+            "B": 9
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        }
+      ]
+    },
+    {
+      "id": "ABC_6X5X4",
+      "description": "120 exhaustive source/intermediate/destination frontier triples for a two-edge chain, separating intermediate inbound delivery at 6 from outbound emission at 7",
+      "edges": [
+        {
+          "id": "edge-A-B-1",
+          "source": "A",
+          "target": "B",
+          "emission_seq": 4,
+          "delivery_seq": 6
+        },
+        {
+          "id": "edge-B-C-2",
+          "source": "B",
+          "target": "C",
+          "emission_seq": 7,
+          "delivery_seq": 9
+        }
+      ],
+      "cases": [
+        {
+          "case_id": "ABC-A03-B05-C08",
+          "barriers": {
+            "A": 3,
+            "B": 5,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A03-B05-C09",
+          "barriers": {
+            "A": 3,
+            "B": 5,
+            "C": 9
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A03-B05-C10",
+          "barriers": {
+            "A": 3,
+            "B": 5,
+            "C": 10
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A03-B05-C11",
+          "barriers": {
+            "A": 3,
+            "B": 5,
+            "C": 11
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A03-B06-C08",
+          "barriers": {
+            "A": 3,
+            "B": 6,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A03-B06-C09",
+          "barriers": {
+            "A": 3,
+            "B": 6,
+            "C": 9
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A03-B06-C10",
+          "barriers": {
+            "A": 3,
+            "B": 6,
+            "C": 10
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A03-B06-C11",
+          "barriers": {
+            "A": 3,
+            "B": 6,
+            "C": 11
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A03-B07-C08",
+          "barriers": {
+            "A": 3,
+            "B": 7,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A03-B07-C09",
+          "barriers": {
+            "A": 3,
+            "B": 7,
+            "C": 9
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A03-B07-C10",
+          "barriers": {
+            "A": 3,
+            "B": 7,
+            "C": 10
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A03-B07-C11",
+          "barriers": {
+            "A": 3,
+            "B": 7,
+            "C": 11
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A03-B08-C08",
+          "barriers": {
+            "A": 3,
+            "B": 8,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A03-B08-C09",
+          "barriers": {
+            "A": 3,
+            "B": 8,
+            "C": 9
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A03-B08-C10",
+          "barriers": {
+            "A": 3,
+            "B": 8,
+            "C": 10
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A03-B08-C11",
+          "barriers": {
+            "A": 3,
+            "B": 8,
+            "C": 11
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A03-B09-C08",
+          "barriers": {
+            "A": 3,
+            "B": 9,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A03-B09-C09",
+          "barriers": {
+            "A": 3,
+            "B": 9,
+            "C": 9
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A03-B09-C10",
+          "barriers": {
+            "A": 3,
+            "B": 9,
+            "C": 10
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A03-B09-C11",
+          "barriers": {
+            "A": 3,
+            "B": 9,
+            "C": 11
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A04-B05-C08",
+          "barriers": {
+            "A": 4,
+            "B": 5,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A04-B05-C09",
+          "barriers": {
+            "A": 4,
+            "B": 5,
+            "C": 9
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A04-B05-C10",
+          "barriers": {
+            "A": 4,
+            "B": 5,
+            "C": 10
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A04-B05-C11",
+          "barriers": {
+            "A": 4,
+            "B": 5,
+            "C": 11
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A04-B06-C08",
+          "barriers": {
+            "A": 4,
+            "B": 6,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A04-B06-C09",
+          "barriers": {
+            "A": 4,
+            "B": 6,
+            "C": 9
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A04-B06-C10",
+          "barriers": {
+            "A": 4,
+            "B": 6,
+            "C": 10
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A04-B06-C11",
+          "barriers": {
+            "A": 4,
+            "B": 6,
+            "C": 11
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A04-B07-C08",
+          "barriers": {
+            "A": 4,
+            "B": 7,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A04-B07-C09",
+          "barriers": {
+            "A": 4,
+            "B": 7,
+            "C": 9
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A04-B07-C10",
+          "barriers": {
+            "A": 4,
+            "B": 7,
+            "C": 10
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A04-B07-C11",
+          "barriers": {
+            "A": 4,
+            "B": 7,
+            "C": 11
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A04-B08-C08",
+          "barriers": {
+            "A": 4,
+            "B": 8,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A04-B08-C09",
+          "barriers": {
+            "A": 4,
+            "B": 8,
+            "C": 9
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A04-B08-C10",
+          "barriers": {
+            "A": 4,
+            "B": 8,
+            "C": 10
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A04-B08-C11",
+          "barriers": {
+            "A": 4,
+            "B": 8,
+            "C": 11
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A04-B09-C08",
+          "barriers": {
+            "A": 4,
+            "B": 9,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A04-B09-C09",
+          "barriers": {
+            "A": 4,
+            "B": 9,
+            "C": 9
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A04-B09-C10",
+          "barriers": {
+            "A": 4,
+            "B": 9,
+            "C": 10
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A04-B09-C11",
+          "barriers": {
+            "A": 4,
+            "B": 9,
+            "C": 11
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A05-B05-C08",
+          "barriers": {
+            "A": 5,
+            "B": 5,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A05-B05-C09",
+          "barriers": {
+            "A": 5,
+            "B": 5,
+            "C": 9
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A05-B05-C10",
+          "barriers": {
+            "A": 5,
+            "B": 5,
+            "C": 10
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A05-B05-C11",
+          "barriers": {
+            "A": 5,
+            "B": 5,
+            "C": 11
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A05-B06-C08",
+          "barriers": {
+            "A": 5,
+            "B": 6,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A05-B06-C09",
+          "barriers": {
+            "A": 5,
+            "B": 6,
+            "C": 9
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A05-B06-C10",
+          "barriers": {
+            "A": 5,
+            "B": 6,
+            "C": 10
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A05-B06-C11",
+          "barriers": {
+            "A": 5,
+            "B": 6,
+            "C": 11
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A05-B07-C08",
+          "barriers": {
+            "A": 5,
+            "B": 7,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A05-B07-C09",
+          "barriers": {
+            "A": 5,
+            "B": 7,
+            "C": 9
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A05-B07-C10",
+          "barriers": {
+            "A": 5,
+            "B": 7,
+            "C": 10
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A05-B07-C11",
+          "barriers": {
+            "A": 5,
+            "B": 7,
+            "C": 11
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A05-B08-C08",
+          "barriers": {
+            "A": 5,
+            "B": 8,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A05-B08-C09",
+          "barriers": {
+            "A": 5,
+            "B": 8,
+            "C": 9
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A05-B08-C10",
+          "barriers": {
+            "A": 5,
+            "B": 8,
+            "C": 10
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A05-B08-C11",
+          "barriers": {
+            "A": 5,
+            "B": 8,
+            "C": 11
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A05-B09-C08",
+          "barriers": {
+            "A": 5,
+            "B": 9,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A05-B09-C09",
+          "barriers": {
+            "A": 5,
+            "B": 9,
+            "C": 9
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A05-B09-C10",
+          "barriers": {
+            "A": 5,
+            "B": 9,
+            "C": 10
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A05-B09-C11",
+          "barriers": {
+            "A": 5,
+            "B": 9,
+            "C": 11
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A06-B05-C08",
+          "barriers": {
+            "A": 6,
+            "B": 5,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A06-B05-C09",
+          "barriers": {
+            "A": 6,
+            "B": 5,
+            "C": 9
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A06-B05-C10",
+          "barriers": {
+            "A": 6,
+            "B": 5,
+            "C": 10
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A06-B05-C11",
+          "barriers": {
+            "A": 6,
+            "B": 5,
+            "C": 11
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A06-B06-C08",
+          "barriers": {
+            "A": 6,
+            "B": 6,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A06-B06-C09",
+          "barriers": {
+            "A": 6,
+            "B": 6,
+            "C": 9
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A06-B06-C10",
+          "barriers": {
+            "A": 6,
+            "B": 6,
+            "C": 10
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A06-B06-C11",
+          "barriers": {
+            "A": 6,
+            "B": 6,
+            "C": 11
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A06-B07-C08",
+          "barriers": {
+            "A": 6,
+            "B": 7,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A06-B07-C09",
+          "barriers": {
+            "A": 6,
+            "B": 7,
+            "C": 9
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A06-B07-C10",
+          "barriers": {
+            "A": 6,
+            "B": 7,
+            "C": 10
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A06-B07-C11",
+          "barriers": {
+            "A": 6,
+            "B": 7,
+            "C": 11
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A06-B08-C08",
+          "barriers": {
+            "A": 6,
+            "B": 8,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A06-B08-C09",
+          "barriers": {
+            "A": 6,
+            "B": 8,
+            "C": 9
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A06-B08-C10",
+          "barriers": {
+            "A": 6,
+            "B": 8,
+            "C": 10
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A06-B08-C11",
+          "barriers": {
+            "A": 6,
+            "B": 8,
+            "C": 11
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A06-B09-C08",
+          "barriers": {
+            "A": 6,
+            "B": 9,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A06-B09-C09",
+          "barriers": {
+            "A": 6,
+            "B": 9,
+            "C": 9
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A06-B09-C10",
+          "barriers": {
+            "A": 6,
+            "B": 9,
+            "C": 10
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A06-B09-C11",
+          "barriers": {
+            "A": 6,
+            "B": 9,
+            "C": 11
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A07-B05-C08",
+          "barriers": {
+            "A": 7,
+            "B": 5,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A07-B05-C09",
+          "barriers": {
+            "A": 7,
+            "B": 5,
+            "C": 9
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A07-B05-C10",
+          "barriers": {
+            "A": 7,
+            "B": 5,
+            "C": 10
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A07-B05-C11",
+          "barriers": {
+            "A": 7,
+            "B": 5,
+            "C": 11
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A07-B06-C08",
+          "barriers": {
+            "A": 7,
+            "B": 6,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A07-B06-C09",
+          "barriers": {
+            "A": 7,
+            "B": 6,
+            "C": 9
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A07-B06-C10",
+          "barriers": {
+            "A": 7,
+            "B": 6,
+            "C": 10
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A07-B06-C11",
+          "barriers": {
+            "A": 7,
+            "B": 6,
+            "C": 11
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A07-B07-C08",
+          "barriers": {
+            "A": 7,
+            "B": 7,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A07-B07-C09",
+          "barriers": {
+            "A": 7,
+            "B": 7,
+            "C": 9
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A07-B07-C10",
+          "barriers": {
+            "A": 7,
+            "B": 7,
+            "C": 10
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A07-B07-C11",
+          "barriers": {
+            "A": 7,
+            "B": 7,
+            "C": 11
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A07-B08-C08",
+          "barriers": {
+            "A": 7,
+            "B": 8,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A07-B08-C09",
+          "barriers": {
+            "A": 7,
+            "B": 8,
+            "C": 9
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A07-B08-C10",
+          "barriers": {
+            "A": 7,
+            "B": 8,
+            "C": 10
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A07-B08-C11",
+          "barriers": {
+            "A": 7,
+            "B": 8,
+            "C": 11
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A07-B09-C08",
+          "barriers": {
+            "A": 7,
+            "B": 9,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A07-B09-C09",
+          "barriers": {
+            "A": 7,
+            "B": 9,
+            "C": 9
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A07-B09-C10",
+          "barriers": {
+            "A": 7,
+            "B": 9,
+            "C": 10
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A07-B09-C11",
+          "barriers": {
+            "A": 7,
+            "B": 9,
+            "C": 11
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A08-B05-C08",
+          "barriers": {
+            "A": 8,
+            "B": 5,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A08-B05-C09",
+          "barriers": {
+            "A": 8,
+            "B": 5,
+            "C": 9
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A08-B05-C10",
+          "barriers": {
+            "A": 8,
+            "B": 5,
+            "C": 10
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A08-B05-C11",
+          "barriers": {
+            "A": 8,
+            "B": 5,
+            "C": 11
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A08-B06-C08",
+          "barriers": {
+            "A": 8,
+            "B": 6,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A08-B06-C09",
+          "barriers": {
+            "A": 8,
+            "B": 6,
+            "C": 9
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A08-B06-C10",
+          "barriers": {
+            "A": 8,
+            "B": 6,
+            "C": 10
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A08-B06-C11",
+          "barriers": {
+            "A": 8,
+            "B": 6,
+            "C": 11
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A08-B07-C08",
+          "barriers": {
+            "A": 8,
+            "B": 7,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A08-B07-C09",
+          "barriers": {
+            "A": 8,
+            "B": 7,
+            "C": 9
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A08-B07-C10",
+          "barriers": {
+            "A": 8,
+            "B": 7,
+            "C": 10
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A08-B07-C11",
+          "barriers": {
+            "A": 8,
+            "B": 7,
+            "C": 11
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A08-B08-C08",
+          "barriers": {
+            "A": 8,
+            "B": 8,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A08-B08-C09",
+          "barriers": {
+            "A": 8,
+            "B": 8,
+            "C": 9
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A08-B08-C10",
+          "barriers": {
+            "A": 8,
+            "B": 8,
+            "C": 10
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A08-B08-C11",
+          "barriers": {
+            "A": 8,
+            "B": 8,
+            "C": 11
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A08-B09-C08",
+          "barriers": {
+            "A": 8,
+            "B": 9,
+            "C": 8
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "ABC-A08-B09-C09",
+          "barriers": {
+            "A": 8,
+            "B": 9,
+            "C": 9
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A08-B09-C10",
+          "barriers": {
+            "A": 8,
+            "B": 9,
+            "C": 10
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        },
+        {
+          "case_id": "ABC-A08-B09-C11",
+          "barriers": {
+            "A": 8,
+            "B": 9,
+            "C": 11
+          },
+          "expected": "SYNTHETIC_CUT_CANDIDATE"
+        }
+      ]
+    },
+    {
+      "id": "AB_SINGLE_PREDICATE_MUTANTS",
+      "description": "13 independent one-precondition mutations of an otherwise positive AB cut; all must deny positive classification",
+      "edges": [
+        {
+          "id": "edge-A-B-1",
+          "source": "A",
+          "target": "B",
+          "emission_seq": 4,
+          "delivery_seq": 6
+        }
+      ],
+      "cases": [
+        {
+          "case_id": "CUT-DENY-root_cutoff_fenced",
+          "barriers": {
+            "A": 8,
+            "B": 9
+          },
+          "precondition_flip": {
+            "key": "root_cutoff_fenced",
+            "value": false
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "CUT-DENY-registry_issuer_authorized",
+          "barriers": {
+            "A": 8,
+            "B": 9
+          },
+          "precondition_flip": {
+            "key": "registry_issuer_authorized",
+            "value": false
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "CUT-DENY-registry_head_current",
+          "barriers": {
+            "A": 8,
+            "B": 9
+          },
+          "precondition_flip": {
+            "key": "registry_head_current",
+            "value": false
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "CUT-DENY-registry_non_aba",
+          "barriers": {
+            "A": 8,
+            "B": 9
+          },
+          "precondition_flip": {
+            "key": "registry_non_aba",
+            "value": false
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "CUT-DENY-new_surface_registration_fenced",
+          "barriers": {
+            "A": 8,
+            "B": 9
+          },
+          "precondition_flip": {
+            "key": "new_surface_registration_fenced",
+            "value": false
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "CUT-DENY-cause_ledger_complete",
+          "barriers": {
+            "A": 8,
+            "B": 9
+          },
+          "precondition_flip": {
+            "key": "cause_ledger_complete",
+            "value": false
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "CUT-DENY-all_provider_generations_current",
+          "barriers": {
+            "A": 8,
+            "B": 9
+          },
+          "precondition_flip": {
+            "key": "all_provider_generations_current",
+            "value": false
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "CUT-DENY-composition_supported",
+          "barriers": {
+            "A": 8,
+            "B": 9
+          },
+          "precondition_flip": {
+            "key": "composition_supported",
+            "value": false
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "CUT-DENY-cross_edge_set_complete",
+          "barriers": {
+            "A": 8,
+            "B": 9
+          },
+          "precondition_flip": {
+            "key": "cross_edge_set_complete",
+            "value": false
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "CUT-DENY-unresolved_causes_absent",
+          "barriers": {
+            "A": 8,
+            "B": 9
+          },
+          "precondition_flip": {
+            "key": "unresolved_causes_absent",
+            "value": false
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "CUT-DENY-pending_retries_absent",
+          "barriers": {
+            "A": 8,
+            "B": 9
+          },
+          "precondition_flip": {
+            "key": "pending_retries_absent",
+            "value": false
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "CUT-DENY-lost_acks_reconciled",
+          "barriers": {
+            "A": 8,
+            "B": 9
+          },
+          "precondition_flip": {
+            "key": "lost_acks_reconciled",
+            "value": false
+          },
+          "expected": "NOT_PROVEN"
+        },
+        {
+          "case_id": "CUT-DENY-independent_roots_verified",
+          "barriers": {
+            "A": 8,
+            "B": 9
+          },
+          "precondition_flip": {
+            "key": "independent_roots_verified",
+            "value": false
+          },
+          "expected": "NOT_PROVEN"
+        }
+      ]
+    }
+  ],
+  "required_verification": [
+    "parse and compare exact case counts 64+120+13",
+    "independent case-by-case evaluator must match all expected results",
+    "mutate each positive fixture to violate one required predicate and observe non-candidate",
+    "native Rust tests, formatting, strict lint and exact-head hosted CI are required of future implementation, not established by this data"
+  ],
+  "no_go": [
+    "no code or runtime policy added",
+    "no gate issuance from fixture",
+    "no default branch integration",
+    "no provider/release/deployment/external effects"
+  ]
+}
