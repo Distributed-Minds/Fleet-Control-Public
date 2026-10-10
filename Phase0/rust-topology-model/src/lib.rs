@@ -190,7 +190,17 @@ fn valid_historical_state(p: &Prior) -> bool {
     {
         return false;
     }
-    if (p.state.phase == Phase::Bootstrap || (p.size == 2 && p.index == 1))
+    // The V1 index-2 analyst rotated after every second NOOP, whereas the
+    // V2 permanent predictor deliberately retains an unbounded observation
+    // streak. Reject V1 history that could not have been produced by its
+    // transition law without rejecting valid long-lived V2 predictor state.
+    let rotating_v1_analyst = p.state.phase == Phase::Analytic
+        && p.size >= 3
+        && p.index == 2
+        && p.source_machine == StateMachine::RotatingAnalystV1;
+    if (p.state.phase == Phase::Bootstrap
+        || (p.size == 2 && p.index == 1)
+        || rotating_v1_analyst)
         && p.state.noop_streak > 1
     {
         return false;

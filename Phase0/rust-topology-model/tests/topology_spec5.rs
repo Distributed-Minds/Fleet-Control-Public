@@ -542,6 +542,60 @@ fn even_positive_predictions_never_grant_provider_append() {
 }
 
 #[test]
+fn legacy_rotating_analyst_rejects_unreachable_second_noop_history() {
+    let top = topology(&["A", "B", "C"], "new", 2);
+    // Every second NOOP rotated PLAN/PREDICT/AUDIT and reset the counter to 0.
+    for mode in [Mode::Plan, Mode::Predict, Mode::Audit] {
+        for streak in [2, u32::MAX] {
+            let mut old = previous(
+                "B",
+                "old",
+                1,
+                3,
+                2,
+                state(mode, Phase::Analytic, streak),
+            );
+            old.source_machine = StateMachine::RotatingAnalystV1;
+            let result = check(
+                &top,
+                "B",
+                Some(old),
+                Lineage::SyntheticIncompatible {
+                    from: "old".into(),
+                    to: "new".into(),
+                },
+                ResultClass::Observe,
+            );
+            assert_eq!(result.unwrap_err(), Rejection::InvalidHistory);
+        }
+    }
+}
+
+#[test]
+fn permanent_predictor_keeps_long_observation_streak_without_rotation() {
+    let top = topology(&["A", "B", "C"], "stable", 3);
+    let prior = previous(
+        "B",
+        "stable",
+        3,
+        3,
+        2,
+        state(Mode::Predict, Phase::Analytic, 17),
+    );
+    let candidate = check(
+        &top,
+        "B",
+        Some(prior),
+        Lineage::SameBasis,
+        ResultClass::Observe,
+    )
+    .unwrap();
+    assert_eq!(candidate.state.mode, Mode::Predict);
+    assert_eq!(candidate.state.noop_streak, 17);
+    assert!(!candidate.provider_append_authorized);
+}
+
+#[test]
 fn historical_machine_semantics_do_not_follow_topology_generation() {
     let top = topology(&["A", "B", "C"], "new", 13);
     let mut legacy = previous("B", "old", 12, 3, 2, state(Mode::Audit, Phase::Analytic, 1));
