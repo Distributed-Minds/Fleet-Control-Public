@@ -4,6 +4,8 @@
 //! test-fixture assertions, NOT signatures, locks, provider receipts or a real
 //! source of scheduler/worker execution authority.
 
+pub mod continuation;
+
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
