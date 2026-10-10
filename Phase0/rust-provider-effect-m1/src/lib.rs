@@ -55,7 +55,12 @@ pub enum ManifestError {
     UnsupportedPositiveClaim(usize),
     UnverifiedProofRoot(usize),
     IncompleteMatrix,
+    InputTooLarge,
 }
+
+/// A v1 manifest has ten finite-schema rows. Reject oversized caller input
+/// before line splitting or allocation of token vectors.
+pub const MAX_V1_MANIFEST_BYTES: usize = 16 * 1024;
 
 /// Parse a *data-only* support matrix. A row is not runtime permission.
 /// Unknown and unsupported are distinct; proof-free SUPPORT claims are invalid.
@@ -79,6 +84,9 @@ fn known_v1_effect(operation: &str, transport: &str) -> bool {
 }
 
 pub fn parse_manifest(contents: &str) -> Result<Vec<ProviderEffectCapability>, ManifestError> {
+    if contents.len() > MAX_V1_MANIFEST_BYTES {
+        return Err(ManifestError::InputTooLarge);
+    }
     let mut lines = contents.lines();
     if lines.next() != Some(MANIFEST_HEADER) {
         return Err(ManifestError::InvalidHeader);
@@ -87,6 +95,10 @@ pub fn parse_manifest(contents: &str) -> Result<Vec<ProviderEffectCapability>, M
     let mut seen = BTreeSet::new();
     for (offset, line) in lines.enumerate() {
         let lineno = offset + 2;
+        // Refuse any eleventh row before allocating its tab-delimited fields.
+        if output.len() >= 10 {
+            return Err(ManifestError::InvalidRow(lineno));
+        }
         if line.is_empty() {
             return Err(ManifestError::InvalidRow(lineno));
         }
@@ -595,4 +607,48 @@ mod tests {
             Err(ManifestError::InvalidRow(2))
         );
     }
+
+    #[test]
+    fn m1_manifest_input_budget_rejects_oversized_rows_before_tokenization() {
+        assert!(EMBEDDED_MANIFEST.len() <= MAX_V1_MANIFEST_BYTES);
+        assert_eq!(parse_manifest(EMBEDDED_MANIFEST).unwrap().len(), 10);
+
+        // These inputs contain enough separators to otherwise create many
+        // temporary field slices. Size admission precedes field splitting.
+        let oversized = format!(
+            "{MANIFEST_HEADER}\n{}",
+            "\t".repeat(MAX_V1_MANIFEST_BYTES)
+        );
+        assert_eq!(
+            parse_manifest(&oversized),
+            Err(ManifestError::InputTooLarge)
+        );
+
+        // Even a valid manifest prefix cannot bypass the exact byte budget.
+        let oversized_valid_prefix = format!(
+            "{}{}",
+            EMBEDDED_MANIFEST,
+            "x".repeat(MAX_V1_MANIFEST_BYTES)
+        );
+        assert_eq!(
+            parse_manifest(&oversized_valid_prefix),
+            Err(ManifestError::InputTooLarge)
+        );
+    }
+
+    #[test]
+    fn m1_manifest_rejects_eleventh_row_without_parsing_another_record() {
+        let first_data_row = EMBEDDED_MANIFEST.lines().nth(1).unwrap();
+        let extra = format!(
+            "{}\n{}\n",
+            EMBEDDED_MANIFEST.trim_end(),
+            first_data_row
+        );
+        assert_eq!(
+            parse_manifest(&extra),
+            Err(ManifestError::InvalidRow(12))
+        );
+        assert_eq!(parse_manifest(EMBEDDED_MANIFEST).unwrap().len(), 10);
+    }
+
 }
