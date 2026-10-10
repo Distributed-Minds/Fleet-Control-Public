@@ -430,10 +430,9 @@ fn run() -> Result<(), String> {
     if args.next().is_some() {
         return Err("usage: github_capability [fixture.json]".to_owned());
     }
-    let json =
-        fs::read_to_string(&input).map_err(|e| format!("cannot read {}: {e}", input.display()))?;
+    let json = fs::read_to_string(&input).map_err(|e| format!("cannot read {input:?}: {e}"))?;
     let fixture: Fixture =
-        parse_fixture(&json).map_err(|e| format!("invalid fixture {}: {e}", input.display()))?;
+        parse_fixture(&json).map_err(|e| format!("invalid fixture {input:?}: {e}"))?;
     match validate(&fixture) {
         Ok(count) => {
             println!("GitHub capability invariant fixtures (Rust): {count} checked");
