@@ -6,7 +6,12 @@ use serde::Deserialize;
 use std::collections::HashSet;
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::io::Read;
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
+#[cfg(target_os = "linux")]
+use std::os::unix::fs::OpenOptionsExt;
+use std::path::{Path, PathBuf};
 use std::process;
 
 fn yes() -> bool {
@@ -466,6 +471,56 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
     }
 }
 
+const MAX_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
+
+/// Only fixture data is admitted: never block on ordinary Linux FIFO/symlink
+/// substitution, and never allocate unbounded memory for a caller-supplied path.
+/// This is local CLI input hygiene, not a provider authorization primitive.
+fn read_fixture(path: &Path) -> Result<String, String> {
+    let before = fs::symlink_metadata(path)
+        .map_err(|error| format!("cannot read fixture {path:?}: {error}"))?;
+    if !before.file_type().is_file() {
+        return Err(format!("fixture {path:?} is not a regular file"));
+    }
+    if before.len() > MAX_FIXTURE_BYTES {
+        return Err(format!("fixture {path:?} exceeds 8 MiB"));
+    }
+
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        // Linux O_NONBLOCK and O_NOFOLLOW: reject a swapped FIFO/symlink
+        // instead of blocking forever or following an unexpected target.
+        options.custom_flags(0o4000 | 0o400000);
+    }
+    let file = options
+        .open(path)
+        .map_err(|error| format!("cannot open fixture {path:?}: {error}"))?;
+    let opened = file
+        .metadata()
+        .map_err(|error| format!("cannot inspect opened fixture {path:?}: {error}"))?;
+    if !opened.file_type().is_file() {
+        return Err(format!("opened fixture {path:?} is not a regular file"));
+    }
+    if opened.len() > MAX_FIXTURE_BYTES {
+        return Err(format!("opened fixture {path:?} exceeds 8 MiB"));
+    }
+    #[cfg(unix)]
+    if before.dev() != opened.dev() || before.ino() != opened.ino() {
+        return Err(format!("fixture {path:?} changed identity during open"));
+    }
+
+    let mut bytes = Vec::new();
+    file.take(MAX_FIXTURE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("cannot read fixture {path:?}: {error}"))?;
+    if bytes.len() as u64 > MAX_FIXTURE_BYTES {
+        return Err(format!("fixture {path:?} grew beyond 8 MiB"));
+    }
+    String::from_utf8(bytes).map_err(|error| format!("fixture {path:?} is not UTF-8: {error}"))
+}
+
 fn run() -> Result<(), String> {
     let mut args = env::args_os().skip(1);
     let input = args
@@ -475,7 +530,7 @@ fn run() -> Result<(), String> {
     if args.next().is_some() {
         return Err("usage: free-energy-phase0-fixtures [fixture.json]".to_owned());
     }
-    let content = fs::read_to_string(&input).map_err(|e| format!("cannot read {input:?}: {e}"))?;
+    let content = read_fixture(&input)?;
     let fixture: Fixture =
         serde_json::from_str(&content).map_err(|e| format!("invalid fixture {input:?}: {e}"))?;
     match validate(&fixture) {
@@ -831,5 +886,52 @@ mod tests {
             decide(&typed.decision_cases[12]),
             Ok(outcome("AUTHORIZED", Some(Level::FreezeNewAuthority)))
         );
+    }
+    #[test]
+    fn caller_supplied_containment_fixture_is_bounded_and_regular() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let unique = NEXT.fetch_add(1, Ordering::Relaxed);
+        let input = env::temp_dir().join(format!(
+            "free-energy-containment-input-{}-{unique}.json",
+            process::id()
+        ));
+        fs::write(&input, BASELINE).expect("write historical fixture");
+        assert_eq!(read_fixture(&input).expect("historical fixture"), BASELINE);
+
+        // Exact limit remains admissible, and trailing JSON whitespace does
+        // not alter the independently computed historical oracle decisions.
+        let mut exact = BASELINE.to_owned();
+        exact.push_str(&" ".repeat(MAX_FIXTURE_BYTES as usize - exact.len()));
+        fs::write(&input, &exact).expect("write exact-size fixture");
+        let decoded = read_fixture(&input).expect("8 MiB accepted");
+        assert_eq!(decoded.len(), MAX_FIXTURE_BYTES as usize);
+        let fixture: Fixture = serde_json::from_str(&decoded).expect("typed fixture");
+        assert!(validate(&fixture).is_ok());
+
+        // Sparse length is checked before reading (no oversized allocation).
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&input)
+            .expect("open fixture for resize")
+            .set_len(MAX_FIXTURE_BYTES + 1)
+            .expect("make oversized fixture");
+        assert!(read_fixture(&input).unwrap_err().contains("exceeds 8 MiB"));
+        assert!(read_fixture(&env::temp_dir())
+            .unwrap_err()
+            .contains("not a regular file"));
+
+        fs::write(&input, [0xff, 0xfe]).expect("write invalid UTF-8");
+        assert!(read_fixture(&input).unwrap_err().contains("not UTF-8"));
+        #[cfg(unix)]
+        {
+            let link = input.with_extension("link");
+            std::os::unix::fs::symlink(&input, &link).expect("make symlink");
+            assert!(read_fixture(&link)
+                .unwrap_err()
+                .contains("not a regular file"));
+            fs::remove_file(&link).expect("remove link");
+        }
+        fs::remove_file(&input).expect("remove fixture");
     }
 }
