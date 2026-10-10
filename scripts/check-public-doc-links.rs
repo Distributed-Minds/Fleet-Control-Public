@@ -577,6 +577,9 @@ fn parse_destination(raw: &str) -> Result<Option<String>, String> {
     if decoded.split('/').next().is_some_and(|segment| segment.contains(':')) {
         return Err("unsupported or unsafe URI scheme".into());
     }
+    if decoded.chars().any(char::is_control) {
+        return Err("unsafe percent-decoded control".into());
+    }
     if decoded.is_empty() || decoded.contains('\0') {
         return Err("empty or NUL destination".into());
     }
@@ -2347,6 +2350,16 @@ mod tests {
             "README.md", &mut report);
         assert_eq!(links, vec!["docs/a&b.md", "docs/a&b.md", "docs/a", "docs/a"]);
         assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn percent_decoded_control_characters_are_not_accepted_as_paths() {
+        for raw in ["a%0Ab.md", "a%09b.md", "a%0Db.md", "a%7Fb.md"] {
+            assert!(
+                parse_destination(raw).is_err(),
+                "control byte must be rejected: {raw}"
+            );
+        }
     }
 
 }
