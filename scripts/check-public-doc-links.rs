@@ -1753,4 +1753,62 @@ mod tests {
         assert_eq!(inspect_help_guide_contract(&broken), Err("unclosed code fence"));
     }
 
+    // Issue #333: CommonMark blank lines contain ASCII spaces/tabs only.
+    // Unicode whitespace inside a paragraph does not split an inline code span.
+    #[test]
+    fn unicode_only_line_keeps_multiline_code_span() {
+        for middle in [
+            "\u{00a0}", "\u{2003}", "\u{000c}", "\u{000b}", "\u{1680}",
+            "\u{2028}", "\u{2029}", "\u{3000}", "\u{202f}", "\u{2009}",
+        ] {
+            for newline in ["\n", "\r\n"] {
+                let source = format!(
+                    "`open{newline}{middle}{newline}[inside](missing.md) `close{newline}[outside](present.md){newline}"
+                );
+                let mut diagnostic = Report::default();
+                let paths = collect_links(&source, "README.md", &mut diagnostic);
+                assert_eq!(paths, vec!["present.md"], "middle={middle:?}, newline={newline:?}");
+                assert!(diagnostic.errors.is_empty(), "{:?}", diagnostic.errors);
+
+                let sandbox = Sandbox::new();
+                sandbox.write("present.md", "present");
+                sandbox.write("README.md", &source);
+                let result = sandbox.scan();
+                assert_eq!(result.local_links, 1, "middle={middle:?}, newline={newline:?}");
+                assert!(result.errors.is_empty(), "{:?}", result.errors);
+            }
+        }
+    }
+
+    #[test]
+    fn ascii_only_blank_line_exposes_broken_link_and_preserves_following_link() {
+        for middle in ["", "  ", "\t", " \t"] {
+            for newline in ["\n", "\r\n"] {
+                let source = format!(
+                    "`open{newline}{middle}{newline}[inside](missing.md) `close{newline}[outside](present.md){newline}"
+                );
+                let mut diagnostic = Report::default();
+                let paths = collect_links(&source, "README.md", &mut diagnostic);
+                assert_eq!(
+                    paths,
+                    vec!["missing.md", "present.md"],
+                    "middle={middle:?}, newline={newline:?}"
+                );
+                assert!(diagnostic.errors.is_empty(), "{:?}", diagnostic.errors);
+
+                let sandbox = Sandbox::new();
+                sandbox.write("present.md", "present");
+                sandbox.write("README.md", &source);
+                let result = sandbox.scan();
+                assert_eq!(result.local_links, 2, "middle={middle:?}, newline={newline:?}");
+                assert_eq!(result.errors.len(), 1, "{:?}", result.errors);
+                assert!(
+                    result.errors[0].contains("README.md:3: target missing: missing.md"),
+                    "{:?}",
+                    result.errors
+                );
+            }
+        }
+    }
+
 }
