@@ -1231,4 +1231,101 @@ mod tests {
         assert_eq!(inspect_help_guide_contract(&broken), Err("unclosed code fence"));
     }
 
+
+    // Issue #359 spec 5: fail-first native Rust oracles for unsupported but
+    // syntactically active CommonMark reference definitions. These tests are
+    // intentionally RED on the existing inline-link-only checker.
+    #[test]
+    fn reference_definition_syntax_and_block_context_oracle() {
+        let cases: [(&str, bool, usize); 18] = [
+            ("[id]: missing.md\n", true, 1),
+            ("Prose\n[id]: missing.md\n", false, 2),
+            ("Prose\n\n[id]: missing.md\n", true, 3),
+            ("   [id]: missing.md\n", true, 1),
+            ("    [id]: missing.md\n", false, 1),
+            ("> [id]: missing.md\n", true, 1),
+            ("> Prose\n> [id]: missing.md\n", false, 2),
+            ("> Prose\n>\n> [id]: missing.md\n", true, 3),
+            ("- [id]: missing.md\n", true, 1),
+            ("- Prose\n  [id]: missing.md\n", false, 2),
+            ("- Prose\n\n  [id]: missing.md\n", true, 3),
+            ("~~~\n[id]: missing.md\n~~~\n", false, 2),
+            ("<!--\n[id]: missing.md\n-->\n", false, 2),
+            ("\\[id]: missing.md\n", false, 1),
+            ("[id]:\n  missing.md\n", true, 1),
+            ("[id]:\n\nmissing.md\n", false, 1),
+            ("[id]: missing.md garbage\n", false, 1),
+            ("[id]: <>\n", true, 1),
+        ];
+        for (index, (markdown, active, line)) in cases.iter().enumerate() {
+            for eol in ["\n", "\r\n"] {
+                let sandbox = Sandbox::new();
+                sandbox.write("README.md", &markdown.replace('\n', eol));
+                let report = sandbox.scan();
+                let actual: Vec<_> = report.errors.iter()
+                    .filter(|error| error.contains("unsupported reference definition"))
+                    .collect();
+                assert_eq!(actual.len(), usize::from(*active),
+                    "case {index}, EOL {eol:?}: {report:?}");
+                if *active {
+                    assert!(actual[0].starts_with(&format!("README.md:{line}:")),
+                        "case {index}, EOL {eol:?}: {report:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn reference_definition_raw_source_codepoint_limit_oracle() {
+        let cases: [(String, bool); 8] = [
+            ("a".repeat(999), true),
+            ("a".repeat(1000), false),
+            (format!("{}e", "e\u{0301}".repeat(499)), true),
+            ("e\u{0301}".repeat(500), false),
+            (format!("{}{}", "e\u{0301}".repeat(250), "a".repeat(500)), false),
+            ("a\u{0305}".repeat(500), false),
+            ("é".repeat(999), true),
+            ("é".repeat(1000), false),
+        ];
+        for (index, (label, active)) in cases.iter().enumerate() {
+            assert_eq!(label.chars().count(), if *active {999} else {1000},
+                "fixture {index} must measure literal source Unicode scalars");
+            for used in [false, true] {
+                for eol in ["\n", "\r\n"] {
+                    let sandbox = Sandbox::new();
+                    let source = if used {
+                        format!("[text][{label}]{eol}{eol}[{label}]: target.md{eol}")
+                    } else {
+                        format!("[{label}]: target.md{eol}")
+                    };
+                    sandbox.write("README.md", &source);
+                    let report = sandbox.scan();
+                    let diagnostic = report.errors.iter()
+                        .any(|error| error.contains("unsupported reference definition"));
+                    assert_eq!(diagnostic, *active,
+                        "label case {index}, used={used}, eol={eol:?}: {report:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn reference_definition_escaped_label_and_destination_oracle() {
+        let cases: [(&str, bool); 5] = [
+            ("[a\\!]: target.md\n", true),
+            ("[a\\]]: target.md\n", true),
+            ("[id]: \"title\"\n", true),
+            ("\\[id]: target.md\n", false),
+            ("[id]: target.md stray\n", false),
+        ];
+        for (markdown, active) in cases {
+            let sandbox = Sandbox::new();
+            sandbox.write("README.md", markdown);
+            let report = sandbox.scan();
+            assert_eq!(report.errors.iter().any(|error|
+                error.contains("unsupported reference definition")), active,
+                "markdown {markdown:?}: {report:?}");
+        }
+    }
+
 }
