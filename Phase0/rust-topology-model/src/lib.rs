@@ -86,8 +86,14 @@ pub enum Lineage {
     SameBasis,
     /// An independently-authorized real transition is NOT established by this
     /// user-constructible fixture label; this only explores its consequences.
-    SyntheticIncompatible { from: String, to: String },
-    SyntheticCompatibleBuilder { from: String, to: String },
+    SyntheticIncompatible {
+        from: String,
+        to: String,
+    },
+    SyntheticCompatibleBuilder {
+        from: String,
+        to: String,
+    },
     Unproven,
 }
 
@@ -221,7 +227,12 @@ fn bootstrap(size: usize, index: usize) -> State {
     }
 }
 
-fn advance(mut state: State, size: usize, index: usize, result: ResultClass) -> Result<State, Rejection> {
+fn advance(
+    mut state: State,
+    size: usize,
+    index: usize,
+    result: ResultClass,
+) -> Result<State, Rejection> {
     if matches!(result, ResultClass::Observe) {
         return Ok(state);
     }
@@ -229,10 +240,17 @@ fn advance(mut state: State, size: usize, index: usize, result: ResultClass) -> 
         return Err(Rejection::MissionDependentSolo);
     }
     if size >= 3 && index <= 2 {
-        if matches!(result, ResultClass::BuildProgress | ResultClass::BuildNoProgress) {
+        if matches!(
+            result,
+            ResultClass::BuildProgress | ResultClass::BuildNoProgress
+        ) {
             return Err(Rejection::IncompatibleResult);
         }
-        state.mode = if index == 1 { Mode::Plan } else { Mode::Predict };
+        state.mode = if index == 1 {
+            Mode::Plan
+        } else {
+            Mode::Predict
+        };
         state.noop_streak = if matches!(result, ResultClass::Noop) {
             state.noop_streak.saturating_add(1)
         } else {
@@ -241,7 +259,10 @@ fn advance(mut state: State, size: usize, index: usize, result: ResultClass) -> 
         return Ok(state);
     }
     if size == 2 && index == 1 {
-        if matches!(result, ResultClass::BuildProgress | ResultClass::BuildNoProgress) {
+        if matches!(
+            result,
+            ResultClass::BuildProgress | ResultClass::BuildNoProgress
+        ) {
             return Err(Rejection::IncompatibleResult);
         }
         state.noop_streak = if matches!(result, ResultClass::Noop) {
@@ -278,7 +299,10 @@ fn advance(mut state: State, size: usize, index: usize, result: ResultClass) -> 
         }
         return Ok(state);
     }
-    if matches!(result, ResultClass::BuildProgress | ResultClass::BuildNoProgress) {
+    if matches!(
+        result,
+        ResultClass::BuildProgress | ResultClass::BuildNoProgress
+    ) {
         return Err(Rejection::IncompatibleResult);
     }
     if matches!(result, ResultClass::Material) {
@@ -338,7 +362,10 @@ pub fn predict(input: &Input) -> Result<Candidate, Rejection> {
                         && (p.source_basis != input.topology.id
                             || p.generation != input.topology.generation) =>
                 {
-                    (bootstrap(input.topology.declared_size, index), BasisDisposition::IncompatibleReset)
+                    (
+                        bootstrap(input.topology.declared_size, index),
+                        BasisDisposition::IncompatibleReset,
+                    )
                 }
                 Lineage::SyntheticCompatibleBuilder { from, to }
                     if from == &p.source_basis
