@@ -1,0 +1,42 @@
+name: Rust provider-effect M1 offline model
+
+on:
+  pull_request:
+    paths:
+      - "Phase0/rust-provider-effect-m1/**"
+      - ".github/workflows/rust-provider-effect-m1.yml"
+  push:
+    branches:
+      - "phase0/public-v0"
+    paths:
+      - "Phase0/rust-provider-effect-m1/**"
+      - ".github/workflows/rust-provider-effect-m1.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  offline-rust-model:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git-only checkout of exact event SHA (no npm/actions dependency)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          git fetch --depth=1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - name: Install pinned Rust stable toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.85.1 --profile minimal --component rustfmt --component clippy
+      - name: Format, offline locked tests, strict all-target Clippy
+        shell: bash
+        working-directory: Phase0/rust-provider-effect-m1
+        run: |
+          set -euo pipefail
+          cargo +1.85.1 fmt --all --check
+          cargo +1.85.1 test --locked --offline
+          cargo +1.85.1 clippy --all-targets --locked --offline -- -D warnings
