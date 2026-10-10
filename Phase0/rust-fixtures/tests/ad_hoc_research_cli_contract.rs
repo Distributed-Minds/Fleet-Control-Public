@@ -147,3 +147,65 @@ fn extra_positional_arguments_do_not_run_the_fixture() {
         .expect("spawn ad-hoc CLI");
     assert_denied(output, "usage: ad_hoc_research");
 }
+
+#[test]
+fn malformed_semantic_packet_fields_fail_through_compiled_binary() {
+    // A positive control is required: failure of every invocation would make
+    // these negative regressions meaningless.
+    let baseline = invoke_contents(BASELINE);
+    assert!(baseline.status.success());
+
+    let scalar_fields = ["packet_schema", "topic", "authoritative_baseline"];
+    let list_fields = [
+        "unique_nondefault_sources",
+        "external_sources",
+        "observations",
+        "derived_conclusions",
+        "predictions",
+        "unknowns",
+        "contradictions",
+        "stale_source_warnings",
+        "discovery_vocabulary",
+        "affected_packages",
+        "proposed_deltas",
+        "unresolved_questions",
+        "useful_next_actions",
+    ];
+
+    for field in scalar_fields {
+        let mut fixture = source();
+        fixture["packet_templates"]["base"][field] = json!(["forged-scalar"]);
+        assert_denied(
+            invoke_value(&fixture),
+            &format!("invalid semantic packet field type: {field}"),
+        );
+    }
+    for field in list_fields {
+        let mut fixture = source();
+        fixture["packet_templates"]["base"][field] = json!(["valid", null]);
+        assert_denied(
+            invoke_value(&fixture),
+            &format!("invalid semantic packet field type: {field}"),
+        );
+    }
+}
+
+#[test]
+fn malformed_handoff_lists_fail_through_compiled_binary() {
+    // Presence-only checks must not accept a scalar, null, or a mixed list
+    // while the historical empty-list positive control remains accepted.
+    for field in [
+        "stale_source_warnings",
+        "discovery_vocabulary",
+        "useful_next_actions",
+    ] {
+        for invalid in [Value::Null, json!("forged"), json!([true])] {
+            let mut fixture = source();
+            fixture["packet_field_cases"][0][field] = invalid;
+            assert_denied(invoke_value(&fixture), "expected");
+        }
+    }
+
+    let baseline = invoke_contents(BASELINE);
+    assert!(baseline.status.success());
+}
