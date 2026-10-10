@@ -511,3 +511,80 @@ fn journal_capacity_fails_closed_without_eviction_or_replay_downgrade() {
     assert_eq!(journal.record(first_operation, &changed), Replay::Conflict);
     assert_eq!(journal.provider_effects_emitted(), 0);
 }
+
+#[test]
+fn canonical_envelope_fingerprint_binds_every_synthetic_field() {
+    let original = good();
+    let original_bytes = canonical_bytes(&original);
+    let original_digest = canonical_digest(&original);
+
+    // Each v1 field must independently alter the canonical encoding and hash.
+    // Some variants become invalid admissions; this tests byte identity only,
+    // not real consent or permission to publish.
+    for field in 0..29 {
+        let mut changed = original.clone();
+        match field {
+            0 => changed.repository_incarnation.push('x'),
+            1 => changed.source_commit.push('x'),
+            2 => changed.intended_target_head.push('x'),
+            3 => changed.observed_target_head.push('x'),
+            4 => changed.input_digest.push('x'),
+            5 => changed.output_digest.push('x'),
+            6 => changed.reviewed_output_digest.push('x'),
+            7 => changed.schema_version += 1,
+            8 => changed.repository_id += 1,
+            9 => changed.terms_version += 1,
+            10 => changed.current_terms_version += 1,
+            11 => changed.authority_generation += 1,
+            12 => changed.current_authority_generation += 1,
+            13 => changed.transformation_occurred = true,
+            14 => changed.credential_identity_ambiguous = true,
+            15 => changed.context = Context::InteractiveOnly,
+            16 => changed.provider_observation = ProviderObservation::RateLimited,
+            17 => changed.evidence.human_act = Claim::Disputed,
+            18 => changed.evidence.dco_declaration = Claim::Disputed,
+            19 => changed.evidence.terms_assent = Claim::Disputed,
+            20 => changed.evidence.code_rights = Claim::Disputed,
+            21 => changed.evidence.asset_rights = Claim::Disputed,
+            22 => changed.evidence.employer_rights = Claim::Disputed,
+            23 => changed.evidence.reviewer_decision = Claim::Disputed,
+            24 => changed.evidence.task_authority = Claim::Disputed,
+            25 => changed.evidence.transformation_map = Claim::Disputed,
+            26 => changed.evidence.historical_lineage = Claim::Disputed,
+            27 => changed.github_signature_verified = true,
+            28 => changed.dco_bot_exempt = true,
+            _ => unreachable!(),
+        }
+        assert_ne!(canonical_bytes(&changed), original_bytes, "field {field}");
+        assert_ne!(canonical_digest(&changed), original_digest, "field {field}");
+    }
+}
+
+#[test]
+fn journal_rejects_equal_decision_with_changed_synthetic_evidence_bytes() {
+    let original = good();
+    let mut journal = SimulationJournal::default();
+    assert_eq!(
+        journal.record(key(), &original),
+        Replay::First(Decision::ReviewableInSimulation)
+    );
+
+    // These changes preserve evaluate()'s simulation decision. The journal
+    // must nevertheless bind the original exact input, not just its result.
+    for field in 0..3 {
+        let mut changed = original.clone();
+        match field {
+            0 => changed.input_digest.push('x'),
+            1 => changed.github_signature_verified = true,
+            2 => changed.dco_bot_exempt = true,
+            _ => unreachable!(),
+        }
+        assert_eq!(evaluate(&changed), Decision::ReviewableInSimulation);
+        assert_eq!(journal.record(key(), &changed), Replay::Conflict);
+    }
+    assert_eq!(
+        journal.record(key(), &original),
+        Replay::Identical(Decision::ReviewableInSimulation)
+    );
+    assert_eq!(journal.provider_effects_emitted(), 0);
+}

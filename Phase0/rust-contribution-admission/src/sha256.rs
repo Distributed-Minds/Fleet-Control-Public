@@ -86,4 +86,73 @@ mod tests {
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
     }
+
+    #[test]
+    fn sha256_padding_and_multiblock_boundary_vectors() {
+        // Independently computed SHA-256 oracle digests (Python hashlib).
+        // 55/56 and 63/64 cross the final-block padding boundary; 119/120
+        // and 127/128 cross later block boundaries.
+        const CASES: &[(usize, &str)] = &[
+            (
+                55,
+                "9f4390f8d30c2dd92ec9f095b65e2b9ae9b0a925a5258e241c9f1e910f734318",
+            ),
+            (
+                56,
+                "b35439a4ac6f0948b6d6f9e3c6af0f5f590ce20f1bde7090ef7970686ec6738a",
+            ),
+            (
+                63,
+                "7d3e74a05d7db15bce4ad9ec0658ea98e3f06eeecf16b4c6fff2da457ddc2f34",
+            ),
+            (
+                64,
+                "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb",
+            ),
+            (
+                65,
+                "635361c48bb9eab14198e76ea8ab7f1a41685d6ad62aa9146d301d4f17eb0ae0",
+            ),
+            (
+                119,
+                "31eba51c313a5c08226adf18d4a359cfdfd8d2e816b13f4af952f7ea6584dcfb",
+            ),
+            (
+                120,
+                "2f3d335432c70b580af0e8e1b3674a7c020d683aa5f73aaaedfdc55af904c21c",
+            ),
+            (
+                127,
+                "c57e9278af78fa3cab38667bef4ce29d783787a2f731d4e12200270f0c32320a",
+            ),
+            (
+                128,
+                "6836cf13bac400e9105071cd6af47084dfacad4e5e302c94bfed24e013afb73e",
+            ),
+            (
+                129,
+                "c12cb024a2e5551cca0e08fce8f1c5e314555cc3fef6329ee994a3db752166ae",
+            ),
+            (
+                1024,
+                "2edc986847e209b4016e141a6dc8716d3207350f416969382d431539bf292e4a",
+            ),
+            (
+                4096,
+                "c93eee2d0db02f10acc7460d9576e122dcf8cd53c4bf8dfcae1b3e74ebcfff5a",
+            ),
+        ];
+
+        for &(length, expected) in CASES {
+            assert_eq!(digest_hex(&vec![b'a'; length]), expected, "length={length}");
+        }
+
+        let patterned: Vec<u8> = (0..1024)
+            .map(|index| ((index * 73 + 19) % 256) as u8)
+            .collect();
+        assert_eq!(
+            digest_hex(&patterned),
+            "e051d1007607de494c073da3c29903d6c0abfee7a4c0609f560a340a1947b470"
+        );
+    }
 }
