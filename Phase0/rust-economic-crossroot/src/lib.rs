@@ -7,6 +7,10 @@ pub const MAX_RECEIPTS: usize = 1024;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Request {
     pub id: String,
+    pub component: String,
+    pub intent_digest: String,
+    pub valuation_basis: String,
+    pub terms_basis: String,
     pub root: String,
     pub root_generation: u64,
     pub topology_generation: u64,
@@ -29,6 +33,7 @@ pub enum State {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Denial {
     Invalid,
+    WrongComponent,
     UnknownRoot,
     StaleRoot,
     StaleTopology,
@@ -136,7 +141,14 @@ impl Ledger {
     /// One exact immutable attempt consumes capacity once. A later identical
     /// retry reads the original receipt even when its CAS head is historical.
     pub fn reserve(&mut self, r: Request) -> ResultKind {
-        if !token(&r.id) || !token(&r.root) || r.units == 0 {
+        if !token(&r.id)
+            || !token(&r.component)
+            || !token(&r.intent_digest)
+            || !token(&r.valuation_basis)
+            || !token(&r.terms_basis)
+            || !token(&r.root)
+            || r.units == 0
+        {
             return ResultKind::Denied(Denial::Invalid);
         }
         if let Some(old) = self.receipts.get(&r.id) {
@@ -145,6 +157,9 @@ impl Ledger {
             } else {
                 ResultKind::Denied(Denial::Conflict)
             };
+        }
+        if r.component != self.component {
+            return ResultKind::Denied(Denial::WrongComponent);
         }
         if self.receipts.len() >= MAX_RECEIPTS {
             return ResultKind::Denied(Denial::HistoryFull);
@@ -319,8 +334,16 @@ mod tests {
     }
 
     fn request(id: &str, root: &str, units: u64, expected: u64) -> Request {
+        request_with_component("shared-risk", id, root, units, expected)
+    }
+
+    fn request_with_component(component: &str, id: &str, root: &str, units: u64, expected: u64) -> Request {
         Request {
             id: id.into(),
+            component: component.into(),
+            intent_digest: "intent-basis-v1".into(),
+            valuation_basis: "valuation-v1".into(),
+            terms_basis: "terms-v1".into(),
             root: root.into(),
             root_generation: 1,
             topology_generation: 1,
@@ -351,11 +374,11 @@ mod tests {
         let mut a = Ledger::new("domain-a", 100, 1, &[("root-a", 1)]);
         let mut b = Ledger::new("domain-b", 100, 1, &[("root-b", 1)]);
         assert_eq!(
-            a.reserve(request("a", "root-a", 95, 1)),
+            a.reserve(request_with_component("domain-a", "a", "root-a", 95, 1)),
             ResultKind::Accepted
         );
         assert_eq!(
-            b.reserve(request("b", "root-b", 95, 1)),
+            b.reserve(request_with_component("domain-b", "b", "root-b", 95, 1)),
             ResultKind::Accepted
         );
         assert_ne!(a.component(), b.component());
@@ -516,20 +539,43 @@ mod tests {
     }
 
     #[test]
+    fn canonical_component_and_basis_digests_are_part_of_immutable_replay() {
+        let mut ledger = shared();
+        let original = request("same-operation", "root-a", 20, 1);
+        assert_eq!(ledger.reserve(original.clone()), ResultKind::Accepted);
+        for which in 0..4 {
+            let mut changed = original.clone();
+            match which {
+                0 => changed.component = "other-domain".into(),
+                1 => changed.intent_digest = "different-intent".into(),
+                2 => changed.valuation_basis = "different-valuation".into(),
+                3 => changed.terms_basis = "different-terms".into(),
+                _ => unreachable!(),
+            }
+            assert_eq!(ledger.reserve(changed), ResultKind::Denied(Denial::Conflict));
+        }
+        let mut fresh = request("fresh", "root-b", 10, 2);
+        fresh.component = "other-domain".into();
+        assert_eq!(ledger.reserve(fresh), ResultKind::Denied(Denial::WrongComponent));
+        assert_eq!(ledger.reserve(original), ResultKind::Identical(State::Pending));
+        assert_eq!(ledger.charged(), 20);
+    }
+
+    #[test]
     fn full_receipt_history_preserves_old_replay_and_blocks_new_ids() {
         let mut l = Ledger::new("bounded", 2000, 1, &[("root-a", 1)]);
         for i in 0..MAX_RECEIPTS {
             assert_eq!(
-                l.reserve(request(&format!("id-{i}"), "root-a", 1, l.generation())),
+                l.reserve(request_with_component("bounded", &format!("id-{i}"), "root-a", 1, l.generation())),
                 ResultKind::Accepted
             );
         }
         assert_eq!(
-            l.reserve(request("new", "root-a", 1, l.generation())),
+            l.reserve(request_with_component("bounded", "new", "root-a", 1, l.generation())),
             ResultKind::Denied(Denial::HistoryFull)
         );
         assert_eq!(
-            l.reserve(request("id-0", "root-a", 1, 1)),
+            l.reserve(request_with_component("bounded", "id-0", "root-a", 1, 1)),
             ResultKind::Identical(State::Pending)
         );
     }

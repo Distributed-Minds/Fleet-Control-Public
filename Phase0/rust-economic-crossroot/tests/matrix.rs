@@ -5,6 +5,10 @@ use free_energy_economic_crossroot::{Denial, Ledger, Request, ResultKind, State}
 fn attempt(id: &str, root: &str, units: u64, expected: u64) -> Request {
     Request {
         id: id.to_owned(),
+        component: "shared-domain".to_owned(),
+        intent_digest: "intent-v1".to_owned(),
+        valuation_basis: "valuation-v1".to_owned(),
+        terms_basis: "terms-v1".to_owned(),
         root: root.to_owned(),
         root_generation: 1,
         topology_generation: 1,
