@@ -56,13 +56,7 @@ fn prepared() -> Prepared {
 }
 
 fn fence(p: &Prepared) -> CommitFence {
-    CommitFence {
-        root_generation: p.root_generation,
-        valuation_generation: p.valuation_generation,
-        exposure_generation: p.exposure_generation,
-        source_allocation_basis: p.source_allocation_basis.clone(),
-        allocation_receipt: p.allocation_receipt.clone(),
-    }
+    p.synthetic_fence()
 }
 
 #[test]
@@ -334,14 +328,18 @@ fn same_operation_new_terms_or_generation_conflicts_without_provider_effect() {
         journal.attempt(p.clone(), &fence(&p), &mut provider),
         Replay::First(Decision::ReviewableInSimulation)
     );
-    let mut changed = p.clone();
-    changed.exact_terms.offer_incarnation = "quote-2".into();
+    let mut changed_request = request();
+    changed_request.observed_offer.offer_incarnation = "quote-2".into();
+    changed_request.mandate.authorized_terms.offer_incarnation = "quote-2".into();
+    let changed = prepare(&changed_request).expect("current synthetic offer");
     assert_eq!(
         journal.attempt(changed, &fence(&p), &mut provider),
         Replay::Conflict
     );
-    let mut changed = p.clone();
-    changed.root_generation += 1;
+    let mut changed_request = request();
+    changed_request.mandate.root_generation += 1;
+    changed_request.mandate.current_root_generation += 1;
+    let changed = prepare(&changed_request).expect("current synthetic root generation");
     assert_eq!(
         journal.attempt(changed, &fence(&p), &mut provider),
         Replay::Conflict
@@ -354,22 +352,25 @@ fn full_ledger_never_evicts_old_attempts_for_new_operation() {
     let mut journal = SimulationJournal::default();
     let mut provider = FakeProvider::new(Binding::ProviderConditional, terms());
     for i in 0..MAX_SIMULATED_ATTEMPTS {
-        let mut p = prepared();
-        p.operation = format!("intent-{i}");
+        let mut req = request();
+        req.operation = format!("intent-{i}");
+        let p = prepare(&req).expect("distinct synthetic operation");
         assert_eq!(
             journal.attempt(p.clone(), &fence(&p), &mut provider),
             Replay::First(Decision::ReviewableInSimulation)
         );
     }
-    let mut extra = prepared();
-    extra.operation = "one-more".into();
+    let mut req = request();
+    req.operation = "one-more".into();
+    let extra = prepare(&req).expect("valid extra synthetic operation");
     assert_eq!(
         journal.attempt(extra.clone(), &fence(&extra), &mut provider),
         Replay::CapacityExhausted
     );
     assert_eq!(journal.receipt_count(), MAX_SIMULATED_ATTEMPTS);
-    let mut original = prepared();
-    original.operation = "intent-0".into();
+    let mut req = request();
+    req.operation = "intent-0".into();
+    let original = prepare(&req).expect("original synthetic operation");
     assert_eq!(
         journal.attempt(original.clone(), &fence(&original), &mut provider),
         Replay::Identical(Decision::ReviewableInSimulation)

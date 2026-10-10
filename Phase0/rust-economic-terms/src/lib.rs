@@ -137,13 +137,27 @@ pub struct Request {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Prepared {
-    pub operation: String,
-    pub exact_terms: Terms,
-    pub root_generation: u64,
-    pub valuation_generation: u64,
-    pub exposure_generation: u64,
-    pub source_allocation_basis: String,
-    pub allocation_receipt: String,
+    operation: String,
+    exact_terms: Terms,
+    root_generation: u64,
+    valuation_generation: u64,
+    exposure_generation: u64,
+    source_allocation_basis: String,
+    allocation_receipt: String,
+}
+
+impl Prepared {
+    /// An opaque prevalidated synthetic ticket. This *only* constructs a
+    /// fixture-level fence; it is not a live authority/capacity receipt.
+    pub fn synthetic_fence(&self) -> CommitFence {
+        CommitFence {
+            root_generation: self.root_generation,
+            valuation_generation: self.valuation_generation,
+            exposure_generation: self.exposure_generation,
+            source_allocation_basis: self.source_allocation_basis.clone(),
+            allocation_receipt: self.allocation_receipt.clone(),
+        }
+    }
 }
 
 /// Stops *before* even a fake external effect when evidence is missing or
