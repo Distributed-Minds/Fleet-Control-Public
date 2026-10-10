@@ -199,6 +199,18 @@ fn valid_historical_state(p: &Prior) -> bool {
     if p.state.phase == Phase::Free && p.state.noop_streak != 0 {
         return false;
     }
+    // INTEGRATE can only follow BUILD progress, and AUDIT can only follow
+    // BUILD no-progress. Neither may appear with a missing/mismatched outcome.
+    // BUILD itself can retain either outcome after a reactive return, or None
+    // immediately after the bootstrap-to-FREE transition.
+    if p.state.phase == Phase::Free {
+        if p.state.mode == Mode::Integrate && p.state.last_build != BuildResult::Progress {
+            return false;
+        }
+        if p.state.mode == Mode::Audit && p.state.last_build != BuildResult::NoProgress {
+            return false;
+        }
+    }
     match p.state.phase {
         Phase::Solo => p.size == 1 && p.index == 1,
         Phase::Analytic => {
@@ -457,6 +469,37 @@ mod historical_state_validation_tests {
                 previous.state.last_build = outcome;
                 assert!(!valid_historical_state(&previous));
             }
+        }
+    }
+
+    #[test]
+    fn free_review_modes_require_consistent_build_outcomes() {
+        let mut integrate = prior(Phase::Free, Mode::Integrate, 3, 0);
+        integrate.state.last_build = BuildResult::Progress;
+        assert!(valid_historical_state(&integrate));
+        for invalid in [BuildResult::None, BuildResult::NoProgress] {
+            integrate.state.last_build = invalid;
+            assert!(!valid_historical_state(&integrate));
+        }
+
+        let mut audit = prior(Phase::Free, Mode::Audit, 3, 0);
+        audit.state.last_build = BuildResult::NoProgress;
+        assert!(valid_historical_state(&audit));
+        for invalid in [BuildResult::None, BuildResult::Progress] {
+            audit.state.last_build = invalid;
+            assert!(!valid_historical_state(&audit));
+        }
+
+        // A freshly bootstrapped BUILD has no result; a reactive return from
+        // either review mode preserves its last BUILD outcome.
+        let mut build = prior(Phase::Free, Mode::Build, 3, 0);
+        for reachable in [
+            BuildResult::None,
+            BuildResult::Progress,
+            BuildResult::NoProgress,
+        ] {
+            build.state.last_build = reachable;
+            assert!(valid_historical_state(&build));
         }
     }
 
