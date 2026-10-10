@@ -25,7 +25,7 @@ fn ambiguous_identity_scalar(ch: char) -> bool {
                 | '\u{0890}'..='\u{0891}' // Arabic currency format marks
                 | '\u{08E2}' // Arabic disputed end-of-ayah
                 | '\u{17B4}'..='\u{17B5}' // Khmer inherent vowels (default ignorable)
-                | '\u{180B}'..='\u{180E}' // Mongolian variation selectors and separator
+                | '\u{180B}'..='\u{180F}' // Mongolian variation selectors and separator
                 | '\u{1BCA0}'..='\u{1BCA3}' // Shorthand format controls
                 | '\u{115F}' // Hangul choseong filler
                 | '\u{1160}' // Hangul jungseong filler
@@ -338,6 +338,7 @@ mod tests {
             "\u{180C}",
             "\u{180D}",
             "\u{180E}",
+            "\u{180F}",
             "\u{1BCA0}", // Shorthand format controls
             "\u{1BCA3}",
             "\u{110BD}", // Kaithi controls
