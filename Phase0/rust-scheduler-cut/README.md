@@ -13,11 +13,18 @@ effect-time movement, malformed identities and second starts. Retrying the
 same committed operation returns the original historical cut rather than
 granting a new start under a more favorable current policy.
 
-Deterministic compiled tests exercise CUT01–CUT11, CUT15–CUT18 and identity
-negative controls. **CUT12–CUT14 full successor-continuation semantics are
-not implemented.** There is no durable crash recovery, production concurrent
-CAS, cryptographic current-selection, domain authority, external effects or
-provider API. Tests only prove the bounded deterministic simulation.
+Deterministic compiled tests exercise **CUT01–CUT18** and identity
+negative controls (18 tests). The separate `continuation.rs` model adds
+CUT12–CUT14: historical start-bound continuation policy, bounded current-run
+steps without P2 retroactive reinterpretation, rejected incompatible successor
+cuts, ordered assignment-preserving successor bridges, step and operation
+idempotency, and effect-time negative cases.
+
+These are **synthetic fixture semantics**, not full production continuation.
+There is no durable crash recovery, production concurrent CAS, trusted
+transition issuer/current-selection, domain authority, external effects or
+provider API. Neither the in-memory ledger nor the booleans constitutes a
+cross-domain execution fence. Tests prove only the bounded simulation.
 
 ```sh
 cd Phase0/rust-scheduler-cut
