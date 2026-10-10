@@ -786,7 +786,19 @@ mod tests {
         // Candidate-specific effectiveness evidence may legitimately differ;
         // unlike incident/harm/policy basis, it is not an implicit common unit.
         let mut independently_attested = broad.clone();
-        independently_attested.effectiveness_basis = "diffe
+        independently_attested.effectiveness_basis = "different-control-proof".into();
+        assert_eq!(
+            choose_control(&[narrow.clone(), independently_attested]),
+            Ok("narrow".into())
+        );
+        let mut different_comparison_policy = broad;
+        different_comparison_policy.comparison_policy = 2;
+        assert_eq!(
+            choose_control(&[narrow, different_comparison_policy]),
+            Err(Error::UnprovedControl)
+        );
+    }
+
     #[test]
     fn dependency_tuple_requires_all_three_exact_bases() {
         let s = state();
@@ -844,18 +856,6 @@ mod tests {
         assert_eq!(
             review(&s, &bound, frontier(), &controls, &malformed),
             Err(Error::UnknownDependency)
-        );
-    }
-rent-control-proof".into();
-        assert_eq!(
-            choose_control(&[narrow.clone(), independently_attested]),
-            Ok("narrow".into())
-        );
-        let mut different_comparison_policy = broad;
-        different_comparison_policy.comparison_policy = 2;
-        assert_eq!(
-            choose_control(&[narrow, different_comparison_policy]),
-            Err(Error::UnprovedControl)
         );
     }
 
