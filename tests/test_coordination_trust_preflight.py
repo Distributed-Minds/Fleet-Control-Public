@@ -1,4 +1,5 @@
 """Offline deterministic preflight tests; no GitHub credentials or network needed."""
+import io
 import json
 import os
 import sys
@@ -113,6 +114,47 @@ class TrustPreflightTests(unittest.TestCase):
     def test_duplicate_declared_author_field_is_blocked(self):
         self.policy.write_text(CONFIG + "COORDINATION_TRUSTED_AUTHORS=alice\n")
         self.assertEqual(self.check()["status"], "BLOCKED")
+
+    def test_malformed_offline_slot_snapshot_is_blocked_not_traceback(self):
+        # Offline JSON is caller-supplied, not an authenticated GitHub API result.
+        # These nested shapes used to raise uncaught AttributeError in discovery.
+        malformed = [
+            ("body as object", "body", {"marker": "FLEET_COORDINATION_V1"}),
+            ("body as integer", "body", 42),
+            ("creator as string", "user", "geromet"),
+            ("creator login as integer", "user", {"login": 42}),
+            ("title as array", "title", []),
+            ("state as array", "state", []),
+            ("issue number as text", "number", "186"),
+            ("issue number as bool", "number", True),
+            ("missing creator", "user", None),
+        ]
+        for label, field, value in malformed:
+            with self.subTest(label=label):
+                bad_slot = issue(186, "B", "ACTIVE", 2)
+                bad_slot[field] = value
+                self.slots.write_text(json.dumps([issue(168, "A", "DRAINING", 1), bad_slot]))
+                with mock.patch.dict(os.environ, {}, clear=True):
+                    result = preflight.preflight(self.policy, self.workflow, "geromet",
+                                                None, self.slots)
+                    self.assertEqual(result["status"], "BLOCKED", result)
+                    self.assertEqual(result["slots"], "INVALID", result)
+                    self.assertTrue(any("malformed issue snapshot at index 1" in e
+                                        for e in result["errors"]), result)
+                    with mock.patch("sys.stdout", new_callable=io.StringIO) as output:
+                        exit_code = preflight.main([
+                            "--config", str(self.policy), "--workflow", str(self.workflow),
+                            "--actions-variable", "geromet", "--slots-json", str(self.slots)])
+                    self.assertEqual(exit_code, 2)
+                    self.assertEqual(json.loads(output.getvalue())["status"], "BLOCKED")
+
+    def test_offline_author_fallback_preserves_valid_slot_selection(self):
+        fallback = issue(186, "B", "ACTIVE", 2)
+        fallback["author"] = fallback.pop("user")
+        self.slots.write_text(json.dumps([issue(168, "A", "DRAINING", 1), fallback]))
+        value = self.check(slots=True)
+        self.assertEqual(value["status"], "TRUST_AND_OFFLINE_SLOTS_CONSISTENT")
+        self.assertEqual(value["slots"], "VALID_ACTIVE_B_EPOCH_2")
 
     def test_json_cli_success_and_failure_status(self):
         with mock.patch.dict(os.environ, {}, clear=True):
