@@ -433,8 +433,8 @@ mod tests {
         let mut outbox = Outbox::new();
         for bad in [
             "with space".to_owned(),
-            "a\\tb".to_owned(),
-            "hidden\\u{202e}suffix".to_owned(),
+            "a\tb".to_owned(),
+            "hidden\u{202e}suffix".to_owned(),
             "é".to_owned(),
             "x".repeat(513),
         ] {
@@ -456,5 +456,4 @@ mod tests {
         maximum.operation_id = "x".repeat(512);
         assert_eq!(outbox.submit(maximum), Ok(true));
     }
-
 }

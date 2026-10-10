@@ -582,8 +582,8 @@ mod tests {
         let mut s = scheduler(4, 1, 10);
         for bad in [
             "with space".to_owned(),
-            "a\\tb".to_owned(),
-            "hidden\\u{202e}suffix".to_owned(),
+            "a\tb".to_owned(),
+            "hidden\u{202e}suffix".to_owned(),
             "é".to_owned(),
             "x".repeat(513),
         ] {
@@ -620,5 +620,4 @@ mod tests {
         assert_eq!(s.enqueue(maximum), Ok(true));
         assert_eq!(s.pending("effective-credential-1"), Ok(1));
     }
-
 }
