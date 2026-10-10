@@ -18,8 +18,13 @@ fn ambiguous_identity_scalar(ch: char) -> bool {
             ch,
             '\u{00AD}'
                 | '\u{034F}'
+                | '\u{0600}'..='\u{0605}' // Arabic numeric format controls
                 | '\u{061C}'
-                | '\u{180E}'
+                | '\u{070F}' // Syriac abbreviation mark
+                | '\u{08E2}' // Arabic disputed end-of-ayah
+                | '\u{17B4}'..='\u{17B5}' // Khmer inherent vowels (default ignorable)
+                | '\u{180B}'..='\u{180E}' // Mongolian variation selectors and separator
+                | '\u{1BCA0}'..='\u{1BCA3}' // Shorthand format controls
                 | '\u{115F}' // Hangul choseong filler
                 | '\u{1160}' // Hangul jungseong filler
                 | '\u{3164}' // Hangul compatibility filler
@@ -29,6 +34,9 @@ fn ambiguous_identity_scalar(ch: char) -> bool {
                 | '\u{2060}'..='\u{206F}'
                 | '\u{FE00}'..='\u{FE0F}'
                 | '\u{FEFF}'
+                | '\u{110BD}' // Kaithi number sign
+                | '\u{110CD}' // Kaithi number sign above
+                | '\u{13430}'..='\u{13455}' // Egyptian hieroglyph format controls
                 | '\u{E0001}' // Language tag
                 | '\u{E0020}'..='\u{E007F}' // Invisible Unicode tags
                 | '\u{E0100}'..='\u{E01EF}'
@@ -312,7 +320,23 @@ mod tests {
         for hidden in [
             "\u{00AD}",
             "\u{034F}",
+            "\u{0600}", // Arabic numeric control
+            "\u{0605}",
             "\u{061C}",
+            "\u{070F}",
+            "\u{08E2}",
+            "\u{17B4}", // Khmer invisible vowel
+            "\u{17B5}",
+            "\u{180B}", // Mongolian selectors
+            "\u{180C}",
+            "\u{180D}",
+            "\u{180E}",
+            "\u{1BCA0}", // Shorthand format controls
+            "\u{1BCA3}",
+            "\u{110BD}", // Kaithi controls
+            "\u{110CD}",
+            "\u{13430}", // Egyptian hieroglyph format controls
+            "\u{13455}",
             "\u{200B}",
             "\u{202E}",
             "\u{2060}",
