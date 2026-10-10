@@ -318,6 +318,20 @@ impl CreateOperation {
                         })
                         .count()
                         == 1
+                    // Another resource with the same incarnation/payload under
+                    // a different ID remains an unattributed create. A receipt
+                    // proves its own result, not that the ambiguous window
+                    // contains no additional indistinguishable effects.
+                    && objects
+                        .iter()
+                        .filter(|o| {
+                            o.repository_incarnation == r.repository_incarnation
+                                && o.parent_incarnation == r.parent_incarnation
+                                && o.credential_group_incarnation == r.credential_group_incarnation
+                                && o.payload_digest == r.payload_digest
+                        })
+                        .count()
+                        == 1
             })
         } else {
             false
@@ -472,6 +486,31 @@ mod tests {
         );
         assert_eq!(op.transmitted_calls(), 1);
         assert!(!op.automatic_retry_allowed());
+    }
+
+    #[test]
+    fn c14_trusted_receipt_cannot_hide_second_indistinguishable_create() {
+        let mut duplicate = remote();
+        duplicate.id = 124;
+        let mut op = lost_ack_operation();
+        assert_eq!(
+            op.reconcile(&[remote(), duplicate], true, true, Some(&trusted_receipt())),
+            Ok(State::ManualHold)
+        );
+        assert_eq!(op.transmitted_calls(), 1);
+        assert!(op.unattributed_remote_present());
+        assert!(!op.automatic_retry_allowed());
+
+        // An unrelated object is not a duplicate of the intended effect.
+        let mut unrelated = remote();
+        unrelated.id = 124;
+        unrelated.payload_digest = "sha256:other".into();
+        let mut valid = lost_ack_operation();
+        assert_eq!(
+            valid.reconcile(&[remote(), unrelated], true, true, Some(&trusted_receipt())),
+            Ok(State::RemoteProven)
+        );
+        assert_eq!(valid.transmitted_calls(), 1);
     }
 
     #[test]
