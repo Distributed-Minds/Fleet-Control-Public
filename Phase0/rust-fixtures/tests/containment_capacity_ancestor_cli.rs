@@ -27,7 +27,10 @@ mod unix_path_tests {
             .arg(&fixture)
             .output()
             .expect("invoke compiled fixture CLI on real directory");
-        assert!(accepted.status.success(), "real fixture failed: {accepted:?}");
+        assert!(
+            accepted.status.success(),
+            "real fixture failed: {accepted:?}"
+        );
         assert!(
             String::from_utf8_lossy(&accepted.stdout).contains("17 passed"),
             "missing historical positive controls: {accepted:?}"
@@ -55,8 +58,7 @@ mod unix_path_tests {
                 "failed fixture emitted positive result: {rejected:?}"
             );
             assert!(
-                String::from_utf8_lossy(&rejected.stderr)
-                    .contains("symbolic-link ancestor"),
+                String::from_utf8_lossy(&rejected.stderr).contains("symbolic-link ancestor"),
                 "missing deterministic ancestor diagnostic: {rejected:?}"
             );
         }
