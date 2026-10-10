@@ -23,7 +23,7 @@ impl Envelope {
             &self.assignment_id,
         ]
         .iter()
-        .all(|value| !value.trim().is_empty() && !value.chars().any(char::is_control))
+        .all(|value| crate::bounded_machine_id(value))
     }
 }
 
@@ -428,4 +428,33 @@ mod tests {
             .iter()
             .any(|event| event.status == Status::RemoteProven));
     }
+    #[test]
+    fn opaque_envelope_fields_are_bounded_and_cannot_hide_format_controls() {
+        let mut outbox = Outbox::new();
+        for bad in [
+            "with space".to_owned(),
+            "a\\tb".to_owned(),
+            "hidden\\u{202e}suffix".to_owned(),
+            "é".to_owned(),
+            "x".repeat(513),
+        ] {
+            for field in 0..5 {
+                let mut invalid = envelope();
+                match field {
+                    0 => invalid.operation_id = bad.clone(),
+                    1 => invalid.repository_incarnation = bad.clone(),
+                    2 => invalid.target = bad.clone(),
+                    3 => invalid.payload_digest = bad.clone(),
+                    _ => invalid.assignment_id = bad.clone(),
+                }
+                assert_eq!(outbox.submit(invalid), Err(Error::InvalidEnvelope));
+            }
+        }
+        assert!(outbox.entry("op-123").is_none());
+
+        let mut maximum = envelope();
+        maximum.operation_id = "x".repeat(512);
+        assert_eq!(outbox.submit(maximum), Ok(true));
+    }
+
 }

@@ -6,6 +6,14 @@ pub mod outbox;
 pub mod recovery;
 use std::collections::BTreeSet;
 
+/// Conservative input admission for opaque machine identifiers in offline
+/// models. Reject format controls, whitespace, non-ASCII aliases and oversized
+/// values before they become journal keys or credential-queue identities.
+/// This is NOT authentication, canonical provider-resource parsing or authority.
+pub(crate) fn bounded_machine_id(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 512 && value.bytes().all(|byte| byte.is_ascii_graphic())
+}
+
 pub const EMBEDDED_MANIFEST: &str = include_str!("../manifest/provider_effects_v1.tsv");
 pub const MANIFEST_HEADER: &str = "version\toperation\ttransport\tpositive_ack\tlost_ack_attribution\tautomatic_replay\ttarget_cas\tproof_root";
 
@@ -158,11 +166,7 @@ impl OperationIdentity {
             &self.payload_digest,
         ]
         .iter()
-        .all(|s| {
-            // These are opaque machine identities, never display text. Reject
-            // confusable formatting/control characters and unbounded strings.
-            !s.is_empty() && s.len() <= 512 && s.bytes().all(|byte| byte.is_ascii_graphic())
-        })
+        .all(|s| bounded_machine_id(s))
     }
 }
 

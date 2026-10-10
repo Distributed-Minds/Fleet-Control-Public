@@ -34,7 +34,7 @@ impl Request {
             &self.target,
         ]
         .iter()
-        .all(|field| !field.trim().is_empty() && !field.chars().any(char::is_control))
+        .all(|field| crate::bounded_machine_id(field))
     }
 }
 
@@ -125,8 +125,7 @@ impl Scheduler {
         reserved_for_recovery: u32,
         max_pending: usize,
     ) -> Result<(), Error> {
-        if credential_group.trim().is_empty()
-            || credential_group.chars().any(char::is_control)
+        if !crate::bounded_machine_id(credential_group)
             || limit == 0
             || reserved_for_recovery > limit
             || max_pending == 0
@@ -578,4 +577,48 @@ mod tests {
             .unwrap()
             .is_some());
     }
+    #[test]
+    fn opaque_budget_keys_are_bounded_before_queue_or_group_mutation() {
+        let mut s = scheduler(4, 1, 10);
+        for bad in [
+            "with space".to_owned(),
+            "a\\tb".to_owned(),
+            "hidden\\u{202e}suffix".to_owned(),
+            "é".to_owned(),
+            "x".repeat(513),
+        ] {
+            assert_eq!(s.register_group(&bad, 4, 1, 10), Err(Error::InvalidConfig));
+            for field in 0..5 {
+                let mut invalid = request(
+                    "safe-id",
+                    "effective-credential-1",
+                    "repo-a",
+                    "tenant-a",
+                    Priority::Normal,
+                );
+                match field {
+                    0 => invalid.operation_id = bad.clone(),
+                    1 => invalid.credential_group = bad.clone(),
+                    2 => invalid.repository = bad.clone(),
+                    3 => invalid.tenant = bad.clone(),
+                    _ => invalid.target = bad.clone(),
+                }
+                assert_eq!(s.enqueue(invalid), Err(Error::InvalidRequest));
+            }
+        }
+        assert_eq!(s.pending("effective-credential-1"), Ok(0));
+        assert_eq!(s.remaining("effective-credential-1"), Ok(4));
+
+        let mut maximum = request(
+            "safe-id",
+            "effective-credential-1",
+            "repo-a",
+            "tenant-a",
+            Priority::Normal,
+        );
+        maximum.operation_id = "x".repeat(512);
+        assert_eq!(s.enqueue(maximum), Ok(true));
+        assert_eq!(s.pending("effective-credential-1"), Ok(1));
+    }
+
 }
