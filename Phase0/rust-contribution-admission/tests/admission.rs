@@ -280,7 +280,10 @@ fn journal_rejects_key_substitution_before_creating_receipt() {
         journal.record(missing_operation, &admission),
         Replay::Conflict
     );
-    assert_eq!(journal.record(key(), &admission), Replay::First(Decision::ReviewableInSimulation));
+    assert_eq!(
+        journal.record(key(), &admission),
+        Replay::First(Decision::ReviewableInSimulation)
+    );
 }
 
 #[test]
