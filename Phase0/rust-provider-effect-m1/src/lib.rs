@@ -3,6 +3,7 @@
 //! authority to admit an actual provider mutation. It is not the #91 broker.
 pub mod outbox;
 pub mod recovery;
+pub mod credential_budget;
 use std::collections::BTreeSet;
 
 pub const EMBEDDED_MANIFEST: &str = include_str!("../manifest/provider_effects_v1.tsv");
