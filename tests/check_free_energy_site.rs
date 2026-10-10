@@ -164,11 +164,11 @@ fn attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
 
 /// Count actual participation-card articles rather than matching text that
 /// might appear in comments, quoted attributes, or unrelated elements.
-/// Reject inert template containers: their descendants are parsed as source
-/// tags by this limited checker but are not rendered as ordinary page content.
-/// A hidden template must not satisfy visible Contact/navigation/card checks.
+/// Reject inert template and scripting-dependent noscript containers: their
+/// descendants appear in this lexical source scanner but are not reliable
+/// rendered page content. They cannot satisfy Contact/navigation/card checks.
 fn disallowed_site_elements(elements: &[&str]) -> Vec<&'static str> {
-    ["script", "iframe", "form", "object", "embed", "template"]
+    ["script", "iframe", "form", "object", "embed", "template", "noscript"]
         .into_iter()
         .filter(|name| elements.iter().any(|tag| is_open_element(tag, name)))
         .collect()
@@ -833,6 +833,90 @@ data="x"></OBject><EMBED/>"#;
 
         let mixed_case = tags("<TeMpLaTe data-purpose='hidden'>Text</TeMpLaTe>");
         assert_eq!(disallowed_site_elements(&mixed_case), ["template"]);
+    }
+
+
+    #[test]
+    fn noscript_cannot_forge_visible_site_cards_or_navigation() {
+        // Use the actual shipping landing and support files, not an isolated
+        // synthetic fragment that could fail unrelated structural assertions.
+        let root = env::temp_dir().join(format!(
+            "free-energy-noscript-site-{}",
+            std::process::id()
+        ));
+        let docs = root.join("docs");
+        fs::create_dir_all(&docs).expect("create noscript fixture directory");
+        let original = include_str!("../docs/index.html");
+        fs::write(docs.join("index.html"), original).expect("write index fixture");
+        fs::write(docs.join("styles.css"), include_str!("../docs/styles.css"))
+            .expect("write stylesheet fixture");
+        fs::write(docs.join("README.md"), include_str!("../docs/README.md"))
+            .expect("write readme fixture");
+        assert!(
+            validate(&root).is_empty(),
+            "unmodified landing fixture must pass"
+        );
+
+        let route_open = r#"<div class="route-grid" aria-label="Choose how to participate">"#;
+        assert_eq!(original.matches(route_open).count(), 1);
+        let start = original.find(route_open).expect("route grid") + route_open.len();
+        let end = start + original[start..].find("</div>").expect("route grid closing tag");
+        let wrap_routes = |open: &str, close: &str| {
+            format!(
+                "{}{open}{}{close}{}",
+                &original[..start],
+                &original[start..end],
+                &original[end..]
+            )
+        };
+        let nav_open = r#"<nav aria-label="Main navigation">"#;
+        let nav_hidden = original
+            .replacen(nav_open, &format!("<noscript>{nav_open}"), 1)
+            .replacen("</nav>", "</nav></noscript>", 1);
+
+        for (case, mutated) in [
+            ("three cards hidden", wrap_routes("<noscript>", "</noscript>")),
+            ("navigation hidden", nav_hidden),
+            ("mixed-case hidden cards", wrap_routes("<NoScRiPt>", "</NoScRiPt>")),
+            (
+                "nested hidden cards",
+                wrap_routes("<noscript><noscript>", "</noscript></noscript>"),
+            ),
+            (
+                "self-closing noscript",
+                original.replacen("</head>", "<NoScRiPt/></head>", 1),
+            ),
+        ] {
+            assert_ne!(mutated, original, "{case}: fixture must mutate source");
+            fs::write(docs.join("index.html"), mutated).expect("write mutated index fixture");
+            let errors = validate(&root);
+            assert!(
+                errors.iter().any(|error| {
+                    error == "Unexpected active, embedded, or inert element: noscript"
+                }),
+                "{case}: expected noscript denial, got {errors:?}"
+            );
+        }
+
+        for (case, mutated) in [
+            (
+                "HTML comment literal",
+                original.replacen("</head>", "<!-- <noscript> --></head>", 1),
+            ),
+            (
+                "multiline HTML comment literal",
+                original.replacen("</head>", "<!--\n<noscript>\n--></head>", 1),
+            ),
+            (
+                "quoted attribute literal",
+                original.replacen("<body", "<body data-example='<noscript>'", 1),
+            ),
+        ] {
+            fs::write(docs.join("index.html"), mutated).expect("write allowed index fixture");
+            let errors = validate(&root);
+            assert!(errors.is_empty(), "{case}: should remain valid: {errors:?}");
+        }
+        fs::remove_dir_all(&root).expect("remove noscript test fixture");
     }
 
     #[test]
