@@ -3,8 +3,7 @@
 //! authority to admit an actual provider mutation. It is not the #91 broker.
 use std::collections::BTreeSet;
 
-pub const EMBEDDED_MANIFEST: &str =
-    include_str!("../manifest/provider_effects_v1.tsv");
+pub const EMBEDDED_MANIFEST: &str = include_str!("../manifest/provider_effects_v1.tsv");
 pub const MANIFEST_HEADER: &str = "version\toperation\ttransport\tpositive_ack\tlost_ack_attribution\tautomatic_replay\ttarget_cas\tproof_root";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -83,9 +82,7 @@ pub fn parse_manifest(contents: &str) -> Result<Vec<ProviderEffectCapability>, M
             .iter()
             .map(|s| Capability::parse(s).ok_or(ManifestError::InvalidRow(lineno)))
             .collect::<Result<_, _>>()?;
-        if statuses.contains(&Capability::SupportedConditionally)
-            && fields[7] == "none"
-        {
+        if statuses.contains(&Capability::SupportedConditionally) && fields[7] == "none" {
             return Err(ManifestError::UnsupportedPositiveClaim(lineno));
         }
         if !seen.insert((fields[1], fields[2])) {
@@ -264,8 +261,7 @@ impl CreateOperation {
                     && r.attempt_id == self.identity.attempt_id
                     && r.repository_incarnation == self.identity.repository_incarnation
                     && r.parent_incarnation == self.identity.parent_incarnation
-                    && r.credential_group_incarnation
-                        == self.identity.credential_group_incarnation
+                    && r.credential_group_incarnation == self.identity.credential_group_incarnation
                     && r.payload_digest == self.identity.payload_digest
                     && objects
                         .iter()
@@ -273,8 +269,7 @@ impl CreateOperation {
                             o.id == r.remote_id
                                 && o.repository_incarnation == r.repository_incarnation
                                 && o.parent_incarnation == r.parent_incarnation
-                                && o.credential_group_incarnation
-                                    == r.credential_group_incarnation
+                                && o.credential_group_incarnation == r.credential_group_incarnation
                                 && o.payload_digest == r.payload_digest
                         })
                         .count()
@@ -345,13 +340,21 @@ mod tests {
     #[test]
     fn c13_same_credential_exact_spoof_is_not_attribution() {
         let mut op = lost_ack_operation();
-        assert_eq!(op.reconcile(&[remote()], true, true, None), Ok(State::ManualHold));
+        assert_eq!(
+            op.reconcile(&[remote()], true, true, None),
+            Ok(State::ManualHold)
+        );
         assert_eq!(op.transmitted_calls(), 1);
         assert!(op.unattributed_remote_present());
         assert_eq!(
             op.transitions(),
-            &[State::Prepared, State::Dispatching, State::EffectUnknown,
-              State::Reconciling, State::ManualHold]
+            &[
+                State::Prepared,
+                State::Dispatching,
+                State::EffectUnknown,
+                State::Reconciling,
+                State::ManualHold
+            ]
         );
         assert!(!op.automatic_retry_allowed());
     }
@@ -361,7 +364,10 @@ mod tests {
         let mut op = lost_ack_operation();
         let mut second = remote();
         second.id = 124;
-        assert_eq!(op.reconcile(&[remote(), second], true, true, None), Ok(State::ManualHold));
+        assert_eq!(
+            op.reconcile(&[remote(), second], true, true, None),
+            Ok(State::ManualHold)
+        );
     }
 
     #[test]
@@ -380,7 +386,10 @@ mod tests {
         let mut bad = trusted_receipt();
         bad.attempt_id = "another-attempt".into();
         let mut op = lost_ack_operation();
-        assert_eq!(op.reconcile(&[remote()], true, true, Some(&bad)), Ok(State::ManualHold));
+        assert_eq!(
+            op.reconcile(&[remote()], true, true, Some(&bad)),
+            Ok(State::ManualHold)
+        );
 
         let mut op = lost_ack_operation();
         let mut bad_object = remote();
@@ -395,7 +404,10 @@ mod tests {
     fn c15_complete_listing_without_receipt_is_not_causal_proof() {
         for complete in [true, false] {
             let mut op = lost_ack_operation();
-            assert_eq!(op.reconcile(&[remote()], complete, true, None), Ok(State::ManualHold));
+            assert_eq!(
+                op.reconcile(&[remote()], complete, true, None),
+                Ok(State::ManualHold)
+            );
             assert!(!op.automatic_retry_allowed());
         }
     }
@@ -413,7 +425,10 @@ mod tests {
     fn c17_manual_hold_is_monotonic_and_distinct_new_operation_is_required() {
         let mut op = lost_ack_operation();
         op.reconcile(&[remote()], true, true, None).unwrap();
-        assert_eq!(op.reconcile(&[remote()], true, true, Some(&trusted_receipt())), Err(ModelError::InvalidState));
+        assert_eq!(
+            op.reconcile(&[remote()], true, true, Some(&trusted_receipt())),
+            Err(ModelError::InvalidState)
+        );
         assert_eq!(op.dispatch(true, true), Err(ModelError::InvalidState));
         let mut other = identity();
         other.operation_id = "human-authorized-fresh-op2".into();
