@@ -227,13 +227,15 @@ fn has_valid_head_title(elements: &[&str]) -> bool {
             }
             zone = Zone::AfterBody;
         } else if zone == Zone::Head
+            && !seen_title
             && !["meta", "link"]
                 .iter()
                 .any(|name| is_open_element(tag, name))
         {
-            // The fixed landing head permits only metadata, its one title,
-            // and its closing head tag. A body-starting element implicitly
-            // closes head in HTML, even without an explicit </head>.
+            // A non-metadata element before the first title implicitly closes
+            // the HTML head, so a later title cannot be credited as head-owned.
+            // After the title, keep harmless element-name lookalikes accepted;
+            // other site checks still enforce prohibited active elements.
             return false;
         }
     }
