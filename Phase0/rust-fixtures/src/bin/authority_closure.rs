@@ -213,6 +213,12 @@ fn composition(case: &Map<String, Value>) -> Result<Option<(String, Value)>, Str
 fn evaluate(case: &Map<String, Value>) -> Result<(String, Value), String> {
     validate_inputs(case)?;
     require_necessary_witnesses(case)?;
+    // A separate denial can short-circuit composition evaluation. Validate
+    // supplied root-count evidence regardless of which outcome wins, rather
+    // than silently accepting impossible/missing declared-root witnesses.
+    if case.contains_key("composition") {
+        composition(case)?;
+    }
 
     // Compatibility, inventory, and durable closure evidence are gates.
     if no(case, "lineage_protocol_compatible") && yes(case, "mutation_requested") {
@@ -751,6 +757,32 @@ mod tests {
         let mut fixture: Value = serde_json::from_str(source).unwrap();
         fixture["cases"][0]["name"] = fixture["cases"][1]["name"].clone();
         assert!(validate_fixture(&fixture.to_string()).is_err());
+    }
+
+    #[test]
+    fn invalid_declared_roots_cannot_hide_behind_unrelated_denial() {
+        for invalid in [
+            json!({"composition":"ALL_REQUIRED"}),
+            json!({"composition":"ANY_OF_DECLARED","surviving_roots":0,"required_roots":0}),
+            json!({"composition":"ALL_REQUIRED","surviving_roots":3,"required_roots":2}),
+        ] {
+            let mut case = input(invalid.clone());
+            case.insert("provider_access".to_owned(), json!("ERROR"));
+            assert!(
+                evaluate(&case).is_err(),
+                "invalid root evidence bypassed by provider denial: {invalid}"
+            );
+        }
+
+        // Validation does not elevate a valid composition over a stronger
+        // provider denial; preserve the historical decision precedence.
+        let mut valid =
+            input(json!({"composition":"ALL_REQUIRED","surviving_roots":1,"required_roots":2}));
+        valid.insert("provider_access".to_owned(), json!("ERROR"));
+        assert_eq!(
+            evaluate(&valid).unwrap(),
+            result("expected_closure", "ERROR")
+        );
     }
 
     #[test]
