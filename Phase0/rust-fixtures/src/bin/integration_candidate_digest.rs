@@ -481,6 +481,146 @@ fn main() {
 mod tests {
     use super::*;
 
+    // Independent SHA-256 reference digests, computed with the standard
+    // hashlib.sha256 implementation rather than this candidate identity code.
+    // 55/56, 63/64, and 119/120 bytes straddle SHA-256 padding boundaries.
+    #[test]
+    fn sha256_matches_independent_multiblock_padding_vectors() {
+        const VECTORS: &[(usize, &str)] = &[
+            (
+                0,
+                "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            ),
+            (
+                1,
+                "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+            ),
+            (
+                3,
+                "9834876dcfb05cb167a5c24953eba58c4ac89b1adf57f28f2f9d09af107ee8f0",
+            ),
+            (
+                55,
+                "9f4390f8d30c2dd92ec9f095b65e2b9ae9b0a925a5258e241c9f1e910f734318",
+            ),
+            (
+                56,
+                "b35439a4ac6f0948b6d6f9e3c6af0f5f590ce20f1bde7090ef7970686ec6738a",
+            ),
+            (
+                63,
+                "7d3e74a05d7db15bce4ad9ec0658ea98e3f06eeecf16b4c6fff2da457ddc2f34",
+            ),
+            (
+                64,
+                "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb",
+            ),
+            (
+                65,
+                "635361c48bb9eab14198e76ea8ab7f1a41685d6ad62aa9146d301d4f17eb0ae0",
+            ),
+            (
+                119,
+                "31eba51c313a5c08226adf18d4a359cfdfd8d2e816b13f4af952f7ea6584dcfb",
+            ),
+            (
+                120,
+                "2f3d335432c70b580af0e8e1b3674a7c020d683aa5f73aaaedfdc55af904c21c",
+            ),
+            (
+                128,
+                "6836cf13bac400e9105071cd6af47084dfacad4e5e302c94bfed24e013afb73e",
+            ),
+            (
+                1000,
+                "41edece42d63e8d9bf515a9ba6932e1c20cbc9f5a5d134645adb5db1b9737ea3",
+            ),
+        ];
+
+        for &(len, expected) in VECTORS {
+            let input = vec![b'a'; len];
+            assert_eq!(
+                sha256_hex(&input),
+                expected,
+                "SHA-256 mismatch at {len} bytes"
+            );
+
+            // A single changed input byte must not match the published digest.
+            if len > 0 {
+                let mut changed = input;
+                changed[len - 1] = b'b';
+                assert_ne!(
+                    sha256_hex(&changed),
+                    expected,
+                    "single-byte mutation retained original digest at {len} bytes"
+                );
+            }
+        }
+    }
+
+    // Binary input exercises high-bit byte handling and all 256 byte values,
+    // not only the ASCII-repeated inputs in the padding-boundary test above.
+    // Expected values were calculated independently with Python hashlib.sha256.
+    #[test]
+    fn sha256_matches_independent_binary_boundary_vectors() {
+        const REPEATED: &[(u8, usize, &str)] = &[
+            (
+                0x00,
+                55,
+                "02779466cdec163811d078815c633f21901413081449002f24aa3e80f0b88ef7",
+            ),
+            (
+                0x80,
+                56,
+                "ab44ecde4bac7f799c8588f617770b1a5877bead1a4bee5d3d848cd41b8855a0",
+            ),
+            (
+                0x80,
+                63,
+                "19cac792c6caf6b1218607e8a46fcea40d7c7bade71844a331aa841223bcc2f1",
+            ),
+            (
+                0x80,
+                64,
+                "1df1b7ce1fd8fcbe20cde61646875e54fe38d8945ea7911afd59e025cc520a68",
+            ),
+            (
+                0xff,
+                119,
+                "b863f94597d433ef2280e3b4656f13ea265a79bb8047287321c218905b03c99b",
+            ),
+            (
+                0xff,
+                120,
+                "9088fee917e5a748c2f0b4f5458c1cbdabbd696291c69be6e605bae0ef779e8f",
+            ),
+        ];
+        for &(byte, len, expected) in REPEATED {
+            let input = vec![byte; len];
+            assert_eq!(
+                sha256_hex(&input),
+                expected,
+                "SHA-256 binary padding mismatch: byte {byte:#04x}, length {len}"
+            );
+        }
+
+        let spectrum: Vec<u8> = (0..=255).collect();
+        assert_eq!(
+            sha256_hex(&spectrum),
+            "40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880"
+        );
+        assert_eq!(
+            sha256_hex(&spectrum.repeat(16)),
+            "c8f5d0341d54d951a71b136e6e2afcb14d11ed8489a7ae126a8fee0df6ecf193"
+        );
+        let mut changed = spectrum;
+        changed[0] ^= 0xff;
+        assert_ne!(
+            sha256_hex(&changed),
+            "40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880"
+        );
+    }
+
     const HISTORICAL: &str = include_str!("../../../fixtures/integration-candidate-v1.json");
 
     #[test]
