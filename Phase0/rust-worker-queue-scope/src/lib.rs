@@ -27,6 +27,9 @@ impl ScopeConflictBasis {
             || self.repository_id == 0
             || self.repository_incarnation.is_empty()
             || self.repository_incarnation.len() > 128
+            || !self.repository_incarnation.bytes().all(|byte| {
+                byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':')
+            })
         {
             return Err(AdmissionError::InvalidBasis);
         }
@@ -356,6 +359,45 @@ mod tests {
         assert_eq!(result, Err(AdmissionError::UnsupportedScope));
         assert_eq!(book.reservation_count(), 0);
         book.reserve(3, &[branch("free")], &basis()).unwrap();
+    }
+
+    #[test]
+    fn malformed_repository_incarnation_never_enters_scope_reservation() {
+        let malformed = [
+            "".to_owned(),
+            " ".to_owned(),
+            "repo inc".to_owned(),
+            "repo\nspoof".to_owned(),
+            "repo\tspoof".to_owned(),
+            "repo\\spoof".to_owned(),
+            "repo/child".to_owned(),
+            "repo\0spoof".to_owned(),
+            "repo\u{200b}spoof".to_owned(),
+            "repo\u{202e}spoof".to_owned(),
+            "repo@child".to_owned(),
+            "x".repeat(129),
+        ];
+        for value in malformed {
+            let mut candidate = basis();
+            candidate.repository_incarnation = value;
+            assert_eq!(candidate.validate(), Err(AdmissionError::InvalidBasis));
+            assert!(matches!(
+                SimulationBook::new(candidate.clone()),
+                Err(AdmissionError::InvalidBasis)
+            ));
+            assert_eq!(
+                compile_footprint(&[branch("safe")], &candidate, &candidate),
+                Err(AdmissionError::InvalidBasis)
+            );
+        }
+
+        let mut valid = basis();
+        valid.repository_incarnation = "A-_.:z9".to_owned();
+        assert_eq!(valid.validate(), Ok(()));
+        valid.repository_incarnation = "a".repeat(128);
+        assert_eq!(valid.validate(), Ok(()));
+        valid.repository_incarnation.push('a');
+        assert_eq!(valid.validate(), Err(AdmissionError::InvalidBasis));
     }
 
     #[test]
