@@ -275,4 +275,4 @@ rustc --edition=2021 -D warnings scripts/check-public-doc-links.rs -o /tmp/free-
 /tmp/free-energy-doc-links --root "$PWD"
 ```
 
-The last command checks local file targets in eight onboarding documents, rejecting missing, malformed or unsafe destinations. It does **not** request external URLs, validate `#fragments`, or implement full CommonMark. A nonzero exit is a failed check. Pass `--root` explicitly because the compiled binary may live outside the checkout. The pinned GitHub Actions validator additionally exercises executable failure cases on a disposable fixture root.
+The last command checks local file targets in ten onboarding documents (including `CONTRIBUTING.md` and `GLOSSARY.md`), rejecting missing, malformed or unsafe destinations. It does **not** request external URLs, validate `#fragments`, or implement full CommonMark. A nonzero exit is a failed check. Pass `--root` explicitly because the compiled binary may live outside the checkout. The pinned GitHub Actions validator additionally exercises executable failure cases on a disposable fixture root.
