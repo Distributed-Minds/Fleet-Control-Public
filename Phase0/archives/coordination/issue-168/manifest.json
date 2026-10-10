@@ -1,5 +1,5 @@
 {
-  "archived_comment_count": 2252,
+  "archived_comment_count": 2260,
   "issue": 168,
   "schema": 1,
   "segments": [
@@ -471,6 +471,13 @@
       "last_comment_id": 6099852904,
       "path": "Phase0/archives/coordination/issue-168/comments-6099840958-6099852904.jsonl",
       "sha256": "1c435f8ccd9894079afe5c6849cd558394096995275466874da1b5b80a5c13e7"
+    },
+    {
+      "count": 8,
+      "first_comment_id": 6099854677,
+      "last_comment_id": 6099865525,
+      "path": "Phase0/archives/coordination/issue-168/comments-6099854677-6099865525.jsonl",
+      "sha256": "e3ef02cf0f3dbc8cbea26c42fe5beeb909e0e7fe3e7902b2288ab8565a4dc2cb"
     }
   ]
 }
