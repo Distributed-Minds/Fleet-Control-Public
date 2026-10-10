@@ -330,6 +330,10 @@ impl CreateOperation {
                         })
                         .count()
                         == 1
+                    // A single remote resource ID cannot simultaneously have
+                    // contradictory metadata in one supposedly complete readback.
+                    // Even one valid match is ambiguous if its ID appears elsewhere.
+                    && objects.iter().filter(|o| o.id == r.remote_id).count() == 1
                     // Another resource with the same incarnation/payload under
                     // a different ID remains an unattributed create. A receipt
                     // proves its own result, not that the ambiguous window
@@ -523,6 +527,37 @@ mod tests {
             Ok(State::RemoteProven)
         );
         assert_eq!(valid.transmitted_calls(), 1);
+    }
+
+    #[test]
+    fn c14_conflicting_metadata_for_one_remote_id_is_not_readback_proof() {
+        // A provider listing that assigns one numeric ID two incompatible
+        // incarnations, parents, credentials or payloads is not coherent
+        // evidence of the precise effect, regardless of record ordering.
+        for field in 0..4 {
+            let mut contradictory = remote();
+            match field {
+                0 => contradictory.repository_incarnation = "other-repo".into(),
+                1 => contradictory.parent_incarnation = "other-parent".into(),
+                2 => contradictory.credential_group_incarnation = "other-credential".into(),
+                _ => contradictory.payload_digest = "sha256:other".into(),
+            }
+            assert_eq!(contradictory.id, remote().id);
+            for records in [
+                vec![remote(), contradictory.clone()],
+                vec![contradictory, remote()],
+            ] {
+                let mut op = lost_ack_operation();
+                assert_eq!(
+                    op.reconcile(&records, true, true, Some(&trusted_receipt())),
+                    Ok(State::ManualHold),
+                    "conflicting remote ID, changed field {field}"
+                );
+                assert_eq!(op.transmitted_calls(), 1);
+                assert!(op.unattributed_remote_present());
+                assert!(!op.automatic_retry_allowed());
+            }
+        }
     }
 
     #[test]
