@@ -77,6 +77,15 @@ enum Selection {
     Family(String),
 }
 
+// Aggregate status messages must not replay terminal-control characters from
+// untrusted arguments or child stderr. Bound raw scalar count before escaping.
+fn log_safe(raw: &str) -> String {
+    raw.chars()
+        .take(256)
+        .flat_map(char::escape_default)
+        .collect()
+}
+
 fn parse_args(args: &[String]) -> Result<(Selection, PathBuf), String> {
     let mut selection = Selection::All;
     let mut selection_seen = false;
@@ -94,7 +103,7 @@ fn parse_args(args: &[String]) -> Result<(Selection, PathBuf), String> {
                         i += 1;
                         let value = args.get(i).ok_or("--family requires a known name")?;
                         if !ORACLES.iter().any(|oracle| oracle.name == value) {
-                            return Err(format!("unknown fixture family: {value}"));
+                            return Err(format!("unknown fixture family: {}", log_safe(value)));
                         }
                         Selection::Family(value.clone())
                     }
@@ -109,7 +118,12 @@ fn parse_args(args: &[String]) -> Result<(Selection, PathBuf), String> {
                 }
                 root = PathBuf::from(value);
             }
-            unknown => return Err(format!("unknown or repeated argument: {unknown}")),
+            unknown => {
+                return Err(format!(
+                    "unknown or repeated argument: {}",
+                    log_safe(unknown)
+                ))
+            }
         }
         i += 1;
     }
@@ -264,12 +278,10 @@ fn run_oracles(selection: Selection, root: &Path) -> Result<(), String> {
             )),
             Ok(output) => {
                 let stderr = String::from_utf8_lossy(&output.stderr);
-                let detail = stderr.trim().chars().take(256).collect::<String>();
+                let detail = log_safe(stderr.trim());
                 failed.push(format!(
                     "{}: child exited {}: {}",
-                    oracle.name,
-                    output.status,
-                    detail.replace('\n', "\\n")
+                    oracle.name, output.status, detail
                 ));
             }
             Err(error) => failed.push(format!("{}: could not execute: {error}", oracle.name)),
@@ -521,6 +533,30 @@ mod tests {
         for pair in ORACLES.windows(2) {
             assert!(pair[0].name < pair[1].name, "family order must be stable");
         }
+    }
+
+    #[test]
+    fn aggregate_errors_escape_untrusted_control_characters() {
+        let injected = "bad\nPASS forged\r\u{1b}[2K\u{202e}name";
+        let rendered = log_safe(injected);
+        assert!(rendered.contains(r"\nPASS forged"));
+        assert!(rendered.contains(r"\r"));
+        assert!(rendered.contains(r"\u{1b}"));
+        assert!(rendered.contains(r"\u{202e}"));
+        assert!(!rendered.chars().any(char::is_control));
+
+        let error =
+            options(&["--unknown\nPASS forged\r\u{1b}"]).expect_err("malicious option must fail");
+        assert!(error.contains(r"\nPASS forged"));
+        assert!(!error.contains('\n'));
+        assert!(!error.contains('\r'));
+        assert!(!error.contains('\u{1b}'));
+
+        let family_error =
+            options(&["--family", "bogus\nPASS forged"]).expect_err("unknown family must fail");
+        assert!(family_error.contains(r"\nPASS forged"));
+        assert!(!family_error.contains('\n'));
+        assert_eq!(log_safe(&"X".repeat(400)).len(), 256);
     }
 
     #[test]
