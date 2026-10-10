@@ -71,6 +71,40 @@ fn case<'a>(fixture: &'a mut Value, name: &str) -> &'a mut Value {
 }
 
 #[test]
+fn compiled_binary_rejects_invalid_argument_count_without_success_output() {
+    for args in [Vec::<&str>::new(), vec!["first.json", "second.json"]] {
+        let result = Command::new(env!("CARGO_BIN_EXE_authority_closure"))
+            .args(args)
+            .output()
+            .expect("run authority-closure CLI with invalid argument count");
+        assert_eq!(result.status.code(), Some(2), "{result:?}");
+        assert!(result.stdout.is_empty(), "{result:?}");
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        assert!(
+            stderr.contains("expected exactly one fixture path"),
+            "{result:?}"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn compiled_binary_rejects_non_utf8_os_argument_without_panic() {
+    use std::os::unix::ffi::OsStringExt;
+
+    let invalid = std::ffi::OsString::from_vec(vec![b'f', 0xff, b'.', b'j', b's', b'o', b'n']);
+    let result = Command::new(env!("CARGO_BIN_EXE_authority_closure"))
+        .arg(invalid)
+        .output()
+        .expect("run authority-closure CLI with non-UTF-8 path");
+    assert_eq!(result.status.code(), Some(2), "{result:?}");
+    assert!(result.stdout.is_empty(), "{result:?}");
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    assert!(stderr.contains("non-UTF-8 fixture path"), "{result:?}");
+    assert!(!stderr.contains("panicked at"), "{result:?}");
+}
+
+#[test]
 fn compiled_binary_accepts_exact_historical_26_case_fixture() {
     let result = run_source(HISTORICAL);
     assert!(

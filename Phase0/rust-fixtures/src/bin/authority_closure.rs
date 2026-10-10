@@ -516,13 +516,29 @@ fn read_fixture_file(path: &str) -> Result<String, String> {
     read_fixture_file_checked(path, &before)
 }
 
-fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() != 2 {
-        eprintln!("Usage: authority_closure <Phase0/fixtures/authority-closure-spec2.json>");
-        process::exit(2);
+// Unix argument bytes need not be UTF-8. Validate before using a fixture
+// path: env::args() would panic on non-UTF-8 instead of returning a typed error.
+// This is CLI admission only; it does not authenticate fixture provenance.
+fn parse_cli_fixture_arg(
+    mut args: impl Iterator<Item = std::ffi::OsString>,
+) -> Result<String, &'static str> {
+    let input = args.next().ok_or("expected exactly one fixture path")?;
+    if args.next().is_some() {
+        return Err("expected exactly one fixture path");
     }
-    let outcome = read_fixture_file(&args[1]).and_then(|source| validate_fixture(&source));
+    input.into_string().map_err(|_| "non-UTF-8 fixture path")
+}
+
+fn main() {
+    let fixture = match parse_cli_fixture_arg(env::args_os().skip(1)) {
+        Ok(fixture) => fixture,
+        Err(reason) => {
+            eprintln!("Usage: authority_closure <Phase0/fixtures/authority-closure-spec2.json>");
+            eprintln!("authority-closure validation FAILED: {reason}");
+            process::exit(2);
+        }
+    };
+    let outcome = read_fixture_file(&fixture).and_then(|source| validate_fixture(&source));
     match outcome {
         Ok(count) => println!("authority closure Rust semantic fixtures: {count} cases passed"),
         Err(reason) => {
@@ -536,6 +552,36 @@ fn main() {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn cli_fixture_argument_admission_rejects_invalid_input_without_panicking() {
+        use std::ffi::OsString;
+
+        assert_eq!(
+            parse_cli_fixture_arg(std::iter::once(OsString::from("fixture.json"))),
+            Ok("fixture.json".to_owned())
+        );
+        assert_eq!(
+            parse_cli_fixture_arg(std::iter::empty()),
+            Err("expected exactly one fixture path")
+        );
+        assert_eq!(
+            parse_cli_fixture_arg(
+                [OsString::from("first.json"), OsString::from("second.json")].into_iter()
+            ),
+            Err("expected exactly one fixture path")
+        );
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::OsStringExt;
+            let invalid = OsString::from_vec(vec![b'f', 0xff]);
+            assert_eq!(
+                parse_cli_fixture_arg(std::iter::once(invalid)),
+                Err("non-UTF-8 fixture path")
+            );
+        }
+    }
 
     #[cfg(unix)]
     #[test]
