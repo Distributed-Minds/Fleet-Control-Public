@@ -165,6 +165,23 @@ fn is_setext_underline(line: &str) -> bool {
     content[width..].iter().all(|&byte| byte == b' ' || byte == b'\t')
 }
 
+// An indented CommonMark code line starts at >=4 visual columns at a fresh
+// block boundary. Callers must preserve indented lazy paragraph continuations.
+fn is_indented_code_line(line: &str) -> bool {
+    let mut column = 0;
+    for byte in line.bytes() {
+        column += match byte {
+            b' ' => 1,
+            b'\t' => 4 - column % 4,
+            _ => break,
+        };
+        if column >= 4 {
+            return true;
+        }
+    }
+    false
+}
+
 fn mask_paragraph_code_spans(markdown: &str) -> String {
     let mut visible = String::with_capacity(markdown.len());
     let mut paragraph = String::new();
@@ -204,6 +221,17 @@ fn mask_paragraph_code_spans(markdown: &str) -> String {
                 visible.push_str(&mask_inline_code(raw_line));
             } else {
                 visible.push_str(raw_line);
+            }
+        } else if paragraph.is_empty() && is_indented_code_line(line) {
+            // Indented literal code must neither emit links nor contribute
+            // backticks to adjacent paragraph-wide inline-code spans.
+            // Preserve source byte count and line breaks for diagnostics.
+            for byte in raw_line.bytes() {
+                visible.push(if byte == b'\n' || byte == b'\r' {
+                    byte as char
+                } else {
+                    ' '
+                });
             }
         } else if setext_underline {
             // All heading content lines share one inline-span context. Flush
