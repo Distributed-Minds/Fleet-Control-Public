@@ -329,8 +329,14 @@ pub fn review(
     if state.generation != bound.active_generation {
         return Err(Error::StaleGeneration);
     }
-    if bound.dependency_bases.is_empty()
-        || live_dependencies.is_empty()
+    // These are the three dependency slots required by the spec-4 offline
+    // review envelope. Equality of incomplete maps is not completeness proof.
+    const REQUIRED_DEPS: [&str; 3] = ["#10", "#13", "#16"];
+    if REQUIRED_DEPS.iter().any(|key| {
+        !matches!(bound.dependency_bases.get(*key), Some(value) if !value.is_empty())
+            || !matches!(live_dependencies.get(*key), Some(value) if !value.is_empty())
+    })
+        || bound.dependency_bases.values().any(String::is_empty)
         || live_dependencies.values().any(String::is_empty)
     {
         return Err(Error::UnknownDependency);
@@ -780,7 +786,67 @@ mod tests {
         // Candidate-specific effectiveness evidence may legitimately differ;
         // unlike incident/harm/policy basis, it is not an implicit common unit.
         let mut independently_attested = broad.clone();
-        independently_attested.effectiveness_basis = "different-control-proof".into();
+        independently_attested.effectiveness_basis = "diffe
+    #[test]
+    fn dependency_tuple_requires_all_three_exact_bases() {
+        let s = state();
+        let controls = [control("narrow", &[Action::Write], [1, 1, 1])];
+        let complete = deps();
+        let mut bound = basis(&s);
+        assert_eq!(
+            review(&s, &bound, frontier(), &controls, &complete),
+            Ok(Review::SyntheticOnly)
+        );
+        for missing in ["#10", "#13", "#16"] {
+            let mut partial = complete.clone();
+            partial.remove(missing);
+            bound.dependency_bases = partial.clone();
+            assert_eq!(
+                review(&s, &bound, frontier(), &controls, &partial),
+                Err(Error::UnknownDependency),
+                "same incomplete map lacks {missing}"
+            );
+            bound.dependency_bases = complete.clone();
+            assert_eq!(
+                review(&s, &bound, frontier(), &controls, &partial),
+                Err(Error::UnknownDependency),
+                "live map lacks {missing}"
+            );
+            bound.dependency_bases = partial;
+            assert_eq!(
+                review(&s, &bound, frontier(), &controls, &complete),
+                Err(Error::UnknownDependency),
+                "bound map lacks {missing}"
+            );
+        }
+        let unrelated = BTreeMap::from([("other".into(), "unrelated-token".into())]);
+        bound.dependency_bases = unrelated.clone();
+        assert_eq!(
+            review(&s, &bound, frontier(), &controls, &unrelated),
+            Err(Error::UnknownDependency)
+        );
+        let mut with_extra = complete.clone();
+        with_extra.insert("#extra".into(), "independent-v1".into());
+        bound.dependency_bases = with_extra.clone();
+        assert_eq!(
+            review(&s, &bound, frontier(), &controls, &with_extra),
+            Ok(Review::SyntheticOnly)
+        );
+        let mut changed = with_extra.clone();
+        changed.insert("#13".into(), "changed-evidence-basis".into());
+        assert_eq!(
+            review(&s, &bound, frontier(), &controls, &changed),
+            Err(Error::StaleDecision)
+        );
+        let mut malformed = with_extra;
+        malformed.insert("#optional".into(), String::new());
+        bound.dependency_bases = malformed.clone();
+        assert_eq!(
+            review(&s, &bound, frontier(), &controls, &malformed),
+            Err(Error::UnknownDependency)
+        );
+    }
+rent-control-proof".into();
         assert_eq!(
             choose_control(&[narrow.clone(), independently_attested]),
             Ok("narrow".into())
