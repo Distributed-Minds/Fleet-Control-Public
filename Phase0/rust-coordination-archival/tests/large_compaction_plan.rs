@@ -208,3 +208,55 @@ fn unarchived_live_tail_is_not_a_removal_candidate() {
         Err(PlanFailure::MissingOrAmbiguousArchivedCopy)
     );
 }
+
+#[test]
+fn globally_sparse_github_comment_ids_require_exact_archived_copy() {
+    // Synthetic records use real-sized, globally sparse GitHub ID boundaries,
+    // not actual comment payloads or current archival authority.
+    let first = "6072460160";
+    let second = "6072460161";
+    let last = "6086765381";
+    let unarchived_in_range = "6080000000";
+    assert_eq!(
+        last.parse::<u64>().unwrap() - first.parse::<u64>().unwrap() + 1,
+        14_305_222
+    );
+
+    let mut history: Vec<_> = (0..4).map(record).collect();
+    for (row, id) in history
+        .iter_mut()
+        .zip([first, second, last, unarchived_in_range])
+    {
+        row.stable_id = id.to_owned();
+    }
+    let archived = history[..3].to_vec();
+    let live = history[1..].to_vec();
+    let mut scoped_cut = cut();
+    scoped_cut.first_sequence = 0;
+    scoped_cut.last_sequence = 3;
+
+    let witnesses = [witness(&live[0]), witness(&live[1])];
+    let plan = plan_compaction(&archived, &live, &scoped_cut, &witnesses)
+        .expect("only the two exact archived live identities are eligible");
+    assert_eq!(
+        plan.model_removals
+            .iter()
+            .map(|removal| removal.source.record_id.as_str())
+            .collect::<Vec<_>>(),
+        vec![second, last]
+    );
+    assert_eq!(plan.retained_live, vec![live[2].clone()]);
+    assert_eq!(plan.reconstructed, history);
+
+    // This ID lies between the same numeric segment boundaries but does not
+    // occur in the archived records. Numeric-span membership grants nothing.
+    assert_eq!(
+        plan_compaction(
+            &archived,
+            &live,
+            &scoped_cut,
+            &[witness(&live[2])]
+        ),
+        Err(PlanFailure::MissingOrAmbiguousArchivedCopy)
+    );
+}
