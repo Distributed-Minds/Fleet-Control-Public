@@ -163,6 +163,70 @@ fn attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
 }
 
 
+/// A complete global HTML attribute name is present even when '=' has no
+/// value. Do not use attribute(): its value parser deliberately gives up on
+/// trailing '=' and cannot enforce a presence-only prohibition.
+fn has_attribute_name(tag: &str, name: &str) -> bool {
+    let bytes = tag.as_bytes();
+    let mut i = 0;
+    let start = tag.trim_start();
+    if start.starts_with('/') || start.starts_with('!') || start.starts_with('?') {
+        return false;
+    }
+    while i < bytes.len() && !bytes[i].is_ascii_whitespace() && bytes[i] != b'/' {
+        i += 1; // Opening element name.
+    }
+    while i < bytes.len() {
+        while i < bytes.len() && (bytes[i].is_ascii_whitespace() || bytes[i] == b'/') {
+            i += 1;
+        }
+        let begin = i;
+        while i < bytes.len()
+            && !bytes[i].is_ascii_whitespace()
+            && bytes[i] != b'='
+            && bytes[i] != b'/'
+        {
+            i += 1;
+        }
+        if begin == i {
+            if i < bytes.len() {
+                i += 1; // Malformed separator, not a valid name.
+            }
+            continue;
+        }
+        if tag[begin..i].eq_ignore_ascii_case(name) {
+            return true; // Check the name before attempting to parse its value.
+        }
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if bytes.get(i) != Some(&b'=') {
+            continue;
+        }
+        i += 1;
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if let Some(&quote) = bytes.get(i) {
+            if quote == b'"' || quote == b'\'' {
+                i += 1;
+                while i < bytes.len() && bytes[i] != quote {
+                    i += 1;
+                }
+                if i == bytes.len() {
+                    break; // Unterminated value never creates a later name.
+                }
+                i += 1;
+            } else {
+                while i < bytes.len() && !bytes[i].is_ascii_whitespace() {
+                    i += 1;
+                }
+            }
+        }
+    }
+    false
+}
+
 /// This intentionally accepts only the known single-page head/title/body
 /// structure, not arbitrary HTML. In particular, the source tag scanner sees
 /// markup-looking tokens in title RCDATA that browsers do not render.
@@ -547,6 +611,12 @@ fn validate(root: &Path) -> Vec<String> {
         "Unexpected title placement outside head or malformed head title",
     );
 
+    expect(
+        &mut errors,
+        !elements.iter().any(|tag| has_attribute_name(tag, "hidden")),
+        "HTML hidden global attribute is forbidden",
+    );
+
     let ids: Vec<&str> = elements
         .iter()
         .filter_map(|tag| attribute(tag, "id"))
@@ -725,6 +795,98 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn real_page_hidden_attribute_presence_and_decoys() {
+        let root = env::temp_dir().join(format!(
+            "free-energy-hidden-global-n8c5-{}", std::process::id()
+        ));
+        let docs = root.join("docs");
+        fs::create_dir_all(&docs).expect("create hidden fixtures");
+        let original = include_str!("../docs/index.html");
+        let needle = "Posting does not enroll a contributor";
+        assert_eq!(original.matches(needle).count(), 1, "fixture must be unambiguous");
+        fs::write(docs.join("styles.css"), include_str!("../docs/styles.css"))
+            .expect("fixture css");
+        fs::write(docs.join("README.md"), include_str!("../docs/README.md"))
+            .expect("fixture readme");
+        fs::write(docs.join("index.html"), original).expect("baseline landing");
+        assert!(validate(&root).is_empty(), "baseline landing must pass");
+
+        for (case, attrs) in [
+            ("boolean", "hidden"),
+            ("missing-value", "hidden="),
+            ("space-value", "hidden= "),
+            ("tab-value", "hidden=\t"),
+            ("linefeed-value", "hidden=\n"),
+            ("carriage-return-value", "hidden=\r"),
+            ("formfeed-value", "hidden=\x0c"),
+            ("mixed-case", "HiDdEn =\t"),
+            ("reordered", "class=notice hidden=  "),
+            ("quoted-empty", "hidden=\"\""),
+            ("single-quoted-empty", "hidden=''"),
+            ("until-found", "hidden=\"until-found\""),
+            ("invalid-false", "hidden=\"false\""),
+            ("unquoted-value", "hidden=until-found"),
+            ("trailing-attribute", "class='notice' hidden"),
+        ] {
+            let marked = format!("<span {attrs}>{needle}</span>");
+            let html = original.replacen(needle, &marked, 1);
+            fs::write(docs.join("index.html"), html).expect("negative hidden fixture");
+            let errors = validate(&root);
+            assert!(
+                errors.iter().any(|error| error == "HTML hidden global attribute is forbidden"),
+                "hidden case {case} must have exact diagnostic, got {errors:?}"
+            );
+        }
+        for (case, attrs) in [
+            ("data-name", "data-hidden"),
+            ("aria-name", "aria-hidden=\"true\""),
+            ("suffix", "hiddenx"),
+            ("prefix", "xhidden"),
+            ("inert-quoted-name", "title='hidden= > literal'"),
+            ("quoted-tag", "title='<span hidden= >'"),
+            ("attribute-value", "data-probe=\"hidden\""),
+        ] {
+            let marked = format!("<span {attrs}>{needle}</span>");
+            let html = original.replacen(needle, &marked, 1);
+            fs::write(docs.join("index.html"), html).expect("positive hidden decoy");
+            assert!(validate(&root).is_empty(), "benign case {case} rejected");
+        }
+        let with_comment = original.replacen(
+            "<body>",
+            "<body><!-- <span hidden= >not markup</span> -->",
+            1,
+        );
+        fs::write(docs.join("index.html"), with_comment).expect("comment decoy");
+        assert!(validate(&root).is_empty(), "comment-only hidden must not count");
+        fs::remove_dir_all(&root).expect("remove hidden fixtures");
+    }
+
+    #[test]
+    fn hidden_name_helper_respects_tag_and_attribute_boundaries() {
+        for tag in [
+            "span hidden",
+            "span hidden=",
+            "span hidden=  ",
+            "SPAN class='other hidden=' HiDdEn =\t",
+            "span title='<span hidden>' hidden=\"false\"",
+        ] {
+            assert!(has_attribute_name(tag, "hidden"), "{tag}");
+        }
+        for tag in [
+            "span data-hidden=true",
+            "span aria-hidden=true",
+            "span hiddenx=1",
+            "span title='hidden='",
+            "/span hidden",
+            "!doctype hidden",
+            "span title='<span hidden= >' data-hidden='x'",
+        ] {
+            assert!(!has_attribute_name(tag, "hidden"), "{tag}");
+        }
+        assert!(!has_attribute_name("span μeta='hidden='", "hidden"));
+    }
 
     #[test]
     fn title_placement_rejects_hidden_real_page_and_malformed_head() {
