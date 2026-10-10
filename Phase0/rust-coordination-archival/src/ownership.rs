@@ -11,7 +11,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 // can make distinct authority identities appear identical in logs or diffs.
 // Reject these at the advisory reducer boundary; do not normalize/merge them.
 fn ambiguous_identity_scalar(ch: char) -> bool {
-    ch.is_control()
+    ch == '|'
+        || ch.is_control()
         || (!ch.is_ascii() && ch.is_whitespace())
         || matches!(
             ch,
@@ -371,6 +372,43 @@ mod tests {
             record.run = "réparer-β".to_owned();
             record.scope.branch = Some("travail-β".to_owned());
             record.scope.seam = "travail-β".to_owned();
+        }
+        assert_eq!(reduce_model_only(&legitimate).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn serialized_phase0_field_delimiters_cannot_be_authority_identities() {
+        // The installed log uses PHASE0 | field=value | field=value. A pipe
+        // inside an identity would manufacture an apparent second field.
+        // Reject it at the advisory model boundary even when both records
+        // repeat exactly the same spoofed identity.
+        for target in ["run", "branch", "seam"] {
+            let mut records = [
+                event(1, 101, "actor", 1, State::Intent, None, "ref-a"),
+                event(2, 102, "actor", 2, State::Owned, Some(101), "ref-a"),
+            ];
+            for record in &mut records {
+                match target {
+                    "run" => record.run = "actor|state=RELEASE".to_owned(),
+                    "branch" => record.scope.branch = Some("ref|pr=999".to_owned()),
+                    "seam" => record.scope.seam = "guard|state=WORKING".to_owned(),
+                    _ => unreachable!(),
+                }
+            }
+            assert_eq!(
+                reduce_model_only(&records),
+                Err(ReductionFailure::InvalidRecord),
+                "field delimiter accepted in {target}"
+            );
+        }
+
+        // A non-delimiter equals sign is not globally stripped or normalized.
+        let mut legitimate = [
+            event(1, 101, "agent=one", 1, State::Intent, None, "ref=a"),
+            event(2, 102, "agent=one", 2, State::Owned, Some(101), "ref=a"),
+        ];
+        for record in &mut legitimate {
+            record.scope.seam = "task=one".to_owned();
         }
         assert_eq!(reduce_model_only(&legitimate).unwrap().len(), 1);
     }
