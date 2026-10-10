@@ -518,4 +518,68 @@ mod tests {
         assert_eq!(s.synthetic_allowed(&resource(), Action::Read), Ok(true));
         assert_eq!(s.synthetic_allowed(&resource(), Action::Delete), Ok(false));
     }
+
+    #[test]
+    fn exhaustive_three_cause_add_recovery_interleavings_never_widen_early() {
+        let permutations = [
+            [0usize, 1, 2], [0, 2, 1], [1, 0, 2],
+            [1, 2, 0], [2, 0, 1], [2, 1, 0],
+        ];
+        let bases = [
+            set(&[Action::Read, Action::Write, Action::Delete]),
+            set(&[Action::Read, Action::Write]),
+            set(&[Action::Read]),
+        ];
+        let denials = [
+            set(&[Action::Write]),
+            set(&[Action::Write, Action::Delete]),
+            set(&[Action::Delete]),
+        ];
+        let actions = [Action::Read, Action::Write, Action::Delete];
+        let mut compared = 0usize;
+        for base in bases {
+            for addition in permutations {
+                for recovery in permutations {
+                    let mut state = ActiveSet::new(resource(), base.clone());
+                    let mut active = [false; 3];
+                    for index in addition {
+                        state.apply(add(
+                            &format!("add-{index}"),
+                            &format!("cause-{index}"),
+                            state.generation,
+                            &denials[index].iter().copied().collect::<Vec<_>>(),
+                        )).unwrap();
+                        active[index] = true;
+                        for action in actions {
+                            let permitted = base.contains(&action)
+                                && !denials.iter().enumerate().any(|(i, blocked)| {
+                                    active[i] && blocked.contains(&action)
+                                });
+                            assert_eq!(state.synthetic_allowed(&resource(), action), Ok(permitted));
+                            compared += 1;
+                        }
+                    }
+                    for index in recovery {
+                        state.apply(recover(
+                            &format!("recover-{index}"),
+                            &format!("cause-{index}"),
+                            state.generation,
+                        )).unwrap();
+                        active[index] = false;
+                        for action in actions {
+                            let permitted = base.contains(&action)
+                                && !denials.iter().enumerate().any(|(i, blocked)| {
+                                    active[i] && blocked.contains(&action)
+                                });
+                            assert_eq!(state.synthetic_allowed(&resource(), action), Ok(permitted));
+                            compared += 1;
+                        }
+                    }
+                    assert_eq!(state.causes(), 0);
+                }
+            }
+        }
+        assert_eq!(compared, 1944);
+    }
+
 }
