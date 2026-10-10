@@ -490,22 +490,18 @@ mod tests {
 
         let mut new_request = envelope();
         new_request.operation_id = "fresh-over-capacity".into();
-        assert_eq!(
-            outbox.submit(new_request),
-            Err(Error::OperationHistoryFull)
-        );
+        assert_eq!(outbox.submit(new_request), Err(Error::OperationHistoryFull));
         assert!(outbox.entry("fresh-over-capacity").is_none());
 
         // A known identity remains idempotent at capacity, even after it has
         // reached a terminal state. Changing its payload cannot reuse its slot.
         assert_eq!(outbox.submit(oldest.clone()), Ok(false));
         oldest.payload_digest = "sha256:changed".into();
+        assert_eq!(outbox.submit(oldest), Err(Error::OperationIdentityConflict));
         assert_eq!(
-            outbox.submit(oldest),
-            Err(Error::OperationIdentityConflict)
+            outbox.entry("bounded-0").unwrap().status(),
+            Status::Rejected
         );
-        assert_eq!(outbox.entry("bounded-0").unwrap().status(), Status::Rejected);
         assert_eq!(outbox.entries.len(), MAX_OUTBOX_OPERATIONS);
     }
-
 }
