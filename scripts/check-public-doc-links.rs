@@ -122,6 +122,49 @@ fn is_atx_heading(line: &str) -> bool {
         && content.get(markers).is_none_or(|&byte| byte == b' ' || byte == b'\t')
 }
 
+// Only 0-3 ASCII spaces may indent block delimiters. Tabs at the start
+// indent code, and a malformed marker must not terminate an inline code span.
+fn block_marker_content(line: &str) -> Option<&[u8]> {
+    let bytes = line.as_bytes();
+    let indentation = bytes.iter().take_while(|&&byte| byte == b' ').count();
+    (indentation <= 3).then_some(&bytes[indentation..])
+}
+
+fn is_thematic_break(line: &str) -> bool {
+    let Some(content) = block_marker_content(line) else {
+        return false;
+    };
+    let Some(&marker) = content.first() else {
+        return false;
+    };
+    if !matches!(marker, b'-' | b'*' | b'_') {
+        return false;
+    }
+    let mut markers = 0;
+    for &byte in content {
+        if byte == marker {
+            markers += 1;
+        } else if byte != b' ' && byte != b'\t' {
+            return false;
+        }
+    }
+    markers >= 3
+}
+
+fn is_setext_underline(line: &str) -> bool {
+    let Some(content) = block_marker_content(line) else {
+        return false;
+    };
+    let Some(&marker) = content.first() else {
+        return false;
+    };
+    if !matches!(marker, b'=' | b'-') {
+        return false;
+    }
+    let width = content.iter().take_while(|&&byte| byte == marker).count();
+    content[width..].iter().all(|&byte| byte == b' ' || byte == b'\t')
+}
+
 fn mask_paragraph_code_spans(markdown: &str) -> String {
     let mut visible = String::with_capacity(markdown.len());
     let mut paragraph = String::new();
@@ -146,7 +189,13 @@ fn mask_paragraph_code_spans(markdown: &str) -> String {
             None => false,
         };
         let atx_heading = fenced.is_none() && is_atx_heading(line);
-        if fence_boundary || fenced.is_some() || line.trim().is_empty() || atx_heading {
+        // A Setext underline (including three or more dashes) completes
+        // pending paragraph content. Only when no preceding paragraph can be
+        // a heading does a matching dashed line become a thematic break.
+        let setext_underline =
+            fenced.is_none() && !paragraph.is_empty() && is_setext_underline(line);
+        let thematic_break = fenced.is_none() && !setext_underline && is_thematic_break(line);
+        if fence_boundary || fenced.is_some() || line.trim().is_empty() || atx_heading || thematic_break {
             if !paragraph.is_empty() {
                 visible.push_str(&mask_inline_code(&paragraph));
                 paragraph.clear();
@@ -156,6 +205,12 @@ fn mask_paragraph_code_spans(markdown: &str) -> String {
             } else {
                 visible.push_str(raw_line);
             }
+        } else if setext_underline {
+            // All heading content lines share one inline-span context. Flush
+            // only AFTER the underline, never between heading content lines.
+            paragraph.push_str(raw_line);
+            visible.push_str(&mask_inline_code(&paragraph));
+            paragraph.clear();
         } else {
             paragraph.push_str(raw_line);
         }
@@ -649,6 +704,135 @@ mod tests {
     }
 
 
+
+
+    #[test]
+    fn block_delimiter_recognizers_reject_near_misses() {
+        for line in ["=", "==", "   ==  ", "-", "--", "   --\t", "---"] {
+            assert!(is_setext_underline(line), "setext: {line:?}");
+        }
+        for line in ["---", " - - -\t", "***", "* * *", "___", "** **"] {
+            assert!(is_thematic_break(line), "thematic: {line:?}");
+        }
+        for line in ["    --", "\t---", "\\---", "-x", "==x", "--=", "----x"] {
+            assert!(!is_setext_underline(line), "not setext: {line:?}");
+            assert!(!is_thematic_break(line), "not thematic: {line:?}");
+        }
+        assert!(!is_thematic_break("--"));
+        assert!(!is_thematic_break("=="));
+        // Three dashes match both raw grammars: with pending paragraph
+        // content, Setext takes precedence (CommonMark thematic example 59).
+        assert!(is_setext_underline("---"));
+        assert!(is_thematic_break("---"));
+    }
+
+    #[test]
+    fn setext_and_thematic_boundaries_expose_later_missing_links() {
+        for underline in [
+            "=", "==", "===", "   ==   ", "-", "--", "   --\t", "---",
+            "- - -", "***", "* * *", "___", "_ _ _", "** **",
+        ] {
+            let source = format!(
+                "`unmatched opener\nHeading\n{underline}\n[broken](missing.md) and `close`\n"
+            );
+            let mut report = Report::default();
+            assert_eq!(
+                collect_links(&source, "README.md", &mut report),
+                vec!["missing.md"],
+                "underline: {underline:?}"
+            );
+            assert!(report.errors.is_empty(), "{:?}", report.errors);
+        }
+        let sandbox = Sandbox::new();
+        sandbox.write(
+            "README.md",
+            "`unmatched opener\nHeading\n--\n[broken](missing.md) and `close`\n",
+        );
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 1);
+        assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+        assert!(
+            report.errors[0].contains("target missing: missing.md"),
+            "{:?}",
+            report.errors
+        );
+    }
+
+    #[test]
+    fn setext_headings_preserve_multiline_code_spans_within_heading() {
+        for (source, expected) in [
+            (
+                "Heading `open\n[hidden](missing.md) and `close`\n--\n[visible](later.md)\n",
+                vec!["later.md"],
+            ),
+            (
+                "Heading `open\n[hidden](missing.md) and `close`\n---\n[visible](later.md)\n",
+                vec!["later.md"],
+            ),
+            (
+                "`open\n[hidden](missing.md) and `close`\n==\n[visible](later.md)\n",
+                vec!["later.md"],
+            ),
+            (
+                "[visible](some.md) `open\n[hidden](missing.md) and `close`\n==\n[visible](later.md)\n",
+                vec!["some.md", "later.md"],
+            ),
+            (
+                "`open\n[visible](missing.md)\n--\n[visible](later.md) and `close`\n",
+                vec!["missing.md", "later.md"],
+            ),
+        ] {
+            let mut report = Report::default();
+            assert_eq!(
+                collect_links(source, "README.md", &mut report),
+                expected,
+                "source: {source:?}"
+            );
+            assert!(report.errors.is_empty(), "{:?}", report.errors);
+        }
+    }
+
+    #[test]
+    fn marker_shaped_non_boundaries_do_not_split_inline_code() {
+        for marker in [
+            "    --", "-x", "==x", "--=", "\\---", "----x", "    ---",
+            "\t---", "\\==", "\\* * *", "--- \\", "   ==x",
+        ] {
+            let source = format!(
+                "`open\n{marker}\n[hidden](missing.md) and `close`\n"
+            );
+            let mut report = Report::default();
+            assert!(
+                collect_links(&source, "README.md", &mut report).is_empty(),
+                "marker: {marker:?}"
+            );
+            assert!(report.errors.is_empty(), "{:?}", report.errors);
+        }
+        let mut report = Report::default();
+        let paths = collect_links(
+            "`open\n[not-a-link](missing.md)\nclose` [real](exists.md)\n",
+            "README.md",
+            &mut report,
+        );
+        assert_eq!(paths, vec!["exists.md"]);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn setext_and_thematic_delimiters_handle_crlf_without_false_links() {
+        for delimiter in ["==", "--", "* * *", "_ _ _"] {
+            let source = format!(
+                "`open\r\nHeading\r\n{delimiter}\t\r\n[visible](exists.md) and `close`\r\n"
+            );
+            let mut report = Report::default();
+            assert_eq!(
+                collect_links(&source, "README.md", &mut report),
+                vec!["exists.md"],
+                "delimiter: {delimiter:?}"
+            );
+            assert!(report.errors.is_empty(), "{:?}", report.errors);
+        }
+    }
 
     #[test]
     fn atx_headings_interrupt_unmatched_inline_code_with_missing_link_diagnostics() {
