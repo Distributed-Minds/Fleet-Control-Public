@@ -172,3 +172,30 @@ fn raising_the_declared_batch_budget_never_recovers_success() {
         );
     }
 }
+
+#[cfg(unix)]
+#[test]
+fn non_utf8_argv_is_a_typed_denial_in_every_rotation_position() {
+    use std::os::unix::ffi::OsStringExt;
+
+    let baseline = snapshot("1800", "STANDBY", "300", "8", "2");
+    for index in 0..baseline.len() {
+        let mut argv: Vec<std::ffi::OsString> = baseline
+            .iter()
+            .map(|value| std::ffi::OsString::from(*value))
+            .collect();
+        argv[index] = std::ffi::OsString::from_vec(vec![b'1', 0xff, b'2']);
+        let output = Command::new(ROTATION)
+            .args(&argv)
+            .output()
+            .expect("execute compiled rotation advisor with non-UTF-8 argv");
+
+        assert_eq!(output.status.code(), Some(2), "index={index}");
+        assert!(output.stdout.is_empty(), "index={index}: {output:?}");
+        assert_eq!(
+            String::from_utf8(output.stderr).expect("UTF-8 diagnostic"),
+            "CAPACITY_UNKNOWN arguments must be valid UTF-8; no write authority\n",
+            "index={index}"
+        );
+    }
+}
