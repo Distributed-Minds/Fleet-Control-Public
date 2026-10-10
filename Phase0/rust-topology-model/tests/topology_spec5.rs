@@ -211,7 +211,9 @@ fn prior_permanent_adversary_reordered_to_builder_resets_bootstrap() {
 
 #[test]
 fn old_free_builder_can_move_to_permanent_predictor_only_after_reset() {
-    let old = previous("A3", "v1", 1, 3, 3, state(Mode::Integrate, Phase::Free, 0));
+    let mut old = previous("A3", "v1", 1, 3, 3, state(Mode::Integrate, Phase::Free, 0));
+    // INTEGRATE is reachable only after BUILD reported progress.
+    old.state.last_build = BuildResult::Progress;
     let new = topology(&["A1", "A3", "A2"], "v2", 2);
     let result = check(
         &new,
