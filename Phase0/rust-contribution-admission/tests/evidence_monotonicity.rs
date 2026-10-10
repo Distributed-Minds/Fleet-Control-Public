@@ -75,7 +75,12 @@ fn all_single_proof_degradations_fail_closed_even_with_provider_badges() {
     let approved = positive();
     assert_eq!(evaluate(&approved), Decision::ReviewableInSimulation);
     let mut seen = BTreeSet::new();
-    let states = [Claim::Absent, Claim::CallerClaim, Claim::Disputed, Claim::Revoked];
+    let states = [
+        Claim::Absent,
+        Claim::CallerClaim,
+        Claim::Disputed,
+        Claim::Revoked,
+    ];
     let mut checked = 0;
     for field in 0..10 {
         for state in states {
@@ -98,7 +103,10 @@ fn all_single_proof_degradations_fail_closed_even_with_provider_badges() {
             // Every differently degraded *field/state* has a distinct payload
             // identity; a caller cannot swap evidence without changing digest.
             let digest = canonical_digest(&input);
-            assert!(seen.insert(digest), "canonical proof positions must not alias");
+            assert!(
+                seen.insert(digest),
+                "canonical proof positions must not alias"
+            );
         }
     }
     assert_eq!(checked, 160);
@@ -118,7 +126,12 @@ fn changed_evidence_cannot_replace_a_reviewable_original_receipt() {
     // Same operation ID and changed proof must conflict, not inherit the
     // original reviewable decision or silently replace the initial receipt.
     for field in 0..10 {
-        for state in [Claim::Absent, Claim::CallerClaim, Claim::Disputed, Claim::Revoked] {
+        for state in [
+            Claim::Absent,
+            Claim::CallerClaim,
+            Claim::Disputed,
+            Claim::Revoked,
+        ] {
             let mut degraded = approved.clone();
             degrade(&mut degraded, field, state);
             assert_eq!(
@@ -139,7 +152,12 @@ fn changed_evidence_cannot_replace_a_reviewable_original_receipt() {
 fn independently_denied_receipts_stay_denied_after_replay() {
     let approved = positive();
     let mut journal = SimulationJournal::default();
-    let states = [Claim::Absent, Claim::CallerClaim, Claim::Disputed, Claim::Revoked];
+    let states = [
+        Claim::Absent,
+        Claim::CallerClaim,
+        Claim::Disputed,
+        Claim::Revoked,
+    ];
     let mut checked = 0;
     for field in 0..10 {
         for (index, state) in states.into_iter().enumerate() {
