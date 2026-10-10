@@ -54,7 +54,11 @@ fn circuit_refill_and_recovery_reserve_are_isolated_per_group() {
     // A retains one recovery slot after two normal selections.
     for _ in 0..2 {
         assert_eq!(
-            s.simulate_candidate(A, CURRENT).unwrap().unwrap().request.priority,
+            s.simulate_candidate(A, CURRENT)
+                .unwrap()
+                .unwrap()
+                .request
+                .priority,
             Priority::Normal
         );
     }
@@ -70,11 +74,20 @@ fn circuit_refill_and_recovery_reserve_are_isolated_per_group() {
     assert_eq!(s.remaining(A), Ok(1));
 
     assert_eq!(
-        s.enqueue(request("a-recovery", A, "comment-create", Priority::Recovery)),
+        s.enqueue(request(
+            "a-recovery",
+            A,
+            "comment-create",
+            Priority::Recovery
+        )),
         Ok(true)
     );
     assert_eq!(
-        s.simulate_candidate(A, CURRENT).unwrap().unwrap().request.operation_id,
+        s.simulate_candidate(A, CURRENT)
+            .unwrap()
+            .unwrap()
+            .request
+            .operation_id,
         "a-recovery"
     );
     assert_eq!(s.remaining(A), Ok(0));
@@ -93,14 +106,22 @@ fn circuit_refill_and_recovery_reserve_are_isolated_per_group() {
     s.enqueue(request("b-new", B, "comment-create", Priority::Normal))
         .unwrap();
     assert_eq!(
-        s.simulate_candidate(B, CURRENT).unwrap().unwrap().request.operation_id,
+        s.simulate_candidate(B, CURRENT)
+            .unwrap()
+            .unwrap()
+            .request
+            .operation_id,
         "b-new"
     );
     assert_eq!(s.remaining(B), Ok(1));
     assert_eq!(s.simulate_candidate(A, CURRENT), Err(Error::CircuitOpen));
     s.set_circuit_open(A, false).unwrap();
     assert_eq!(
-        s.simulate_candidate(A, CURRENT).unwrap().unwrap().request.operation_id,
+        s.simulate_candidate(A, CURRENT)
+            .unwrap()
+            .unwrap()
+            .request
+            .operation_id,
         "a-normal-2"
     );
     assert_eq!(s.remaining(A), Ok(2));
@@ -125,7 +146,11 @@ fn class_quota_and_replay_identity_remain_distinct_across_groups() {
         .unwrap();
 
     assert_eq!(
-        s.simulate_candidate(A, CURRENT).unwrap().unwrap().request.operation_id,
+        s.simulate_candidate(A, CURRENT)
+            .unwrap()
+            .unwrap()
+            .request
+            .operation_id,
         "a-ref-0"
     );
     assert_eq!(s.remaining_class(A, "ref-update"), Ok(0));
@@ -133,13 +158,21 @@ fn class_quota_and_replay_identity_remain_distinct_across_groups() {
     assert!(s.simulate_candidate(A, CURRENT).unwrap().is_none());
 
     assert_eq!(
-        s.simulate_candidate(B, CURRENT).unwrap().unwrap().request.operation_id,
+        s.simulate_candidate(B, CURRENT)
+            .unwrap()
+            .unwrap()
+            .request
+            .operation_id,
         "b-ref-0"
     );
     assert_eq!(s.remaining_class(B, "ref-update"), Ok(0));
     // B's exhausted ref class must not block its eligible comment class.
     assert_eq!(
-        s.simulate_candidate(B, CURRENT).unwrap().unwrap().request.operation_id,
+        s.simulate_candidate(B, CURRENT)
+            .unwrap()
+            .unwrap()
+            .request
+            .operation_id,
         "b-comment"
     );
     assert_eq!(s.pending(B), Ok(1));
@@ -147,7 +180,11 @@ fn class_quota_and_replay_identity_remain_distinct_across_groups() {
 
     s.replenish(B).unwrap();
     assert_eq!(
-        s.simulate_candidate(B, CURRENT).unwrap().unwrap().request.operation_id,
+        s.simulate_candidate(B, CURRENT)
+            .unwrap()
+            .unwrap()
+            .request
+            .operation_id,
         "b-ref-1"
     );
     assert_eq!(s.remaining_class(B, "ref-update"), Ok(0));
@@ -170,7 +207,11 @@ fn class_quota_and_replay_identity_remain_distinct_across_groups() {
     assert_eq!(s.pending(B), Ok(1));
     assert_eq!(s.pending(A), Ok(1));
     assert_eq!(
-        s.simulate_candidate(B, CURRENT).unwrap().unwrap().request.operation_id,
+        s.simulate_candidate(B, CURRENT)
+            .unwrap()
+            .unwrap()
+            .request
+            .operation_id,
         "b-later"
     );
     assert!(s.simulate_candidate(A, CURRENT).unwrap().is_none());
