@@ -182,6 +182,23 @@ fn valid_historical_state(p: &Prior) -> bool {
     if p.size == 0 || p.index == 0 || p.index > p.size || p.generation == 0 {
         return false;
     }
+    // These are unreachable under the transition function: analytic and
+    // bootstrap roles never report a BUILD outcome, and every second NOOP in
+    // an exhausting role moves the mode and resets the counter to zero.
+    if matches!(p.state.phase, Phase::Analytic | Phase::Bootstrap)
+        && p.state.last_build != BuildResult::None
+    {
+        return false;
+    }
+    if (p.state.phase == Phase::Bootstrap || (p.size == 2 && p.index == 1))
+        && p.state.noop_streak > 1
+    {
+        return false;
+    }
+    // The FREE reactive loop always clears the NOOP counter.
+    if p.state.phase == Phase::Free && p.state.noop_streak != 0 {
+        return false;
+    }
     match p.state.phase {
         Phase::Solo => p.size == 1 && p.index == 1,
         Phase::Analytic => {
@@ -403,4 +420,65 @@ pub fn predict(input: &Input) -> Result<Candidate, Rejection> {
         basis,
         provider_append_authorized: false,
     })
+}
+
+#[cfg(test)]
+mod historical_state_validation_tests {
+    use super::*;
+
+    fn prior(phase: Phase, mode: Mode, index: usize, noop_streak: u32) -> Prior {
+        Prior {
+            principal: "P".into(),
+            source_basis: "basis".into(),
+            generation: 1,
+            size: 3,
+            index,
+            source_machine: StateMachine::PermanentPredictorV2,
+            state: State {
+                mode,
+                phase,
+                noop_streak,
+                last_build: BuildResult::None,
+            },
+            counter: None,
+        }
+    }
+
+    #[test]
+    fn analytic_and_bootstrap_states_cannot_carry_build_outcomes() {
+        for (phase, mode, index) in [
+            (Phase::Analytic, Mode::Plan, 1),
+            (Phase::Analytic, Mode::Predict, 2),
+            (Phase::Bootstrap, Mode::Plan, 3),
+        ] {
+            let mut previous = prior(phase, mode, index, 0);
+            assert!(valid_historical_state(&previous));
+            for outcome in [BuildResult::Progress, BuildResult::NoProgress] {
+                previous.state.last_build = outcome;
+                assert!(!valid_historical_state(&previous));
+            }
+        }
+    }
+
+    #[test]
+    fn exhausted_noop_streaks_and_free_streaks_fail_closed() {
+        let mut bootstrap = prior(Phase::Bootstrap, Mode::Predict, 3, 1);
+        assert!(valid_historical_state(&bootstrap));
+        bootstrap.state.noop_streak = 2;
+        assert!(!valid_historical_state(&bootstrap));
+
+        let mut free = prior(Phase::Free, Mode::Build, 3, 0);
+        assert!(valid_historical_state(&free));
+        free.state.noop_streak = 1;
+        assert!(!valid_historical_state(&free));
+
+        let permanent = prior(Phase::Analytic, Mode::Predict, 2, 9);
+        assert!(valid_historical_state(&permanent));
+
+        let mut size_two_analyst = prior(Phase::Analytic, Mode::Plan, 1, 1);
+        size_two_analyst.size = 2;
+        assert!(valid_historical_state(&size_two_analyst));
+        size_two_analyst.state.noop_streak = 2;
+        assert!(!valid_historical_state(&size_two_analyst));
+    }
 }
