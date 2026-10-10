@@ -1,0 +1,32 @@
+name: Rust spec4 authority closure synthetic oracle
+
+# Read-only test-only candidate; no cloud/provider credentials or state mutation.
+on:
+  pull_request:
+    branches:
+      - phase0/public-v0
+    paths:
+      - .github/workflows/rust-authority-closure-spec4.yml
+      - tests/authority_closure_spec4.rs
+
+permissions:
+  contents: read
+
+jobs:
+  spec4-closure-model:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out proposed non-default tree
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust compiler
+        run: rustup toolchain install 1.85.1 --profile minimal
+      - name: Compile strict and execute pure typed closure cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup run 1.85.1 rustc --edition=2021 -D warnings --test \
+            tests/authority_closure_spec4.rs -o "$RUNNER_TEMP/authority-closure-spec4"
+          "$RUNNER_TEMP/authority-closure-spec4" --test-threads=1
