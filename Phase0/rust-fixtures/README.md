@@ -1,13 +1,31 @@
 # Phase0 Rust fixture oracle — partial migration under #71
 
-This is a non-default **source candidate**, not the implemented universal
-FREE ENERGY dispatcher, a release, or runtime containment authority. It replaces
-**one** of the eight Python fixture-checker families semantically: containment
-specification v3 (17 decisions, 5 recovery cases, 13 traces = 35 cases).
-The original Python checker and JSON fixture remain untouched until all
-families have proven executable parity and the migration can integrate safely.
+This is an **unmerged, partial multi-family Rust source candidate**, not the
+universal FREE ENERGY dispatcher, a release, or runtime containment authority.
+The branch contains independently developed offline CLI candidates for historical
+Phase0 fixture families. The `src/bin/all_oracles.rs` allowlist currently covers
+**ten Rust CLI checks** (including a separate integration candidate digest check).
+A CLI's presence or positive fixture output does **not** establish full
+Python/Rust semantic parity, actual Git-topology parity, production authority,
+or integration approval.
 
-## Reproduce the CI validation from the repository root
+The historical Python checkers and fixture bytes remain as differential
+baselines until the migration satisfies issue #71.
+
+## Current staged source inventory
+
+The aggregate `all_oracles` runner recognizes these exact check names:
+`ad_hoc_research`, `adaptive_stress`, `authority_closure`, `containment`,
+`containment_capacity`, `coordination_history`, `github_capability`,
+`integration_candidate`, `integration_candidate_digest`, and
+`merge_base_topology`. These are **ten CLI entries, not ten certified
+semantic migrations**. In particular, `github_capability` is an explicitly
+partial safety-invariant validator, `integration_candidate` excludes
+SHA-256 identity parity, and `integration_candidate_digest` handles a
+separate identity check. The historical differential and negative-control
+matrix still requires independent acceptance.
+
+## Reproduce the containment CI validation from the repository root
 
 The [candidate validation workflow](../../.github/workflows/phase0-rust-containment.yml)
 uses **Rust 1.85.1** with rustfmt and Clippy. From a fresh clone, install a
@@ -31,10 +49,25 @@ install. Keep `--locked` so dependency resolution cannot silently change
 the committed lockfile. Failures in formatting, compilation, tests, Clippy,
 fixture execution or dependency fetch are **not** a passing validation.
 
-The CLI exits nonzero on an invalid schema/type, absent fixture, repeated ID,
-missing required semantic input or disagreement between its independently
-computed verdict and the fixture's expected outcome. Unit tests explicitly
-mutate authority, expectations, dependencies, types and identities.
+The default containment CLI exits nonzero on an invalid schema/type, absent
+fixture, repeated ID, missing required semantic input or disagreement between
+its independently computed verdict and the fixture's expected outcome. Unit
+tests explicitly mutate authority, expectations, dependencies, types and
+identities. This does **not** certify the other candidate binaries.
+
+For a **separate multi-family local check**, first compile *all* sibling
+binaries, then run the aggregate CLI (which refuses missing sibling binaries
+and unrecognized success outputs):
+
+```sh
+rustup run 1.85.1 cargo build --manifest-path Phase0/rust-fixtures/Cargo.toml --bins --locked --offline
+rustup run 1.85.1 cargo run --manifest-path Phase0/rust-fixtures/Cargo.toml --bin all_oracles --locked --offline -- --list
+rustup run 1.85.1 cargo run --manifest-path Phase0/rust-fixtures/Cargo.toml --bin all_oracles --locked --offline -- --all
+```
+
+These extra commands are instructions, **not tests executed or passing in
+this documentation correction**. `--all` is an aggregate fixture-output
+check, not historical Python/Rust differential evidence.
 
 ## Admission limits
 
@@ -47,7 +80,10 @@ mutate authority, expectations, dependencies, types and identities.
 - CI compiles, formats, lints and runs this Rust family; run an independent
   executable differential against the unchanged historical Python runner and
   audit the lockfile dependency set before integration.
-- Other seven fixture families, canonical JSON/SHA-256 identity, and Git
-  merge-base executable proofs remain OUTSTANDING in issue #71.
+- Other fixture-family Rust candidates are present, but independent
+  Python/Rust semantic differentials (including malformed inputs and negative
+  mutations), canonical JSON/SHA-256 historical identity parity, and real Git
+  merge-base subprocess behavior remain **unproven** under issue #71. Do not
+  infer completion from binary counts or compilation.
 - The current preview remains on phase0/public-v0. Do not change main,
-  publish this prototype, or remove Python based on this one-family patch.
+  publish this prototype, or remove Python based on the candidate alone.
