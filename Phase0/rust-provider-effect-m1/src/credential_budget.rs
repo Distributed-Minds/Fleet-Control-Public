@@ -346,39 +346,55 @@ fn has_eligible(queues: &TenantQueues, classes: &BTreeMap<String, ClassBudget>) 
     })
 }
 
+// Inspect borrowed BTreeMap entries in cursor order. Clone only the selected
+// tenant and the range bound, never all active tenant String keys per attempt.
+fn first_eligible_tenant<'a>(
+    mut tenants: impl Iterator<Item = (&'a String, &'a VecDeque<Request>)>,
+    classes: &BTreeMap<String, ClassBudget>,
+) -> Option<(String, usize)> {
+    tenants.find_map(|(tenant, queue)| {
+        queue
+            .iter()
+            .position(|request| {
+                classes
+                    .get(&request.operation_class)
+                    .is_some_and(|budget| budget.remaining > 0)
+            })
+            .map(|position| (tenant.clone(), position))
+    })
+}
+
 fn take_round_robin(
     queues: &mut TenantQueues,
     previous_tenant: &mut Option<String>,
     classes: &BTreeMap<String, ClassBudget>,
 ) -> Option<Request> {
-    let tenants: Vec<String> = queues.keys().cloned().collect();
-    if tenants.is_empty() {
-        return None;
-    }
-    let start = previous_tenant
-        .as_ref()
-        .and_then(|last| tenants.iter().position(|tenant| tenant > last))
-        .unwrap_or(0);
-    for offset in 0..tenants.len() {
-        let tenant = &tenants[(start + offset) % tenants.len()];
-        let queue = queues.get_mut(tenant).expect("selected tenant exists");
-        let eligible_position = queue.iter().position(|request| {
-            classes
-                .get(&request.operation_class)
-                .is_some_and(|budget| budget.remaining > 0)
-        });
-        if let Some(position) = eligible_position {
-            // Keep blocked requests intact; scheduling other classes cannot
-            // bypass the exhausted class limit or lose FIFO order within it.
-            let request = queue.remove(position);
-            if queue.is_empty() {
-                queues.remove(tenant);
-            }
-            *previous_tenant = Some(tenant.clone());
-            return request;
+    use std::ops::Bound::{Excluded, Included, Unbounded};
+
+    // Strict successor first, then wrap through the previous cursor. This
+    // also works if that cursor's queue was deleted after the prior selection.
+    let selected = match previous_tenant.as_ref() {
+        Some(last) => {
+            first_eligible_tenant(queues.range((Excluded(last.clone()), Unbounded)), classes)
+                .or_else(|| {
+                    first_eligible_tenant(
+                        queues.range((Unbounded, Included(last.clone()))),
+                        classes,
+                    )
+                })
         }
+        None => first_eligible_tenant(queues.iter(), classes),
+    }?;
+    let (tenant, position) = selected;
+    let queue = queues.get_mut(&tenant).expect("selected tenant exists");
+    // An exhausted class must retain its pending request: eligibility selects
+    // an admissible position without discarding earlier blocked requests.
+    let request = queue.remove(position);
+    if queue.is_empty() {
+        queues.remove(&tenant);
     }
-    None
+    *previous_tenant = Some(tenant);
+    request
 }
 
 #[cfg(test)]
@@ -414,6 +430,89 @@ mod tests {
     fn next(s: &mut Scheduler) -> Option<Candidate> {
         s.simulate_candidate("effective-credential-1", CURRENT)
             .unwrap()
+    }
+
+    #[test]
+    fn cursor_range_selection_preserves_wrap_and_blocked_class_requests() {
+        let mut classes = BTreeMap::new();
+        classes.insert(
+            "comment-create".into(),
+            ClassBudget {
+                limit: 3,
+                remaining: 3,
+            },
+        );
+        classes.insert(
+            "issue-create".into(),
+            ClassBudget {
+                limit: 1,
+                remaining: 0,
+            },
+        );
+        let make = |id: &str, tenant: &str, class: &str| {
+            let mut r = request(
+                id,
+                "effective-credential-1",
+                "repo-a",
+                tenant,
+                Priority::Normal,
+            );
+            r.operation_class = class.into();
+            r
+        };
+        let mut queues: TenantQueues = BTreeMap::new();
+        queues.insert(
+            "alpha".into(),
+            VecDeque::from(vec![
+                make("alpha-blocked", "alpha", "issue-create"),
+                make("alpha-allowed", "alpha", "comment-create"),
+            ]),
+        );
+        queues.insert(
+            "bravo".into(),
+            VecDeque::from(vec![make("bravo-blocked", "bravo", "issue-create")]),
+        );
+        queues.insert(
+            "charlie".into(),
+            VecDeque::from(vec![make("charlie-allowed", "charlie", "comment-create")]),
+        );
+        let mut previous = Some("alpha".to_owned());
+        assert_eq!(
+            take_round_robin(&mut queues, &mut previous, &classes)
+                .unwrap()
+                .operation_id,
+            "charlie-allowed"
+        );
+        assert_eq!(previous.as_deref(), Some("charlie"));
+        // Removed cursor must wrap past the blocked head of alpha.
+        assert_eq!(
+            take_round_robin(&mut queues, &mut previous, &classes)
+                .unwrap()
+                .operation_id,
+            "alpha-allowed"
+        );
+        assert_eq!(previous.as_deref(), Some("alpha"));
+        assert!(take_round_robin(&mut queues, &mut previous, &classes).is_none());
+        assert_eq!(previous.as_deref(), Some("alpha"));
+        assert_eq!(
+            queues.get("alpha").unwrap().front().unwrap().operation_id,
+            "alpha-blocked"
+        );
+        // Restoring a class allows the strict successor, then wrapped tenant.
+        classes.get_mut("issue-create").unwrap().remaining = 1;
+        assert_eq!(
+            take_round_robin(&mut queues, &mut previous, &classes)
+                .unwrap()
+                .operation_id,
+            "bravo-blocked"
+        );
+        assert_eq!(
+            take_round_robin(&mut queues, &mut previous, &classes)
+                .unwrap()
+                .operation_id,
+            "alpha-blocked"
+        );
+        assert!(queues.is_empty());
     }
 
     #[test]
