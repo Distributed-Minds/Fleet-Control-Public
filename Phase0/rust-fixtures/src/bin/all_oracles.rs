@@ -254,9 +254,15 @@ fn run_oracles(selection: Selection, root: &Path) -> Result<(), String> {
             }
         }
         let target = bin_dir.join(oracle.executable);
-        if !target.is_file() {
+        // Path::is_file follows symlinks, so a link to an arbitrary program
+        // could forge the fixed success receipt. Require a direct regular file.
+        // This static check is not an atomic executable-integrity attestation.
+        let direct_regular_file = fs::symlink_metadata(&target)
+            .map(|metadata| metadata.file_type().is_file())
+            .unwrap_or(false);
+        if !direct_regular_file {
             failed.push(format!(
-                "{}: compiled sibling executable is missing",
+                "{}: compiled sibling executable is missing, nonregular or symlinked",
                 oracle.name
             ));
             continue;
