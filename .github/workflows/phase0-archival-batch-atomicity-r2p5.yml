@@ -1,0 +1,28 @@
+name: Verify archival multi-witness compaction (#22)
+on:
+  pull_request:
+    branches: [rust/coordination-archival-admission-22]
+    paths:
+      - '.github/workflows/phase0-archival-batch-atomicity-r2p5.yml'
+      - 'Phase0/rust-coordination-archival/**'
+permissions:
+  contents: read
+jobs:
+  atomic-multiwitness-model:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust
+        run: rustup toolchain install 1.85.1 --profile minimal --component clippy --component rustfmt
+      - name: Format check for isolated regression
+        run: rustup run 1.85.1 rustfmt --check --edition 2021 Phase0/rust-coordination-archival/tests/atomic_multiwitness_compaction.rs
+      - name: Run all offline locked archival Rust tests
+        run: |
+          set -euo pipefail
+          manifest=Phase0/rust-coordination-archival/Cargo.toml
+          rustup run 1.85.1 cargo fetch --manifest-path "$manifest" --locked
+          rustup run 1.85.1 cargo test --manifest-path "$manifest" --locked --offline
+          rustup run 1.85.1 cargo clippy --manifest-path "$manifest" --all-targets --locked --offline -- -D warnings

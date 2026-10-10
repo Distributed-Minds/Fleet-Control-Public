@@ -1,0 +1,787 @@
+//! Deterministic, side-effect-free candidate planning for archive-first compaction.
+//!
+//! Model witnesses are NOT provider attestations, mutation authorization, or
+//! DELETE tokens. A trusted executor must independently revalidate every
+//! receipt at the effect boundary under the installed authority protocol.
+
+use std::collections::{BTreeSet, HashMap, HashSet};
+
+use crate::{
+    evaluate, replay, DeleteWitness, Denial, ReplayCut, ReplayFailure, ReplayRecord, Source,
+    Verdict,
+};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelRemoval {
+    pub sequence: u64,
+    pub source: Source,
+    pub operation_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompactionPlan {
+    pub model_removals: Vec<ModelRemoval>,
+    pub retained_live: Vec<ReplayRecord>,
+    pub reconstructed: Vec<ReplayRecord>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlanFailure {
+    UntrustedHistory(ReplayFailure),
+    DuplicateCandidate,
+    MissingOrAmbiguousLiveRecord,
+    MissingOrAmbiguousArchivedCopy,
+    InconsistentWitness,
+    Ineligible(Denial),
+    ReconcilePriorEffect,
+    PostRemovalHistory(ReplayFailure),
+    ReplayDiverged,
+}
+
+/// Plan only exact, already-archived copies of eligible live records.
+///
+/// The complete pre-removal replay MUST already be admissible. Every candidate
+/// must appear exactly once in each tier, have identical reducer-relevant
+/// record bytes, and bind the exact independent source and snapshot bases.
+/// This routine never mutates the caller's slices, storage, or provider state.
+pub fn plan_compaction(
+    archived: &[ReplayRecord],
+    live: &[ReplayRecord],
+    cut: &ReplayCut,
+    witnesses: &[DeleteWitness],
+) -> Result<CompactionPlan, PlanFailure> {
+    let reconstructed = replay(archived, live, cut).map_err(PlanFailure::UntrustedHistory)?;
+
+    let mut live_by_id: HashMap<&str, Vec<usize>> = HashMap::new();
+    let mut archived_by_id: HashMap<&str, Vec<&ReplayRecord>> = HashMap::new();
+    for (index, record) in live.iter().enumerate() {
+        live_by_id.entry(&record.stable_id).or_default().push(index);
+    }
+    for record in archived {
+        archived_by_id
+            .entry(&record.stable_id)
+            .or_default()
+            .push(record);
+    }
+
+    // Reject duplicated source and operation identities before individual
+    // eligibility checks: provider page order must not select an arbitrary
+    // error when a collision and another invalid witness coexist.
+    let mut seen_sources = HashSet::new();
+    let mut seen_operations = HashSet::new();
+    for witness in witnesses {
+        if !seen_sources.insert(witness.observed_source.record_id.as_str())
+            || !seen_operations.insert(witness.operation_id.as_str())
+        {
+            return Err(PlanFailure::DuplicateCandidate);
+        }
+    }
+    // An unordered provider response has no authority over diagnostics.
+    // Source IDs are now unique, so this ordering is deterministic. Successful
+    // removals are still ordered by certified sequence below.
+    let mut ordered_witnesses: Vec<_> = witnesses.iter().collect();
+    ordered_witnesses.sort_unstable_by(|a, b| {
+        a.observed_source
+            .record_id
+            .cmp(&b.observed_source.record_id)
+    });
+    let mut selected = BTreeSet::new();
+    let mut model_removals = Vec::with_capacity(witnesses.len());
+    // A batch is admitted against one coherent archive manifest generation.
+    // Individually valid witness snapshots from different generations cannot
+    // be composed into one plan without a trusted cross-generation cut.
+    let mut manifest_basis = None;
+    let mut shared_batch_basis = None;
+    for witness in ordered_witnesses {
+        match &manifest_basis {
+            Some(expected) if expected != &witness.manifest.basis => {
+                return Err(PlanFailure::InconsistentWitness);
+            }
+            None => manifest_basis = Some(witness.manifest.basis.clone()),
+            _ => {}
+        }
+        let source = &witness.observed_source;
+        let positions = live_by_id
+            .get(source.record_id.as_str())
+            .ok_or(PlanFailure::MissingOrAmbiguousLiveRecord)?;
+        if positions.len() != 1 {
+            return Err(PlanFailure::MissingOrAmbiguousLiveRecord);
+        }
+        let index = positions[0];
+        if !selected.insert(index) {
+            return Err(PlanFailure::DuplicateCandidate);
+        }
+        let record = &live[index];
+        if record.source_incarnation != source.incarnation
+            || record.source_version != source.version
+            || record.payload_digest != source.content_digest
+            || record.order_basis != cut.ordering
+            || witness.ordering.basis != cut.ordering
+            || witness.ordering.source_incarnation != cut.source_incarnation
+            || witness.snapshot.ordering != cut.ordering
+            || witness.snapshot.source_incarnation != cut.source_incarnation
+            || witness.snapshot.manifest != witness.manifest.basis
+            || witness.manifest.basis != cut.manifest
+        {
+            return Err(PlanFailure::InconsistentWitness);
+        }
+        let copies = archived_by_id
+            .get(source.record_id.as_str())
+            .ok_or(PlanFailure::MissingOrAmbiguousArchivedCopy)?;
+        if copies.len() != 1 || *copies[0] != *record {
+            return Err(PlanFailure::MissingOrAmbiguousArchivedCopy);
+        }
+        match evaluate(witness) {
+            Verdict::EligibleModelOnly => {}
+            Verdict::Ineligible(reason) => return Err(PlanFailure::Ineligible(reason)),
+            Verdict::ReconcilePriorEffect => return Err(PlanFailure::ReconcilePriorEffect),
+        }
+        // Individually eligible witnesses cannot elect incompatible archive
+        // destinations or reconstruction objectives for one destructive batch.
+        // This is a pure model check, not current provider deletion authority.
+        let basis = (
+            witness.manifest.destination_incarnation.as_str(),
+            // Individually hash-valid archive receipts must still agree on
+            // the bytes of the ONE current manifest for this removal batch.
+            witness.archive.manifest_digest,
+            &witness.horizon.basis,
+            witness.horizon.policy_source_incarnation.as_str(),
+            witness.horizon.preserve_through_epoch,
+        );
+        match shared_batch_basis {
+            Some(previous) if previous != basis => {
+                return Err(PlanFailure::InconsistentWitness);
+            }
+            None => shared_batch_basis = Some(basis),
+            _ => {}
+        }
+        model_removals.push(ModelRemoval {
+            sequence: record.sequence,
+            source: source.clone(),
+            operation_id: witness.operation_id.clone(),
+        });
+    }
+
+    let retained_live: Vec<ReplayRecord> = live
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| !selected.contains(index))
+        .map(|(_, record)| record.clone())
+        .collect();
+    let replayed =
+        replay(archived, &retained_live, cut).map_err(PlanFailure::PostRemovalHistory)?;
+    if replayed != reconstructed {
+        return Err(PlanFailure::ReplayDiverged);
+    }
+    model_removals.sort_by_key(|record| record.sequence);
+
+    Ok(CompactionPlan {
+        model_removals,
+        retained_live,
+        reconstructed,
+    })
+}
+
+/// This wrapper is model-only: `preserve_newest_live` must come from an
+/// independently authenticated/current retention policy before any real effect.
+/// Apply the caller-supplied newest-live retention bound to a coherent model
+/// compaction plan. A source page's retrieval order never defines "newest":
+/// only the cut's certified reducer sequence does.
+///
+/// Unlike individual `witness.protections.live_tail` flags, this guard checks
+/// the entire observed live frontier as a batch. A candidate cannot displace
+/// one of the newest `preserve_newest_live` live records, even if its
+/// independently eligible witness omitted that protection flag.
+///
+/// Returning a plan is NOT provider authorization or proof that this
+/// caller-selected retention count is the current installed policy.
+pub fn plan_compaction_preserving_live_tail(
+    archived: &[ReplayRecord],
+    live: &[ReplayRecord],
+    cut: &ReplayCut,
+    witnesses: &[DeleteWitness],
+    preserve_newest_live: usize,
+) -> Result<CompactionPlan, PlanFailure> {
+    let plan = plan_compaction(archived, live, cut, witnesses)?;
+    if preserve_newest_live == 0 || plan.model_removals.is_empty() {
+        return Ok(plan);
+    }
+
+    let mut live_sequences: Vec<u64> = live.iter().map(|record| record.sequence).collect();
+    live_sequences.sort_unstable();
+    let start = live_sequences.len().saturating_sub(preserve_newest_live);
+    let protected = &live_sequences[start..];
+
+    if plan
+        .model_removals
+        .iter()
+        .any(|removal| protected.binary_search(&removal.sequence).is_ok())
+    {
+        return Err(PlanFailure::Ineligible(Denial::ProtectedRecord));
+    }
+    Ok(plan)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        Archive, Authority, Basis, Durability, EffectState, Horizon, Manifest, Ordering,
+        Protections, Snapshot,
+    };
+
+    fn basis(identity: &str) -> Basis {
+        Basis {
+            identity: identity.to_owned(),
+            generation: 5,
+        }
+    }
+
+    fn record(id: &str, sequence: u64) -> ReplayRecord {
+        ReplayRecord {
+            stable_id: id.to_owned(),
+            sequence,
+            payload_digest: [sequence as u8; 32],
+            order_basis: basis("provider-order"),
+            source_incarnation: "live-v2".into(),
+            source_version: "fixture-version-v1".to_owned(),
+        }
+    }
+
+    fn cut() -> ReplayCut {
+        ReplayCut {
+            ordering: basis("provider-order"),
+            source_incarnation: "live-v2".into(),
+            manifest: basis("manifest-current"),
+            first_sequence: 10,
+            last_sequence: 13,
+            authoritative_order: true,
+            current_manifest: true,
+            coherent_snapshot: true,
+            complete_frontier: true,
+            closing_fence_current: true,
+        }
+    }
+
+    fn witness(record: &ReplayRecord) -> DeleteWitness {
+        let source = Source {
+            record_id: record.stable_id.clone(),
+            incarnation: record.source_incarnation.clone(),
+            version: record.source_version.clone(),
+            content_digest: record.payload_digest,
+        };
+        let manifest = basis("manifest-current");
+        let horizon = basis("horizon-current");
+        let operation_id = format!("delete-{}", record.stable_id);
+        DeleteWitness {
+            operation_id: operation_id.clone(),
+            observed_source: source.clone(),
+            archive: Archive {
+                source: source.clone(),
+                manifest: manifest.clone(),
+                segment: "immutable-segment".into(),
+                manifest_digest: [21; 32],
+                remotely_read_digest: [21; 32],
+                exact_remote_readback: true,
+            },
+            ordering: Ordering {
+                basis: basis("provider-order"),
+                source_incarnation: source.incarnation.clone(),
+                authoritative: true,
+                frontier_complete: true,
+                current: true,
+            },
+            manifest: Manifest {
+                basis: manifest.clone(),
+                destination_incarnation: "archive-v3".into(),
+                unique_current_selection: true,
+                predecessor_transition_fenced: true,
+            },
+            snapshot: Snapshot {
+                manifest: manifest.clone(),
+                ordering: basis("provider-order"),
+                source_incarnation: source.incarnation.clone(),
+                coherent_cut: true,
+                frontier_complete: true,
+                closing_fence_current: true,
+                stable_identity_dedup: true,
+            },
+            authority: Authority {
+                operation_id,
+                source,
+                action: "DELETE_SOURCE_RECORD".into(),
+                current: true,
+                fence_current: true,
+            },
+            horizon: Horizon {
+                basis: horizon.clone(),
+                policy_source_incarnation: "policy-v2".into(),
+                uniquely_current: true,
+                transition_authorized: true,
+                preserve_through_epoch: 100,
+                predecessor_protects_source: false,
+                exact_retirement_authorized: false,
+            },
+            durability: Durability {
+                manifest,
+                segment: "immutable-segment".into(),
+                destination_incarnation: "archive-v3".into(),
+                horizon,
+                reconstructed_through_epoch: 100,
+                current: true,
+                keys_recoverable: true,
+            },
+            protections: Protections::default(),
+            effect_state: EffectState::NotAttempted,
+        }
+    }
+
+    fn histories() -> (Vec<ReplayRecord>, Vec<ReplayRecord>) {
+        (
+            vec![record("r10", 10), record("r11", 11), record("r12", 12)],
+            vec![record("r11", 11), record("r12", 12), record("r13", 13)],
+        )
+    }
+
+    #[test]
+    fn plans_exact_overlaps_and_preserves_order_sensitive_history() {
+        let (archived, live) = histories();
+        let witnesses = [witness(&live[0]), witness(&live[1])];
+        let plan = plan_compaction(&archived, &live, &cut(), &witnesses).unwrap();
+        assert_eq!(plan.model_removals.len(), 2);
+        assert_eq!(plan.model_removals[0].sequence, 11);
+        assert_eq!(plan.model_removals[1].sequence, 12);
+        assert_eq!(plan.retained_live, vec![record("r13", 13)]);
+        assert_eq!(
+            plan.reconstructed,
+            vec![
+                record("r10", 10),
+                record("r11", 11),
+                record("r12", 12),
+                record("r13", 13),
+            ]
+        );
+        assert_eq!(live.len(), 3);
+        assert_eq!(archived.len(), 3);
+    }
+
+    #[test]
+    fn source_version_replacement_blocks_replay_and_archival_removal() {
+        let (archived, live) = histories();
+        let mut forged = witness(&live[0]);
+        // All witness copies agree on the forged version. Source-history
+        // equality must still reject a same-bytes record replacement.
+        forged.observed_source.version = "etag-replaced-with-same-bytes".into();
+        forged.archive.source.version = forged.observed_source.version.clone();
+        forged.authority.source.version = forged.observed_source.version.clone();
+        assert_eq!(evaluate(&forged), Verdict::EligibleModelOnly);
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[forged]),
+            Err(PlanFailure::InconsistentWitness)
+        );
+
+        let mut replaced_live = live.clone();
+        replaced_live[0].source_version = "etag-replaced-with-same-bytes".into();
+        assert_eq!(
+            replay(&archived, &replaced_live, &cut()),
+            Err(ReplayFailure::ConflictingDuplicate),
+            "same digest and incarnation cannot conceal source version movement"
+        );
+        assert_eq!(
+            plan_compaction(&archived, &replaced_live, &cut(), &[]),
+            Err(PlanFailure::UntrustedHistory(
+                ReplayFailure::ConflictingDuplicate
+            ))
+        );
+
+        let mut missing_version = live.clone();
+        missing_version[0].source_version.clear();
+        assert_eq!(
+            replay(&archived, &missing_version, &cut()),
+            Err(ReplayFailure::UntrustedCut)
+        );
+    }
+
+    #[test]
+    fn no_candidates_replays_without_removing_anything() {
+        let (archived, live) = histories();
+        let plan = plan_compaction(&archived, &live, &cut(), &[]).unwrap();
+        assert!(plan.model_removals.is_empty());
+        assert_eq!(plan.retained_live, live);
+    }
+
+    #[test]
+    fn missing_or_ambiguous_archive_copy_is_not_eligible() {
+        let (mut archived, live) = histories();
+        let candidate = witness(&live[0]);
+        archived.retain(|r| r.stable_id != "r11");
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[candidate.clone()]),
+            Err(PlanFailure::MissingOrAmbiguousArchivedCopy)
+        );
+        archived.push(record("r11", 11));
+        archived.push(record("r11", 11));
+        // The replay boundary rejects a repeated record inside one archive
+        // tier before the removal planner can mistake it for an overlap.
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[candidate]),
+            Err(PlanFailure::UntrustedHistory(
+                ReplayFailure::ConflictingDuplicate
+            ))
+        );
+    }
+
+    #[test]
+    fn mismatch_and_stale_order_cannot_remove_anything() {
+        let (archived, live) = histories();
+        let mut bad = witness(&live[0]);
+        bad.observed_source.content_digest = [100; 32];
+        bad.archive.source.content_digest = [100; 32];
+        bad.authority.source.content_digest = [100; 32];
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[bad]),
+            Err(PlanFailure::InconsistentWitness)
+        );
+        let mut bad = witness(&live[0]);
+        bad.snapshot.ordering.generation += 1;
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[bad]),
+            Err(PlanFailure::InconsistentWitness)
+        );
+        let mut bad_cut = cut();
+        bad_cut.closing_fence_current = false;
+        assert_eq!(
+            plan_compaction(&archived, &live, &bad_cut, &[]),
+            Err(PlanFailure::UntrustedHistory(ReplayFailure::UntrustedCut))
+        );
+    }
+
+    #[test]
+    fn duplicate_candidate_and_ambiguous_live_record_fail_closed() {
+        let (archived, mut live) = histories();
+        let first = witness(&live[0]);
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[first.clone(), first.clone()]),
+            Err(PlanFailure::DuplicateCandidate)
+        );
+        live.push(record("r11", 11));
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[first]),
+            Err(PlanFailure::UntrustedHistory(
+                ReplayFailure::ConflictingDuplicate
+            ))
+        );
+    }
+
+    #[test]
+    fn protection_and_unknown_prior_effect_block_selection() {
+        let (archived, live) = histories();
+        let mut protected = witness(&live[0]);
+        protected.protections.active_ownership_chain = true;
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[protected]),
+            Err(PlanFailure::Ineligible(Denial::ProtectedRecord))
+        );
+        let mut retry = witness(&live[0]);
+        retry.effect_state = EffectState::AckUnknown;
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[retry]),
+            Err(PlanFailure::ReconcilePriorEffect)
+        );
+    }
+
+    #[test]
+    fn replay_cut_manifest_basis_must_match_individually_valid_witnesses() {
+        let (archived, live) = histories();
+        let first = witness(&live[0]);
+        let second = witness(&live[1]);
+        assert!(
+            plan_compaction(&archived, &live, &cut(), &[first.clone(), second.clone()]).is_ok()
+        );
+
+        let mut stale_generation = cut();
+        stale_generation.manifest.generation += 1;
+        let mut wrong_identity = cut();
+        wrong_identity.manifest.identity = "other-manifest".into();
+        for stale_cut in [stale_generation, wrong_identity] {
+            assert_eq!(evaluate(&first), Verdict::EligibleModelOnly);
+            assert_eq!(evaluate(&second), Verdict::EligibleModelOnly);
+            assert_eq!(
+                plan_compaction(&archived, &live, &stale_cut, &[first.clone()]),
+                Err(PlanFailure::InconsistentWitness)
+            );
+            for candidates in [
+                [first.clone(), second.clone()],
+                [second.clone(), first.clone()],
+            ] {
+                assert_eq!(
+                    plan_compaction(&archived, &live, &stale_cut, &candidates),
+                    Err(PlanFailure::InconsistentWitness)
+                );
+            }
+        }
+        let mut missing = cut();
+        missing.manifest.identity.clear();
+        assert_eq!(
+            plan_compaction(&archived, &live, &missing, &[first]),
+            Err(PlanFailure::UntrustedHistory(ReplayFailure::UntrustedCut))
+        );
+    }
+
+    #[test]
+    fn mixed_manifest_generations_cannot_form_a_single_compaction_plan() {
+        let (archived, live) = histories();
+        let first = witness(&live[0]);
+        let original_second = witness(&live[1]);
+        let mut moved_second = original_second.clone();
+
+        // The second witness is internally consistent, and independently
+        // eligible: only the combined plan crosses manifest generations.
+        moved_second.manifest.basis.generation += 1;
+        moved_second.archive.manifest.generation += 1;
+        moved_second.snapshot.manifest.generation += 1;
+        moved_second.durability.manifest.generation += 1;
+        assert_eq!(evaluate(&first), Verdict::EligibleModelOnly);
+        assert_eq!(evaluate(&moved_second), Verdict::EligibleModelOnly);
+
+        let original_live = live.clone();
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[first.clone(), moved_second]),
+            Err(PlanFailure::InconsistentWitness)
+        );
+        assert_eq!(live, original_live, "rejected model must not alter input");
+        assert!(
+            plan_compaction(&archived, &live, &cut(), &[first, original_second]).is_ok(),
+            "matching manifest generation must remain plannable"
+        );
+    }
+
+    #[test]
+    fn non_archived_live_tail_cannot_be_selected() {
+        let (archived, live) = histories();
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[witness(&live[2])]),
+            Err(PlanFailure::MissingOrAmbiguousArchivedCopy)
+        );
+    }
+    #[test]
+    fn batch_rejects_distinct_archive_destination_incarnations() {
+        let (archived, live) = histories();
+        let first = witness(&live[0]);
+        let mut second = witness(&live[1]);
+        second.manifest.destination_incarnation = "other-archive-incarnation".into();
+        second.durability.destination_incarnation = second.manifest.destination_incarnation.clone();
+        assert_eq!(evaluate(&first), Verdict::EligibleModelOnly);
+        assert_eq!(evaluate(&second), Verdict::EligibleModelOnly);
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[first, second]),
+            Err(PlanFailure::InconsistentWitness)
+        );
+    }
+
+    #[test]
+    fn batch_rejects_distinct_authorized_horizon_generations() {
+        let (archived, live) = histories();
+        let first = witness(&live[0]);
+        let mut second = witness(&live[1]);
+        second.horizon.basis.generation += 1;
+        second.durability.horizon = second.horizon.basis.clone();
+        assert_eq!(evaluate(&first), Verdict::EligibleModelOnly);
+        assert_eq!(evaluate(&second), Verdict::EligibleModelOnly);
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[first, second]),
+            Err(PlanFailure::InconsistentWitness)
+        );
+    }
+
+    #[test]
+    fn batch_rejects_distinct_horizon_policy_incarnations() {
+        let (archived, live) = histories();
+        let first = witness(&live[0]);
+        let mut second = witness(&live[1]);
+        second.horizon.policy_source_incarnation = "new-policy-incarnation".into();
+        assert_eq!(evaluate(&first), Verdict::EligibleModelOnly);
+        assert_eq!(evaluate(&second), Verdict::EligibleModelOnly);
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[first, second]),
+            Err(PlanFailure::InconsistentWitness)
+        );
+    }
+
+    #[test]
+    fn batch_rejects_incompatible_reconstruction_horizon_lengths() {
+        let (archived, live) = histories();
+        let first = witness(&live[0]);
+        let mut second = witness(&live[1]);
+        second.horizon.preserve_through_epoch = 99;
+        assert_eq!(evaluate(&first), Verdict::EligibleModelOnly);
+        assert_eq!(evaluate(&second), Verdict::EligibleModelOnly);
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[first, second]),
+            Err(PlanFailure::InconsistentWitness)
+        );
+    }
+
+    #[test]
+    fn coherent_manifest_can_select_distinct_immutable_segments() {
+        let (archived, live) = histories();
+        let first = witness(&live[0]);
+        let mut second = witness(&live[1]);
+        second.archive.segment = "another-immutable-segment".into();
+        second.durability.segment = second.archive.segment.clone();
+        assert_eq!(evaluate(&second), Verdict::EligibleModelOnly);
+        let plan = plan_compaction(&archived, &live, &cut(), &[first, second])
+            .expect("one current manifest/horizon may contain distinct segments");
+        assert_eq!(plan.model_removals.len(), 2);
+    }
+
+    #[test]
+    fn independent_failures_are_diagnosed_independently_of_page_order() {
+        let (archived, live) = histories();
+        let mut lower_id = witness(&live[0]);
+        lower_id.effect_state = EffectState::AckUnknown;
+        let mut higher_id = witness(&live[1]);
+        higher_id.protections.active_ownership_chain = true;
+        for candidates in [
+            [lower_id.clone(), higher_id.clone()],
+            [higher_id.clone(), lower_id.clone()],
+        ] {
+            assert_eq!(
+                plan_compaction(&archived, &live, &cut(), &candidates),
+                Err(PlanFailure::ReconcilePriorEffect),
+                "provider page order must not select another denial"
+            );
+        }
+    }
+
+    #[test]
+    fn duplicate_identity_is_stable_even_with_other_ineligible_witnesses() {
+        let (archived, live) = histories();
+        let first = witness(&live[0]);
+        let mut same_operation = witness(&live[1]);
+        same_operation.operation_id = first.operation_id.clone();
+        same_operation.authority.operation_id = first.operation_id.clone();
+        same_operation.effect_state = EffectState::AckUnknown;
+        for candidates in [
+            [first.clone(), same_operation.clone()],
+            [same_operation.clone(), first.clone()],
+        ] {
+            assert_eq!(
+                plan_compaction(&archived, &live, &cut(), &candidates),
+                Err(PlanFailure::DuplicateCandidate)
+            );
+        }
+        let mut same_source = witness(&live[1]);
+        same_source.observed_source.record_id = first.observed_source.record_id.clone();
+        same_source.archive.source.record_id = first.observed_source.record_id.clone();
+        same_source.authority.source.record_id = first.observed_source.record_id.clone();
+        same_source.effect_state = EffectState::AckUnknown;
+        for candidates in [[first.clone(), same_source.clone()], [same_source, first]] {
+            assert_eq!(
+                plan_compaction(&archived, &live, &cut(), &candidates),
+                Err(PlanFailure::DuplicateCandidate)
+            );
+        }
+    }
+    #[test]
+    fn batch_rejects_hash_valid_but_different_current_manifest_contents() {
+        let (archived, live) = histories();
+        let first = witness(&live[0]);
+        let mut second = witness(&live[1]);
+
+        // Both are self-consistent and individually model-eligible. However,
+        // one current manifest identity/generation cannot authorize two
+        // different content digests in a single destructive batch.
+        second.archive.manifest_digest = [88; 32];
+        second.archive.remotely_read_digest = [88; 32];
+        assert_eq!(evaluate(&first), Verdict::EligibleModelOnly);
+        assert_eq!(evaluate(&second), Verdict::EligibleModelOnly);
+        assert_eq!(first.manifest.basis, second.manifest.basis);
+
+        for candidates in [
+            [first.clone(), second.clone()],
+            [second.clone(), first.clone()],
+        ] {
+            assert_eq!(
+                plan_compaction(&archived, &live, &cut(), &candidates),
+                Err(PlanFailure::InconsistentWitness),
+                "provider page order cannot select mismatching manifest bytes"
+            );
+        }
+
+        // The same two source witnesses are admissible when the verified
+        // current-manifest bytes agree, independently of witness page order.
+        second.archive.manifest_digest = first.archive.manifest_digest;
+        second.archive.remotely_read_digest = first.archive.remotely_read_digest;
+        assert_eq!(
+            plan_compaction(&archived, &live, &cut(), &[first, second])
+                .expect("one coherent manifest may authorize distinct records")
+                .model_removals
+                .len(),
+            2
+        );
+    }
+
+    #[test]
+    fn certified_live_tail_is_preserved_even_if_individual_witness_flags_are_false() {
+        let (archived, live) = histories();
+        let first = witness(&live[0]); // sequence 11, outside the latest two
+        let second = witness(&live[1]); // sequence 12, inside the latest two
+
+        let accepted =
+            plan_compaction_preserving_live_tail(&archived, &live, &cut(), &[first.clone()], 2)
+                .expect("old overlapping record may be selected");
+        assert_eq!(accepted.model_removals.len(), 1);
+        assert_eq!(accepted.model_removals[0].sequence, 11);
+
+        assert_eq!(
+            plan_compaction_preserving_live_tail(&archived, &live, &cut(), &[second.clone()], 2),
+            Err(PlanFailure::Ineligible(Denial::ProtectedRecord))
+        );
+        assert_eq!(
+            plan_compaction_preserving_live_tail(&archived, &live, &cut(), &[first.clone()], 3),
+            Err(PlanFailure::Ineligible(Denial::ProtectedRecord))
+        );
+        assert_eq!(
+            plan_compaction_preserving_live_tail(&archived, &live, &cut(), &[first.clone()], 99),
+            Err(PlanFailure::Ineligible(Denial::ProtectedRecord))
+        );
+        assert_eq!(
+            plan_compaction_preserving_live_tail(&archived, &live, &cut(), &[first, second], 1)
+                .unwrap()
+                .model_removals
+                .len(),
+            2,
+            "latest live record 13 is never a candidate"
+        );
+    }
+
+    #[test]
+    fn live_tail_model_is_independent_of_provider_page_order_and_has_no_partial_plan() {
+        let (mut archived, mut live) = histories();
+        archived.reverse();
+        live.reverse();
+        let first = witness(&live[2]); // sequence 11
+        let protected = witness(&live[1]); // sequence 12
+        let original_live = live.clone();
+
+        let allowed =
+            plan_compaction_preserving_live_tail(&archived, &live, &cut(), &[first.clone()], 2)
+                .unwrap();
+        assert_eq!(allowed.model_removals[0].sequence, 11);
+        for candidates in [
+            vec![first.clone(), protected.clone()],
+            vec![protected, first],
+        ] {
+            assert_eq!(
+                plan_compaction_preserving_live_tail(&archived, &live, &cut(), &candidates, 2),
+                Err(PlanFailure::Ineligible(Denial::ProtectedRecord)),
+                "one protected candidate invalidates the whole model batch"
+            );
+        }
+        assert_eq!(
+            live, original_live,
+            "denial may not mutate the caller's live history"
+        );
+    }
+}
