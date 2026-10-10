@@ -80,7 +80,10 @@ fn compiled_binary_rejects_invalid_argument_count_without_success_output() {
         assert_eq!(result.status.code(), Some(2), "{result:?}");
         assert!(result.stdout.is_empty(), "{result:?}");
         let stderr = String::from_utf8_lossy(&result.stderr);
-        assert!(stderr.contains("expected exactly one fixture path"), "{result:?}");
+        assert!(
+            stderr.contains("expected exactly one fixture path"),
+            "{result:?}"
+        );
     }
 }
 
