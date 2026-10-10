@@ -36,21 +36,17 @@ pub struct ReplayOutcome {
 /// process cutoff. The caller must independently establish journal integrity,
 /// provenance, source completeness and version compatibility before ANY real
 /// recovery decision. This function proves none of those prerequisites.
-pub fn reconstruct_after_cutoff(
-    records: &[JournalRecord],
-) -> Result<ReplayOutcome, ReplayError> {
+pub fn reconstruct_after_cutoff(records: &[JournalRecord]) -> Result<ReplayOutcome, ReplayError> {
     let mut outbox = Outbox::new();
     let mut operation_ids = Vec::new();
 
     for (index, record) in records.iter().enumerate() {
         match record {
-            JournalRecord::Submitted(envelope) => {
-                match outbox.submit(envelope.clone()) {
-                    Ok(true) => operation_ids.push(envelope.operation_id.clone()),
-                    Ok(false) => return Err(ReplayError::DuplicateSubmission(index)),
-                    Err(error) => return Err(ReplayError::InvalidRecord(index, error)),
-                }
-            }
+            JournalRecord::Submitted(envelope) => match outbox.submit(envelope.clone()) {
+                Ok(true) => operation_ids.push(envelope.operation_id.clone()),
+                Ok(false) => return Err(ReplayError::DuplicateSubmission(index)),
+                Err(error) => return Err(ReplayError::InvalidRecord(index, error)),
+            },
             JournalRecord::Applied {
                 operation_id,
                 expected_version,
@@ -58,7 +54,12 @@ pub fn reconstruct_after_cutoff(
                 historical_boundary,
             } => {
                 outbox
-                    .apply(operation_id, *expected_version, *action, *historical_boundary)
+                    .apply(
+                        operation_id,
+                        *expected_version,
+                        *action,
+                        *historical_boundary,
+                    )
                     .map_err(|error| ReplayError::InvalidRecord(index, error))?;
             }
         }
@@ -219,16 +220,36 @@ mod tests {
             Status::ManualHold
         );
         for id in ["dispatched", "reserved", "held"] {
-            assert_ne!(replay.outbox.entry(id).unwrap().status(), Status::RemoteProven);
+            assert_ne!(
+                replay.outbox.entry(id).unwrap().status(),
+                Status::RemoteProven
+            );
         }
     }
 
     #[test]
-    fn replay_order_and_versions_are_semantic() {
-        let out_of_order = vec![
-            applied("one", 0, Action::Admit),
-            submitted("one"),
+    fn prepared_and_queued_reconstruct_without_dispatch_or_implicit_admission() {
+        let records = vec![
+            submitted("prepared"),
+            submitted("queued"),
+            applied("queued", 0, Action::Admit),
         ];
+        let replay = reconstruct_after_cutoff(&records).unwrap();
+        let prepared = replay.outbox.entry("prepared").unwrap();
+        let queued = replay.outbox.entry("queued").unwrap();
+        assert_eq!(prepared.status(), Status::Prepared);
+        assert_eq!(queued.status(), Status::Queued);
+        assert_eq!(prepared.version(), 0);
+        assert_eq!(queued.version(), 1);
+        assert!(!prepared.attempted());
+        assert!(!queued.attempted());
+        assert_eq!(replay.released_reservations, 0);
+        assert_eq!(replay.newly_ambiguous_attempts, 0);
+    }
+
+    #[test]
+    fn replay_order_and_versions_are_semantic() {
+        let out_of_order = vec![applied("one", 0, Action::Admit), submitted("one")];
         assert_eq!(
             reconstruct_after_cutoff(&out_of_order).err(),
             Some(ReplayError::InvalidRecord(0, Error::UnknownOperation))
@@ -253,12 +274,9 @@ mod tests {
         );
         let mut changed = envelope("one");
         changed.payload_digest = "sha256:different".into();
+        let changed_records = vec![submitted("one"), JournalRecord::Submitted(changed)];
         assert_eq!(
-            reconstruct_after_cutoff(&[
-                submitted("one"),
-                JournalRecord::Submitted(changed),
-            ])
-            .err(),
+            reconstruct_after_cutoff(&changed_records).err(),
             Some(ReplayError::InvalidRecord(
                 1,
                 Error::OperationIdentityConflict
