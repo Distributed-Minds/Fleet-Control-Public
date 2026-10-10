@@ -615,21 +615,15 @@ mod tests {
 
         // These inputs contain enough separators to otherwise create many
         // temporary field slices. Size admission precedes field splitting.
-        let oversized = format!(
-            "{MANIFEST_HEADER}\n{}",
-            "\t".repeat(MAX_V1_MANIFEST_BYTES)
-        );
+        let oversized = format!("{MANIFEST_HEADER}\n{}", "\t".repeat(MAX_V1_MANIFEST_BYTES));
         assert_eq!(
             parse_manifest(&oversized),
             Err(ManifestError::InputTooLarge)
         );
 
         // Even a valid manifest prefix cannot bypass the exact byte budget.
-        let oversized_valid_prefix = format!(
-            "{}{}",
-            EMBEDDED_MANIFEST,
-            "x".repeat(MAX_V1_MANIFEST_BYTES)
-        );
+        let oversized_valid_prefix =
+            format!("{}{}", EMBEDDED_MANIFEST, "x".repeat(MAX_V1_MANIFEST_BYTES));
         assert_eq!(
             parse_manifest(&oversized_valid_prefix),
             Err(ManifestError::InputTooLarge)
@@ -639,16 +633,8 @@ mod tests {
     #[test]
     fn m1_manifest_rejects_eleventh_row_without_parsing_another_record() {
         let first_data_row = EMBEDDED_MANIFEST.lines().nth(1).unwrap();
-        let extra = format!(
-            "{}\n{}\n",
-            EMBEDDED_MANIFEST.trim_end(),
-            first_data_row
-        );
-        assert_eq!(
-            parse_manifest(&extra),
-            Err(ManifestError::InvalidRow(12))
-        );
+        let extra = format!("{}\n{}\n", EMBEDDED_MANIFEST.trim_end(), first_data_row);
+        assert_eq!(parse_manifest(&extra), Err(ManifestError::InvalidRow(12)));
         assert_eq!(parse_manifest(EMBEDDED_MANIFEST).unwrap().len(), 10);
     }
-
 }
