@@ -105,7 +105,12 @@ fn concurrent_same_id_different_payload_cannot_adopt_other_content() {
     let mut b = fixture();
     b.source_commit = "synthetic-source-b".into();
     let inputs = (0..24)
-        .map(|index| (operation(), if index % 2 == 0 { a.clone() } else { b.clone() }))
+        .map(|index| {
+            (
+                operation(),
+                if index % 2 == 0 { a.clone() } else { b.clone() },
+            )
+        })
         .collect();
     let (results, effects) = race(inputs);
     let admitted = Decision::ReviewableInSimulation;
