@@ -123,3 +123,30 @@ fn adding_consumption_never_recovers_successful_capacity() {
     );
     expect_failure(&["2500", "2500", "6", "16"], 1, "EXHAUSTED remaining=0;");
 }
+
+#[cfg(unix)]
+#[test]
+fn non_utf8_argv_is_a_typed_denial_in_every_numeric_position() {
+    use std::os::unix::ffi::OsStringExt;
+
+    let baseline = ["2500", "0", "1", "0"];
+    for index in 0..baseline.len() {
+        let mut argv: Vec<std::ffi::OsString> = baseline
+            .iter()
+            .map(|value| std::ffi::OsString::from(*value))
+            .collect();
+        argv[index] = std::ffi::OsString::from_vec(vec![b'1', 0xff, b'2']);
+        let output = Command::new(BIN)
+            .args(&argv)
+            .output()
+            .expect("execute compiled advisor with non-UTF-8 argv");
+
+        assert_eq!(output.status.code(), Some(2), "index={index}");
+        assert!(output.stdout.is_empty(), "index={index}: {output:?}");
+        assert_eq!(
+            String::from_utf8(output.stderr).expect("UTF-8 diagnostic"),
+            "CAPACITY_UNKNOWN arguments must be valid UTF-8; no write authority\n",
+            "index={index}"
+        );
+    }
+}

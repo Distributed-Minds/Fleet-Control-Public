@@ -74,7 +74,19 @@ fn preflight(args: &[String]) -> Result<Capacity, String> {
 }
 
 fn main() -> ExitCode {
-    let args: Vec<String> = env::args().skip(1).collect();
+    // env::args() panics on non-UTF-8 Unix argv. Malformed untrusted inputs
+    // must return the same typed, non-authoritative disposition as bad counts.
+    let args: Vec<String> = match env::args_os()
+        .skip(1)
+        .map(|arg| arg.into_string())
+        .collect::<Result<Vec<_>, _>>()
+    {
+        Ok(args) => args,
+        Err(_) => {
+            eprintln!("CAPACITY_UNKNOWN arguments must be valid UTF-8; no write authority");
+            return ExitCode::from(2);
+        }
+    };
     match preflight(&args) {
         Ok(Capacity::Headroom { remaining }) => {
             println!("HEADROOM remaining={remaining}; advisory only, verify provider state and ownership");
