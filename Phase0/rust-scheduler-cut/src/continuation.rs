@@ -549,6 +549,4 @@ mod tests {
             MAX_SIMULATED_CONTINUATION_RECEIPTS
         );
         assert_eq!(book.emitted_starts(), 1);
-    }
-
-}
+    }}
