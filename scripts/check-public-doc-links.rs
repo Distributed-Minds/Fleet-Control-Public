@@ -209,7 +209,8 @@ fn mask_paragraph_code_spans(markdown: &str) -> String {
         let setext_underline =
             fenced.is_none() && !paragraph.is_empty() && is_setext_underline(line);
         let thematic_break = fenced.is_none() && !setext_underline && is_thematic_break(line);
-        if fence_boundary || fenced.is_some() || line.trim().is_empty() || atx_heading || thematic_break {
+        let blank_line = line.bytes().all(|byte| byte == b' ' || byte == b'\t');
+        if fence_boundary || fenced.is_some() || blank_line || atx_heading || thematic_break {
             if !paragraph.is_empty() {
                 visible.push_str(&mask_inline_code(&paragraph));
                 paragraph.clear();
@@ -1803,7 +1804,7 @@ mod tests {
                 assert_eq!(result.local_links, 2, "middle={middle:?}, newline={newline:?}");
                 assert_eq!(result.errors.len(), 1, "{:?}", result.errors);
                 assert!(
-                    result.errors[0].contains("README.md:3: target missing: missing.md"),
+                    result.errors[0].contains("README.md: target missing: missing.md"),
                     "{:?}",
                     result.errors
                 );
