@@ -10,7 +10,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::env;
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Write};
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
+#[cfg(target_os = "linux")]
+use std::os::unix::fs::OpenOptionsExt;
 use std::process;
 
 #[cfg(test)]
@@ -70,6 +74,85 @@ struct Fixture {
     digest: String,
     cases: Vec<Case>,
     stale_head_cases: Vec<StaleCase>,
+}
+
+// Input is a caller-supplied fixture path, not a trusted provider snapshot.
+// Reject unbounded/special-file reads before parsing; cap the actual read too,
+// since a regular file can grow after the metadata observation.
+const MAX_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
+
+fn read_fixture_with_observed_metadata(
+    path: &str,
+    metadata: &fs::Metadata,
+) -> Result<String, String> {
+    if !metadata.file_type().is_file() {
+        return Err("fixture must be a regular non-symlink file".to_owned());
+    }
+    if metadata.len() > MAX_FIXTURE_BYTES {
+        return Err("fixture exceeds maximum input size".to_owned());
+    }
+
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        // Do not follow a swapped-in symlink or block on a substituted FIFO.
+        // These open(2) flags are Linux-specific, not portable numeric values.
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let file = options.open(path).map_err(|error| error.to_string())?;
+    let opened = file.metadata().map_err(|error| error.to_string())?;
+    if !opened.file_type().is_file() {
+        return Err("opened fixture is not a regular file".to_owned());
+    }
+    #[cfg(unix)]
+    if opened.dev() != metadata.dev() || opened.ino() != metadata.ino() {
+        return Err("fixture changed between metadata check and open".to_owned());
+    }
+    if opened.len() > MAX_FIXTURE_BYTES {
+        return Err("fixture exceeds maximum input size".to_owned());
+    }
+
+    // Bound the descriptor read even if the file grows after both size checks.
+    // This does not authenticate the mutable bytes or authorize provider use.
+    let mut contents = String::new();
+    file.take(MAX_FIXTURE_BYTES + 1)
+        .read_to_string(&mut contents)
+        .map_err(|error| error.to_string())?;
+    if contents.len() as u64 > MAX_FIXTURE_BYTES {
+        return Err("fixture exceeds maximum input size".to_owned());
+    }
+    Ok(contents)
+}
+
+// O_NOFOLLOW protects only the final path component. A symlink in a parent
+// directory would otherwise bypass the explicit non-symlink fixture path rule.
+// This is static path admission, not an atomic defense against parent swaps.
+fn reject_symlinked_ancestors(path: &str) -> Result<(), String> {
+    let mut prefix = std::path::PathBuf::new();
+    let mut components = std::path::Path::new(path).components().peekable();
+    while let Some(component) = components.next() {
+        prefix.push(component.as_os_str());
+        if components.peek().is_none() || !matches!(component, std::path::Component::Normal(_)) {
+            continue;
+        }
+        let metadata = fs::symlink_metadata(&prefix).map_err(|error| error.to_string())?;
+        if metadata.file_type().is_symlink() {
+            return Err("fixture path has symbolic-link ancestor".to_owned());
+        }
+        if !metadata.file_type().is_dir() {
+            return Err("fixture ancestor is not a directory".to_owned());
+        }
+    }
+    Ok(())
+}
+
+fn read_fixture_file(path: &str) -> Result<String, String> {
+    reject_symlinked_ancestors(path)?;
+    let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+    read_fixture_with_observed_metadata(path, &metadata)
 }
 
 fn git_id(value: &str) -> bool {
@@ -267,7 +350,7 @@ fn main() {
     }
     .map(String::as_str)
     .unwrap_or("Phase0/fixtures/integration-candidate-v1.json");
-    let result = fs::read_to_string(path)
+    let result = read_fixture_file(path)
         .map_err(|e| e.to_string())
         .and_then(|contents| serde_json::from_str::<Fixture>(&contents).map_err(|e| e.to_string()))
         .and_then(|fixture| {
@@ -308,6 +391,129 @@ mod tests {
 
     fn sample() -> Fixture {
         serde_json::from_str(HISTORICAL_FIXTURE).expect("historical fixture must parse")
+    }
+
+    #[test]
+    fn bounded_input_accepts_original_fixture_and_rejects_unsafe_paths() {
+        let fixture_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../fixtures/integration-candidate-v1.json"
+        );
+        let original = read_fixture_file(fixture_path).expect("read original regular fixture");
+        assert_eq!(original, HISTORICAL_FIXTURE);
+        let parsed: Fixture = serde_json::from_str(&original).unwrap();
+        assert_eq!(validate(&parsed), Ok(6));
+
+        let scratch = std::env::temp_dir().join(format!(
+            "free-energy-integration-candidate-bounded-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&scratch).expect("create isolated fixture test directory");
+
+        let oversized = scratch.join("oversized-fixture.json");
+        let file = fs::File::create(&oversized).expect("create sparse oversized fixture");
+        file.set_len(MAX_FIXTURE_BYTES + 1)
+            .expect("size oversized fixture without allocating 8 MiB");
+        assert!(read_fixture_file(oversized.to_str().unwrap())
+            .unwrap_err()
+            .contains("maximum input size"));
+
+        assert!(read_fixture_file(scratch.to_str().unwrap())
+            .unwrap_err()
+            .contains("regular non-symlink"));
+
+        #[cfg(unix)]
+        {
+            let alias = scratch.join("alias-to-valid.json");
+            std::os::unix::fs::symlink(fixture_path, &alias)
+                .expect("create untrusted fixture path alias");
+            assert!(read_fixture_file(alias.to_str().unwrap())
+                .unwrap_err()
+                .contains("regular non-symlink"));
+        }
+
+        drop(file);
+        fs::remove_dir_all(&scratch).expect("remove isolated fixture test directory");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bounded_fixture_rejects_symlinked_parent_paths() {
+        let scratch = std::env::temp_dir().join(format!(
+            "free-energy-integration-candidate-parent-alias-{}",
+            std::process::id()
+        ));
+        let real = scratch.join("real");
+        let nested = real.join("nested");
+        fs::create_dir_all(&nested).expect("create isolated real fixture directories");
+        let valid = nested.join("candidate.json");
+        fs::write(&valid, HISTORICAL_FIXTURE).expect("write original fixture bytes");
+        assert_eq!(
+            read_fixture_file(valid.to_str().unwrap()).expect("real parent is admissible"),
+            HISTORICAL_FIXTURE
+        );
+
+        let outer_alias = scratch.join("linked-real");
+        std::os::unix::fs::symlink(&real, &outer_alias).expect("create outer directory alias");
+        let outer_path = outer_alias.join("nested/candidate.json");
+        let outer_error = read_fixture_file(outer_path.to_str().unwrap())
+            .expect_err("outer symlinked ancestor cannot select fixture bytes");
+        assert!(
+            outer_error.contains("symbolic-link ancestor"),
+            "unexpected outer-ancestor rejection: {outer_error}"
+        );
+
+        let inner_alias = real.join("linked-nested");
+        std::os::unix::fs::symlink(&nested, &inner_alias).expect("create inner directory alias");
+        let inner_path = inner_alias.join("candidate.json");
+        let inner_error = read_fixture_file(inner_path.to_str().unwrap())
+            .expect_err("inner symlinked ancestor cannot select fixture bytes");
+        assert!(
+            inner_error.contains("symbolic-link ancestor"),
+            "unexpected inner-ancestor rejection: {inner_error}"
+        );
+
+        fs::remove_dir_all(&scratch).expect("remove isolated fixture directory");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn opened_fixture_rejects_byte_identical_path_swap_and_symlink() {
+        let scratch = std::env::temp_dir().join(format!(
+            "free-energy-fixture-open-swap-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&scratch).expect("create isolated fixture directory");
+        let source = scratch.join("fixture.json");
+        let replacement = scratch.join("replacement.json");
+        fs::write(&source, HISTORICAL_FIXTURE).expect("write source fixture");
+        fs::write(&replacement, HISTORICAL_FIXTURE).expect("write identical replacement");
+        let observed = fs::symlink_metadata(&source).expect("observe original inode");
+        assert_eq!(
+            read_fixture_with_observed_metadata(source.to_str().unwrap(), &observed)
+                .expect("same opened inode is accepted"),
+            HISTORICAL_FIXTURE
+        );
+
+        fs::rename(&replacement, &source).expect("replace fixture before open");
+        let error = read_fixture_with_observed_metadata(source.to_str().unwrap(), &observed)
+            .expect_err("byte-identical replacement must not pass inode check");
+        assert!(
+            error.contains("changed between metadata check and open"),
+            "unexpected rejection: {error}"
+        );
+
+        let second_observation = fs::symlink_metadata(&source).expect("observe replacement");
+        let target = scratch.join("target.json");
+        fs::write(&target, HISTORICAL_FIXTURE).expect("write symlink target");
+        fs::remove_file(&source).expect("remove regular input");
+        std::os::unix::fs::symlink(&target, &source).expect("replace with symlink");
+        assert!(
+            read_fixture_with_observed_metadata(source.to_str().unwrap(), &second_observation)
+                .is_err(),
+            "symlink substituted after metadata observation must not be opened"
+        );
+        fs::remove_dir_all(&scratch).expect("remove isolated fixture directory");
     }
 
     #[test]
