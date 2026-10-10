@@ -113,3 +113,32 @@ fn malformed_and_zero_size_attempts_never_create_receipts() {
     assert_eq!(ledger.charged(), 0);
     assert_eq!(ledger.provider_effects(), 0);
 }
+
+#[test]
+fn maximum_integer_exposure_is_checked_without_wrap_or_fake_headroom() {
+    let mut ledger = Ledger::new(
+        "shared-domain",
+        u64::MAX,
+        1,
+        &[("root-a", 1), ("root-b", 1)],
+    );
+    let almost_full = u64::MAX - 10;
+    let original = attempt("large", "root-a", almost_full, 1);
+    assert_eq!(ledger.reserve(original.clone()), ResultKind::Accepted);
+    assert_eq!(ledger.headroom(), 10);
+    assert_eq!(
+        ledger.reserve(attempt("overflow", "root-b", 11, 2)),
+        ResultKind::Denied(Denial::NoCapacity)
+    );
+    assert_eq!(ledger.generation(), 2);
+    assert_eq!(
+        ledger.reserve(attempt("exact", "root-b", 10, 2)),
+        ResultKind::Accepted
+    );
+    assert_eq!(ledger.headroom(), 0);
+    assert_eq!(
+        ledger.reserve(original),
+        ResultKind::Identical(State::Pending)
+    );
+    assert_eq!(ledger.provider_effects(), 0);
+}
