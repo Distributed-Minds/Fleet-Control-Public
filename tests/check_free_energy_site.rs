@@ -799,6 +799,62 @@ mod tests {
 
 
     #[test]
+    fn all_required_body_disclosures_reject_valid_title_only_spoofs() {
+        let root = env::temp_dir().join(format!(
+            "free-energy-body-disclosures-a6r4-{}", std::process::id()
+        ));
+        let docs = root.join("docs");
+        fs::create_dir_all(&docs).expect("create required-copy fixture directory");
+        let original = include_str!("../docs/index.html");
+        fs::write(docs.join("styles.css"), include_str!("../docs/styles.css"))
+            .expect("fixture stylesheet");
+        fs::write(docs.join("README.md"), include_str!("../docs/README.md"))
+            .expect("fixture README");
+        fs::write(docs.join("index.html"), original).expect("fixture original");
+        assert!(validate(&root).is_empty(), "unmodified landing must pass");
+
+        // Real-page negative controls: every body occurrence of one disclosure
+        // is removed and one exact copy is placed inside the existing valid
+        // HTML head title. Metadata is not rendered participation copy.
+        for (required, explanation) in [
+            ("Download the starter ZIP", "Download CTA does not identify ZIP"),
+            ("older setup guide", "Release archive age warning missing"),
+            ("before installing or forking", "Corrected online guide warning missing"),
+            ("Posting does not enroll a contributor", "Public contact enrollment boundary missing"),
+            ("Do not post secrets", "Public contact confidentiality boundary missing"),
+            ("PLAY / DISCOVER", "PLAY route missing"),
+            ("HELP AN EXISTING PROJECT", "HELP route missing"),
+            ("MAKE / REMIX", "MAKE route missing"),
+            ("A verified playable catalog is still planned", "Missing catalog-not-shipped disclosure"),
+            ("Want to run your own agent fleet?", "Separate fleet installation route missing"),
+            ("You do not need it to help", "Fleet installation requirement is misleading"),
+            ("FUTURE VISION", "Future vision label missing"),
+            ("FUTURE PLATFORM", "Future platform label missing"),
+            ("Not yet available", "Missing future-feature disclaimer"),
+            ("Fleet-Control Phase0", "Current orchestration preview not identified"),
+        ] {
+            let start = original.find("<body>").expect("opening body") + "<body>".len();
+            let end = original.find("</body>").expect("closing body");
+            assert!(original[start..end].contains(required), "body fixture missing {required}");
+            let hidden_body = original[start..end].replace(required, "");
+            let mutated = format!(
+                "{}{}{}", &original[..start], hidden_body, &original[end..]
+            ).replacen("</title>", &format!(" {required}</title>"), 1);
+            let body_start = mutated.find("<body>").expect("mutated body");
+            let body_end = mutated.find("</body>").expect("mutated body end");
+            assert!(!mutated[body_start..body_end].contains(required), "body still has {required}");
+            assert!(mutated[..body_start].contains(required), "head must contain {required}");
+            fs::write(docs.join("index.html"), mutated).expect("write title-only fixture");
+            let errors = validate(&root);
+            assert!(
+                errors.iter().any(|error| error.as_str() == explanation),
+                "title-only disclosure {required} must fail with {explanation}, got {errors:?}"
+            );
+        }
+        fs::remove_dir_all(&root).expect("remove body-copy fixtures");
+    }
+
+    #[test]
     fn required_copy_in_attributes_is_not_treated_as_page_copy() {
         let spoof = r#"<main>
 <meta content="Do not post secrets">
