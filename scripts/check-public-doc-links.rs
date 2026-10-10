@@ -723,6 +723,72 @@ fn check(root: &Path, docs: &[&str]) -> Report {
      String::from_utf8(masked).expect("ASCII-only masking preserves UTF-8")
  }
 
+// A rendered HELP disclosure must be ordinary emphasized prose, not image
+// alternative text or HTML attribute metadata. Keep UTF-8 offsets stable.
+fn mask_help_nonprose_attributes(source: &str) -> String {
+    let raw = source.as_bytes();
+    let mut masked = raw.to_vec();
+    let mut i = 0;
+    while i < raw.len() {
+        if raw[i] == b'!' && !preceded_by_escape(raw, i)
+            && raw.get(i + 1) == Some(&b'[')
+        {
+            let mut cursor = i + 2;
+            let mut depth = 1usize;
+            while cursor < raw.len() {
+                if !preceded_by_escape(raw, cursor) {
+                    match raw[cursor] {
+                        b'[' => depth += 1,
+                        b']' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                cursor += 1;
+            }
+            if depth == 0 && matches!(raw.get(cursor + 1), Some(b'(' | b'[')) {
+                for byte in &mut masked[i..=cursor] {
+                    *byte = b' ';
+                }
+                i = cursor + 1;
+                continue;
+            }
+        }
+        if raw[i] == b'<' {
+            let mut start = i + 1;
+            if raw.get(start) == Some(&b'/') {
+                start += 1;
+            }
+            if matches!(raw.get(start), Some(c) if c.is_ascii_alphabetic()) {
+                let mut cursor = start + 1;
+                let mut quote: Option<u8> = None;
+                while cursor < raw.len() {
+                    match (quote, raw[cursor]) {
+                        (Some(delimiter), c) if c == delimiter => quote = None,
+                        (None, b'"' | b'\'') => quote = Some(raw[cursor]),
+                        (None, b'>') => break,
+                        _ => {}
+                    }
+                    cursor += 1;
+                }
+                if quote.is_none() && raw.get(cursor) == Some(&b'>') {
+                    for byte in &mut masked[i..=cursor] {
+                        *byte = b' ';
+                    }
+                    i = cursor + 1;
+                    continue;
+                }
+            }
+        }
+        i += 1;
+    }
+    String::from_utf8(masked).expect("ASCII-only masking preserves UTF-8")
+}
+
 fn inspect_help_guide_contract(guide: &str) -> Result<(), &'static str> {
     // Reuse the existing Markdown comment/inline-code mask. A code fence
     // inside a CommonMark HTML block is not a rendered, copyable prompt.
@@ -786,7 +852,9 @@ fn inspect_help_guide_contract(guide: &str) -> Result<(), &'static str> {
     // Visible prose is outside code blocks, HTML comments, and inline code.
     // A raw substring in a hidden sample must not satisfy a reader-facing
     // disclosure or Phase0 link contract.
-    if !mask_help_link_titles(&visible_prose).contains("**Not available yet:**") {
+    if !mask_help_nonprose_attributes(&mask_help_link_titles(&visible_prose))
+        .contains("**Not available yet:**")
+    {
         return Err("manual versus future capability disclosure missing");
     }
     let mut link_diagnostics = Report::default();
@@ -2108,6 +2176,58 @@ mod tests {
         sandbox.write("HELP-A-PROJECT.md", guide);
         let site = check(&sandbox.0, &DOCUMENTS);
         assert!(site.errors.is_empty(), "valid full-site HELP: {:?}", site.errors);
+    }
+
+    // Spec 3: image alt and HTML attribute values are not prominent
+    // rendered emphasized prose, even when they contain the exact marker.
+    #[test]
+    fn help_guide_disclosure_cannot_hide_in_attributes() {
+        let guide = include_str!("../HELP-A-PROJECT.md");
+        let removed = guide.replacen("**Not available yet:**", "", 1);
+        assert_ne!(removed, guide, "missing real disclosure fixture anchor");
+        let cases = [
+            ("H11h-image-alt", format!("{removed}\n![**Not available yet:**](https://example.org/notice.svg)\n"), false),
+            ("H11i-title", format!("{removed}\n<span title=\"**Not available yet:**\">Details</span>\n"), false),
+            ("H11j-raw-image-alt", format!("{removed}\n<img src=\"https://example.org/notice.svg\" alt=\"**Not available yet:**\">\n"), false),
+            ("H11k-visible", format!("{removed}\n**Not available yet:** This is visible prose.\n"), true),
+            ("H11k-visible-and-image", format!("{removed}\n![**Not available yet:**](https://example.org/notice.svg)\n**Not available yet:** This is visible prose.\n"), true),
+        ];
+        for (case, original, visible) in cases {
+            for newline in ["\n", "\r\n"] {
+                for trailing in [false, true] {
+                    let mut fixture = original.replace('\n', newline);
+                    if trailing && !fixture.ends_with(newline) {
+                        fixture.push_str(newline);
+                    } else if !trailing {
+                        while fixture.ends_with(newline) {
+                            fixture.truncate(fixture.len() - newline.len());
+                        }
+                    }
+                    let expected = if visible {
+                        Ok(())
+                    } else {
+                        Err("manual versus future capability disclosure missing")
+                    };
+                    assert_eq!(inspect_help_guide_contract(&fixture), expected,
+                        "case={case}, newline={newline:?}, trailing={trailing}");
+                    let sandbox = Sandbox::new();
+                    for document in DOCUMENTS {
+                        sandbox.write(document, "");
+                    }
+                    sandbox.write("HELP-A-PROJECT.md", &fixture);
+                    let site = check(&sandbox.0, &DOCUMENTS);
+                    assert_eq!(site.errors.iter().any(|error|
+                        error.contains("manual versus future capability disclosure missing")),
+                        !visible,
+                        "case={case}, newline={newline:?}, trailing={trailing}: {:?}",
+                        site.errors);
+                    if visible {
+                        assert!(site.errors.is_empty(),
+                            "positive case={case}: {:?}", site.errors);
+                    }
+                }
+            }
+        }
     }
 
     // Issue #333: CommonMark blank lines contain ASCII spaces/tabs only.
