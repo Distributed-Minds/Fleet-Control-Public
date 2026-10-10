@@ -21,8 +21,9 @@ pub enum ContinuationPolicy {
 impl ContinuationPolicy {
     fn max_steps(&self) -> u32 {
         match self {
-            Self::BoundedCurrentRun { max_steps }
-            | Self::SuccessorReAdmission { max_steps } => *max_steps,
+            Self::BoundedCurrentRun { max_steps } | Self::SuccessorReAdmission { max_steps } => {
+                *max_steps
+            }
         }
     }
 }
@@ -116,10 +117,16 @@ impl ContinuationSimulation {
             {
                 return Err(StartContractDenial::ChangedHistoricalContract);
             }
-            return self.starts.start(attempt).map_err(StartContractDenial::Start);
+            return self
+                .starts
+                .start(attempt)
+                .map_err(StartContractDenial::Start);
         }
 
-        let result = self.starts.start(attempt).map_err(StartContractDenial::Start)?;
+        let result = self
+            .starts
+            .start(attempt)
+            .map_err(StartContractDenial::Start)?;
         if let Outcome::Committed(receipt) = &result {
             self.historical.insert(
                 id,
@@ -173,10 +180,16 @@ impl ContinuationSimulation {
         if attempt.step > historic.continuation_policy.max_steps() {
             return Err(ContinuationDenial::ContractBoundaryExceeded);
         }
-        if self.steps.contains_key(&(attempt.start_operation, attempt.step)) {
+        if self
+            .steps
+            .contains_key(&(attempt.start_operation, attempt.step))
+        {
             return Err(ContinuationDenial::StepAlreadyCommitted);
         }
-        if attempt.step > 1 && !self.steps.contains_key(&(attempt.start_operation, attempt.step - 1))
+        if attempt.step > 1
+            && !self
+                .steps
+                .contains_key(&(attempt.start_operation, attempt.step - 1))
         {
             return Err(ContinuationDenial::OutOfOrderStep);
         }
@@ -326,8 +339,11 @@ mod tests {
     #[test]
     fn cut12_historical_current_run_is_bounded_and_not_rewritten_by_p2() {
         let mut book = ContinuationSimulation::default();
-        book.start(&start(), ContinuationPolicy::BoundedCurrentRun { max_steps: 1 })
-            .unwrap();
+        book.start(
+            &start(),
+            ContinuationPolicy::BoundedCurrentRun { max_steps: 1 },
+        )
+        .unwrap();
         let one = continuation(82, 1);
         let receipt = match book.continue_run(&one).unwrap() {
             ContinuationOutcome::Committed(r) => r,
@@ -344,7 +360,10 @@ mod tests {
         later_p2.observed_current.admission_policy_generation = 2;
         later_p2.effect_current = later_p2.observed_current.clone();
         assert!(matches!(
-            book.start(&later_p2, ContinuationPolicy::BoundedCurrentRun { max_steps: 1 }),
+            book.start(
+                &later_p2,
+                ContinuationPolicy::BoundedCurrentRun { max_steps: 1 }
+            ),
             Ok(Outcome::Reconciled(_))
         ));
         assert_eq!(
@@ -359,8 +378,11 @@ mod tests {
     #[test]
     fn cut13_incompatible_p2_or_untrusted_bridge_cannot_continue() {
         let mut book = ContinuationSimulation::default();
-        book.start(&start(), ContinuationPolicy::SuccessorReAdmission { max_steps: 1 })
-            .unwrap();
+        book.start(
+            &start(),
+            ContinuationPolicy::SuccessorReAdmission { max_steps: 1 },
+        )
+        .unwrap();
         let mut candidate = continuation(82, 1);
         successor(&mut candidate, &cut());
         candidate.bridge = None;
@@ -376,7 +398,11 @@ mod tests {
         );
         successor(&mut candidate, &cut());
         candidate.effect_current.as_mut().unwrap().policy.generation = 3;
-        candidate.effect_current.as_mut().unwrap().admission_policy_generation = 3;
+        candidate
+            .effect_current
+            .as_mut()
+            .unwrap()
+            .admission_policy_generation = 3;
         assert_eq!(
             book.continue_run(&candidate),
             Err(ContinuationDenial::EffectTimeDrift)
@@ -387,8 +413,11 @@ mod tests {
     #[test]
     fn cut14_authorized_successor_is_exact_and_replay_safe() {
         let mut book = ContinuationSimulation::default();
-        book.start(&start(), ContinuationPolicy::SuccessorReAdmission { max_steps: 2 })
-            .unwrap();
+        book.start(
+            &start(),
+            ContinuationPolicy::SuccessorReAdmission { max_steps: 2 },
+        )
+        .unwrap();
         let mut first = continuation(82, 1);
         successor(&mut first, &cut());
         let first_receipt = match book.continue_run(&first).unwrap() {
@@ -429,10 +458,16 @@ mod tests {
             book.continue_run(&a),
             Err(ContinuationDenial::UnknownHistoricalStart)
         );
-        book.start(&start(), ContinuationPolicy::BoundedCurrentRun { max_steps: 2 })
-            .unwrap();
+        book.start(
+            &start(),
+            ContinuationPolicy::BoundedCurrentRun { max_steps: 2 },
+        )
+        .unwrap();
         assert_eq!(
-            book.start(&start(), ContinuationPolicy::SuccessorReAdmission { max_steps: 2 }),
+            book.start(
+                &start(),
+                ContinuationPolicy::SuccessorReAdmission { max_steps: 2 }
+            ),
             Err(StartContractDenial::ChangedHistoricalContract)
         );
         assert_eq!(
