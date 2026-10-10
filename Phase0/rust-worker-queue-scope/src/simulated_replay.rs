@@ -28,6 +28,29 @@ pub enum ReplayError {
     Scope(AdmissionError),
 }
 
+
+/// Model-only acceptance of a duplicate or first delivery event; neither grants
+/// authorization to start a worker, mutate GitHub or trust result contents.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeliveryOutcome {
+    Recorded,
+    Reconciled,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeliveryError {
+    UnknownPrincipal,
+    StalePrincipal,
+    RevokedPrincipal,
+    StaleBasis,
+    UnknownRequest,
+    AssignmentMismatch,
+    RecoveryRequired,
+    MissingAcknowledgement,
+    InvalidDigest,
+    ConflictingResult,
+}
+
 impl From<AdmissionError> for ReplayError {
     fn from(error: AdmissionError) -> Self {
         Self::Scope(error)
@@ -56,6 +79,9 @@ pub struct SimulatedReplay {
     book: SimulationBook,
     principals: BTreeMap<u64, TestPrincipal>,
     requests: BTreeMap<(u64, u64, String), RecordedRequest>,
+    // Synthetic receipts only; no trusted worker transport or effect execution.
+    acknowledgements: BTreeMap<(u64, u64, String), u64>,
+    results: BTreeMap<(u64, u64, String), (u64, String)>,
 }
 
 impl SimulatedReplay {
@@ -66,6 +92,8 @@ impl SimulatedReplay {
             book,
             principals: BTreeMap::new(),
             requests: BTreeMap::new(),
+            acknowledgements: BTreeMap::new(),
+            results: BTreeMap::new(),
         })
     }
 
@@ -191,6 +219,132 @@ impl SimulatedReplay {
     pub fn require_recovery(&mut self, task_id: u64) -> Result<(), ReplayError> {
         self.book.require_recovery(task_id)?;
         Ok(())
+    }
+
+
+    /// Validate a fixture-supplied principal, request ID and exact assignment.
+    /// The trusted test harness injects identity; no client JSON can authenticate
+    /// itself by invoking this helper in a real execution context.
+    fn delivery_key(
+        &self,
+        principal_id: u64,
+        principal_generation: u64,
+        request_id: &str,
+        task_id: u64,
+        assignment_generation: u64,
+        current_basis: &ScopeConflictBasis,
+    ) -> Result<(u64, u64, String), DeliveryError> {
+        let principal = self
+            .principals
+            .get(&principal_id)
+            .ok_or(DeliveryError::UnknownPrincipal)?;
+        if principal_generation != principal.generation {
+            return Err(DeliveryError::StalePrincipal);
+        }
+        if !principal.active {
+            return Err(DeliveryError::RevokedPrincipal);
+        }
+        if current_basis != &self.basis {
+            return Err(DeliveryError::StaleBasis);
+        }
+        let key = (principal_id, principal_generation, request_id.to_owned());
+        // Do not expose another principal's receipt in denial diagnostics.
+        let recorded = self.requests.get(&key).ok_or(DeliveryError::UnknownRequest)?;
+        if recorded.task_id != task_id
+            || recorded.receipt.assignment_generation != assignment_generation
+        {
+            return Err(DeliveryError::AssignmentMismatch);
+        }
+        let live = self
+            .book
+            .reservation(task_id)
+            .ok_or(DeliveryError::RecoveryRequired)?;
+        if live.state != SimulationState::Active
+            || live.assignment_generation != assignment_generation
+        {
+            return Err(DeliveryError::RecoveryRequired);
+        }
+        Ok(key)
+    }
+
+    /// One synthetic ACK per immutable issued request. Duplicate exact ACK is
+    /// reconciled; revocation or recovery never re-activates an old assignment.
+    pub fn acknowledge(
+        &mut self,
+        principal_id: u64,
+        principal_generation: u64,
+        request_id: &str,
+        task_id: u64,
+        assignment_generation: u64,
+        current_basis: &ScopeConflictBasis,
+    ) -> Result<DeliveryOutcome, DeliveryError> {
+        let key = self.delivery_key(
+            principal_id,
+            principal_generation,
+            request_id,
+            task_id,
+            assignment_generation,
+            current_basis,
+        )?;
+        if self.acknowledgements.contains_key(&key) {
+            return Ok(DeliveryOutcome::Reconciled);
+        }
+        self.acknowledgements.insert(key, assignment_generation);
+        Ok(DeliveryOutcome::Recorded)
+    }
+
+    /// Exact semantic result identity is constrained by the previously issued
+    /// assignment and its ACK. A digest is an *untrusted fixture label*: it is
+    /// not a signature, provenance proof, domain-acceptance or provider effect.
+    pub fn submit_result(
+        &mut self,
+        principal_id: u64,
+        principal_generation: u64,
+        request_id: &str,
+        task_id: u64,
+        assignment_generation: u64,
+        payload_digest: &str,
+        current_basis: &ScopeConflictBasis,
+    ) -> Result<DeliveryOutcome, DeliveryError> {
+        let key = self.delivery_key(
+            principal_id,
+            principal_generation,
+            request_id,
+            task_id,
+            assignment_generation,
+            current_basis,
+        )?;
+        if payload_digest.is_empty()
+            || payload_digest.len() > 128
+            || !payload_digest
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
+        {
+            return Err(DeliveryError::InvalidDigest);
+        }
+        if self.acknowledgements.get(&key) != Some(&assignment_generation) {
+            return Err(DeliveryError::MissingAcknowledgement);
+        }
+        if let Some((saved_assignment, saved_digest)) = self.results.get(&key) {
+            return if *saved_assignment == assignment_generation
+                && saved_digest == payload_digest
+            {
+                Ok(DeliveryOutcome::Reconciled)
+            } else {
+                Err(DeliveryError::ConflictingResult)
+            };
+        }
+        self.results
+            .insert(key, (assignment_generation, payload_digest.to_owned()));
+        Ok(DeliveryOutcome::Recorded)
+    }
+
+    pub fn acknowledgement_count(&self) -> usize {
+        self.acknowledgements.len()
+    }
+
+    pub fn result_count(&self) -> usize {
+        self.results.len()
     }
 
     pub fn reservation_count(&self) -> usize {
@@ -412,4 +566,120 @@ mod tests {
         assert_eq!(state.reservation_count(), 0);
         assert_eq!(state.request_count(), 0);
     }
+
+    #[test]
+    fn synthetic_ack_and_result_are_idempotent_and_generation_bound() {
+        let mut state = SimulatedReplay::new(basis()).unwrap();
+        state.enroll_test_principal(1, 7).unwrap();
+        state.enroll_test_principal(2, 7).unwrap();
+        let issued = state.poll(1, 7, &poll("r1", 40, &[11]), &basis()).unwrap();
+        let generation = issued.assignment_generation;
+        assert_eq!(
+            state.acknowledge(2, 7, "r1", 40, generation, &basis()),
+            Err(DeliveryError::UnknownRequest)
+        );
+        assert_eq!(
+            state.acknowledge(1, 6, "r1", 40, generation, &basis()),
+            Err(DeliveryError::StalePrincipal)
+        );
+        assert_eq!(
+            state.acknowledge(1, 7, "r1", 40, generation + 1, &basis()),
+            Err(DeliveryError::AssignmentMismatch)
+        );
+        assert_eq!(
+            state.submit_result(1, 7, "r1", 40, generation, "digest1", &basis()),
+            Err(DeliveryError::MissingAcknowledgement)
+        );
+        assert_eq!(
+            state.acknowledge(1, 7, "r1", 40, generation, &basis()),
+            Ok(DeliveryOutcome::Recorded)
+        );
+        assert_eq!(
+            state.acknowledge(1, 7, "r1", 40, generation, &basis()),
+            Ok(DeliveryOutcome::Reconciled)
+        );
+        assert_eq!(
+            state.submit_result(1, 7, "r1", 40, generation, "digest1", &basis()),
+            Ok(DeliveryOutcome::Recorded)
+        );
+        assert_eq!(
+            state.submit_result(1, 7, "r1", 40, generation, "digest1", &basis()),
+            Ok(DeliveryOutcome::Reconciled)
+        );
+        assert_eq!(
+            state.submit_result(1, 7, "r1", 40, generation, "digest2", &basis()),
+            Err(DeliveryError::ConflictingResult)
+        );
+        assert_eq!(state.acknowledgement_count(), 1);
+        assert_eq!(state.result_count(), 1);
+        assert_eq!(state.request_count(), 1);
+    }
+
+    #[test]
+    fn revoked_and_recovery_held_requests_never_accept_late_result() {
+        let mut state = SimulatedReplay::new(basis()).unwrap();
+        state.enroll_test_principal(1, 1).unwrap();
+        let first = state.poll(1, 1, &poll("first", 10, &[10]), &basis()).unwrap();
+        state
+            .acknowledge(1, 1, "first", 10, first.assignment_generation, &basis())
+            .unwrap();
+        state.revoke_test_principal(1).unwrap();
+        assert_eq!(
+            state.submit_result(1, 1, "first", 10, first.assignment_generation, "digest", &basis()),
+            Err(DeliveryError::RevokedPrincipal)
+        );
+        state.enroll_test_principal(1, 2).unwrap();
+        assert_eq!(
+            state.submit_result(1, 1, "first", 10, first.assignment_generation, "digest", &basis()),
+            Err(DeliveryError::StalePrincipal)
+        );
+        let second = state.poll(1, 2, &poll("second", 20, &[20]), &basis()).unwrap();
+        state
+            .acknowledge(1, 2, "second", 20, second.assignment_generation, &basis())
+            .unwrap();
+        state.require_recovery(20).unwrap();
+        assert_eq!(
+            state.submit_result(1, 2, "second", 20, second.assignment_generation, "digest", &basis()),
+            Err(DeliveryError::RecoveryRequired)
+        );
+        assert_eq!(state.acknowledgement_count(), 2);
+        assert_eq!(state.result_count(), 0);
+        assert_eq!(state.reservation_count(), 2);
+    }
+
+    #[test]
+    fn result_controls_reject_wrong_assignment_stale_basis_and_malformed_digest() {
+        let mut state = SimulatedReplay::new(basis()).unwrap();
+        state.enroll_test_principal(1, 1).unwrap();
+        let receipt = state.poll(1, 1, &poll("result", 12, &[7]), &basis()).unwrap();
+        let generation = receipt.assignment_generation;
+        let mut moved = basis();
+        moved.generation += 1;
+        assert_eq!(
+            state.acknowledge(1, 1, "result", 12, generation, &moved),
+            Err(DeliveryError::StaleBasis)
+        );
+        assert_eq!(
+            state.acknowledge(1, 1, "result", 13, generation, &basis()),
+            Err(DeliveryError::AssignmentMismatch)
+        );
+        state.acknowledge(1, 1, "result", 12, generation, &basis()).unwrap();
+        for digest in ["", "bad digest", "bad\nvalue"] {
+            assert_eq!(
+                state.submit_result(1, 1, "result", 12, generation, digest, &basis()),
+                Err(DeliveryError::InvalidDigest)
+            );
+        }
+        assert_eq!(
+            state.submit_result(1, 1, "result", 13, generation, "valid", &basis()),
+            Err(DeliveryError::AssignmentMismatch)
+        );
+        assert_eq!(
+            state.submit_result(1, 1, "result", 12, generation, "valid", &moved),
+            Err(DeliveryError::StaleBasis)
+        );
+        assert_eq!(state.result_count(), 0);
+        assert_eq!(state.acknowledgement_count(), 1);
+    }
+
 }
