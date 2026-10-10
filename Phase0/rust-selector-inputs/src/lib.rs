@@ -23,6 +23,7 @@ pub struct Source {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Rank {
     pub model: String,
+    pub model_incarnation: String,
     pub source: String,
     pub source_incarnation: String,
     pub source_generation: u64,
@@ -154,6 +155,7 @@ fn basis(s: &Snapshot) -> String {
     for r in ranks {
         field(&mut out, "rank");
         field(&mut out, &r.model);
+        field(&mut out, &r.model_incarnation);
         field(&mut out, &r.source);
         field(&mut out, &r.source_incarnation);
         field(&mut out, &r.source_generation.to_string());
@@ -183,10 +185,12 @@ pub fn evaluate(s: &Snapshot) -> Result<Selection, Denial> {
         return Err(Denial::Incomplete);
     }
     let mut models = BTreeSet::new();
+    let mut model_incarnations = BTreeMap::new();
     for m in &s.models {
         if !atom(&m.id) || !atom(&m.incarnation) || !models.insert(m.id.as_str()) {
             return Err(Denial::Malformed);
         }
+        model_incarnations.insert(m.id.as_str(), m.incarnation.as_str());
     }
     let mut sources = BTreeMap::new();
     for source in &s.sources {
@@ -230,7 +234,10 @@ pub fn evaluate(s: &Snapshot) -> Result<Selection, Denial> {
     }
     let mut ranks = BTreeMap::new();
     for r in &s.ranks {
-        if !models.contains(r.model.as_str())
+        let Some(&model_incarnation) = model_incarnations.get(r.model.as_str()) else {
+            return Err(Denial::Malformed);
+        };
+        if r.model_incarnation != model_incarnation
             || r.score < 0
             || r.score > 10_000
             || r.unit != "basis-points"

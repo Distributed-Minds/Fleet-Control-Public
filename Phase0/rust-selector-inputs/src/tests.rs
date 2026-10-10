@@ -34,10 +34,11 @@ fn fixture() -> Snapshot {
         ranks: ["registry-a", "registry-b"]
             .iter()
             .flat_map(|name| {
-                [("conservative", 100), ("optimistic", 900)]
+                [("conservative", "m1", 100), ("optimistic", "m2", 900)]
                     .into_iter()
-                    .map(move |(model, score)| Rank {
+                    .map(move |(model, model_incarnation, score)| Rank {
                         model: model.into(),
+                        model_incarnation: model_incarnation.into(),
                         source: (*name).into(),
                         source_incarnation: format!("{name}-1"),
                         source_generation: 7,
@@ -64,6 +65,7 @@ fn s6_01_unregistered_favorable_evidence_does_not_select() {
     let mut s = fixture();
     s.ranks.push(Rank {
         model: "optimistic".into(),
+        model_incarnation: "m2".into(),
         source: "attacker".into(),
         source_incarnation: "fake".into(),
         source_generation: 1,
@@ -253,4 +255,31 @@ fn unknown_policy_or_schema_and_zero_operation_not_accepted() {
     assert_eq!(evaluate(&s), Err(Denial::Incomplete));
     let s = fixture();
     assert_eq!(Journal::default().submit(0, &s, &s), Err(Denial::Malformed));
+}
+
+#[test]
+fn stale_candidate_incarnation_cannot_reuse_prior_rank_evidence() {
+    let baseline = evaluate(&fixture()).unwrap();
+    let mut s = fixture();
+    s.models[1].incarnation = "m3".into();
+    assert_eq!(evaluate(&s), Err(Denial::Incomplete));
+
+    for rank in &mut s.ranks {
+        if rank.model == "optimistic" {
+            rank.model_incarnation = "m3".into();
+        }
+    }
+    let refreshed = evaluate(&s).unwrap();
+    assert_eq!(refreshed.model, baseline.model);
+    assert_eq!(refreshed.score, baseline.score);
+    assert_ne!(refreshed.semantic_basis, baseline.semantic_basis);
+    assert!(!refreshed.confidence_gain);
+}
+
+#[test]
+fn forged_rank_model_incarnation_is_denied_without_state_change() {
+    let mut s = fixture();
+    s.ranks[0].model_incarnation = "m2".into();
+    assert_eq!(evaluate(&s), Err(Denial::Incomplete));
+    assert_eq!(evaluate(&fixture()).unwrap().model, "conservative");
 }
