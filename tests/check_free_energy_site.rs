@@ -168,7 +168,10 @@ fn attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
 /// descendants appear in this lexical source scanner but are not reliable
 /// rendered page content. They cannot satisfy Contact/navigation/card checks.
 fn disallowed_site_elements(elements: &[&str]) -> Vec<&'static str> {
-    ["script", "iframe", "form", "object", "embed", "template", "noscript"]
+    [
+        "script", "iframe", "form", "object", "embed", "template", "noscript",
+        "textarea", "xmp", "plaintext", "noembed", "noframes",
+    ]
         .into_iter()
         .filter(|name| elements.iter().any(|tag| is_open_element(tag, name)))
         .collect()
