@@ -336,7 +336,19 @@ fn validate(fixture: &Fixture) -> Result<usize, String> {
 }
 
 fn main() {
-    let args: Vec<String> = env::args().skip(1).collect();
+    // OS argument bytes are untrusted. env::args() panics on non-UTF-8 Unix argv.
+    // Reject them before selecting a fixture or writing canonical bytes.
+    let args: Vec<String> = match env::args_os()
+        .skip(1)
+        .map(|arg| arg.into_string().map_err(|_| "non-UTF-8 CLI argument"))
+        .collect::<Result<Vec<_>, _>>()
+    {
+        Ok(args) => args,
+        Err(reason) => {
+            eprintln!("FAIL: {reason}");
+            process::exit(2);
+        }
+    };
     let emit_canonical = args.first().is_some_and(|arg| arg == "--emit-canonical");
     if (emit_canonical && !(2..=3).contains(&args.len())) || (!emit_canonical && args.len() > 1) {
         eprintln!("usage: integration_candidate [fixture-path]");
