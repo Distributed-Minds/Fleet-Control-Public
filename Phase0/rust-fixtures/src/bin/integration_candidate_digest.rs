@@ -372,16 +372,13 @@ fn admit_fixture_shell(root: &Value) -> Result<(), String> {
     Ok(())
 }
 
-
 /* A digest receipt is not a semantic verdict, but it must not launder a
  * contradictory historical fixture as a valid identity witness. The structural
  * integration_candidate oracle remains the authoritative independent check;
  * this preflight fails closed on mismatched declared outcomes before any digest
  * is returned or written to stdout. */
 fn validate_fixture_outcomes(root: &Value) -> Result<(), String> {
-    let cases = root["cases"]
-        .as_array()
-        .ok_or("missing candidate cases")?;
+    let cases = root["cases"].as_array().ok_or("missing candidate cases")?;
     let normal = cases
         .iter()
         .find(|case| case["name"] == "normal-two-parent")
@@ -444,7 +441,9 @@ fn validate_fixture_outcomes(root: &Value) -> Result<(), String> {
         .as_array()
         .ok_or("missing stale-head cases")?
     {
-        let name = case["name"].as_str().ok_or("missing stale-head case name")?;
+        let name = case["name"]
+            .as_str()
+            .ok_or("missing stale-head case name")?;
         let current = case["predicted_target"] == case["live_target"]
             && case["predicted_source"] == case["live_source"];
         let actual = if current {
@@ -909,7 +908,6 @@ mod tests {
         assert!(candidate_ids(&input).is_err());
     }
 
-
     #[test]
     fn digest_receipts_reject_contradictory_semantic_witnesses() {
         let original: Value = serde_json::from_str(HISTORICAL).unwrap();
@@ -923,8 +921,7 @@ mod tests {
         scenarios.push(("forged normal verdict", forged_expectation));
 
         let mut unsupported_now_supported = original.clone();
-        unsupported_now_supported["cases"][2]["constructor_support"] =
-            serde_json::json!([1, 2, 3]);
+        unsupported_now_supported["cases"][2]["constructor_support"] = serde_json::json!([1, 2, 3]);
         scenarios.push(("contradictory cardinality", unsupported_now_supported));
 
         let mut forged_reversal = original.clone();
