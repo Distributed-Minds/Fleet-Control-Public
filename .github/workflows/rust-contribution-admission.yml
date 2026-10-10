@@ -1,0 +1,42 @@
+name: Rust contribution admission synthetic model
+
+on:
+  pull_request:
+    paths:
+      - "Phase0/rust-contribution-admission/**"
+      - ".github/workflows/rust-contribution-admission.yml"
+  push:
+    branches:
+      - "phase0/public-v0"
+    paths:
+      - "Phase0/rust-contribution-admission/**"
+      - ".github/workflows/rust-contribution-admission.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-rust-model:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git-only exact-SHA checkout (no npm actions)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          git fetch --depth=1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - name: Install pinned Rust toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.85.1 --profile minimal --component rustfmt --component clippy
+      - name: Offline locked format tests and strict Clippy
+        shell: bash
+        working-directory: Phase0/rust-contribution-admission
+        run: |
+          set -euo pipefail
+          cargo +1.85.1 fmt --all --check
+          cargo +1.85.1 test --locked --offline
+          cargo +1.85.1 clippy --all-targets --locked --offline -- -D warnings
