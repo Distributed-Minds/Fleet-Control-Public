@@ -55,6 +55,7 @@ pub enum Denial {
     NoUniqueWinner,
     EffectTimeDrift,
     ConflictingReplay,
+    CapacityExceeded,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -300,6 +301,9 @@ pub fn evaluate(s: &Snapshot) -> Result<Selection, Denial> {
 }
 
 /// One-process journal, NOT an atomic persistent provider effects service.
+/// Fixed bounded capacity: existing operation receipts are never evicted to
+/// admit new operations, and exact known-operation reconciliation remains valid.
+pub const MAX_SYNTHETIC_JOURNAL_RECORDS: usize = 1024;
 #[derive(Default)]
 pub struct Journal {
     records: BTreeMap<u64, (String, Selection)>,
@@ -314,6 +318,13 @@ impl Journal {
     ) -> Result<Outcome, Denial> {
         if operation == 0 {
             return Err(Denial::Malformed);
+        }
+        // Check admission before creating another record. A full journal may
+        // still reconcile or reject a conflicting replay of an existing ID.
+        if !self.records.contains_key(&operation)
+            && self.records.len() >= MAX_SYNTHETIC_JOURNAL_RECORDS
+        {
+            return Err(Denial::CapacityExceeded);
         }
         let decision = evaluate(original)?;
         if let Some((identity, saved)) = self.records.get(&operation) {
