@@ -84,7 +84,12 @@ pub enum ContinuationDenial {
     InvalidSuccessorCut,
     EffectTimeDrift,
     UnprovedSuccessorTransition,
+    CapacityExhausted,
 }
+
+/// Bound synthetic continuation receipts without evicting previously committed
+/// operation/step identities; a full model still reconciles existing receipts.
+pub const MAX_SIMULATED_CONTINUATION_RECEIPTS: usize = 1024;
 
 /// In-memory, single-threaded fixture ledger. No crash persistence, concurrent
 /// transaction, scheduler service, domain-policy authorization or provider API.
@@ -253,6 +258,10 @@ impl ContinuationSimulation {
                 effect.clone()
             }
         };
+
+        if self.continuations.len() >= MAX_SIMULATED_CONTINUATION_RECEIPTS {
+            return Err(ContinuationDenial::CapacityExhausted);
+        }
 
         let receipt = ContinuationReceipt {
             start_operation: attempt.start_operation,
@@ -492,5 +501,53 @@ mod tests {
             Err(ContinuationDenial::UnexpectedSuccessor)
         );
         assert_eq!(book.emitted_continuations(), 1);
+    }
+
+    #[test]
+    fn continuation_capacity_denies_new_steps_without_erasing_replay_evidence() {
+        let mut book = ContinuationSimulation::default();
+        book.start(
+            &start(),
+            ContinuationPolicy::BoundedCurrentRun {
+                max_steps: MAX_SIMULATED_CONTINUATION_RECEIPTS as u32 + 1,
+            },
+        )
+        .unwrap();
+
+        for step in 1..=(MAX_SIMULATED_CONTINUATION_RECEIPTS as u32) {
+            let candidate = continuation(81 + u64::from(step), step);
+            assert!(matches!(
+                book.continue_run(&candidate),
+                Ok(ContinuationOutcome::Committed(_))
+            ));
+        }
+
+        let beyond = continuation(
+            82 + MAX_SIMULATED_CONTINUATION_RECEIPTS as u64,
+            MAX_SIMULATED_CONTINUATION_RECEIPTS as u32 + 1,
+        );
+        assert_eq!(
+            book.continue_run(&beyond),
+            Err(ContinuationDenial::CapacityExhausted)
+        );
+        assert_eq!(
+            book.continue_run(&beyond),
+            Err(ContinuationDenial::CapacityExhausted)
+        );
+        assert!(matches!(
+            book.continue_run(&continuation(82, 1)),
+            Ok(ContinuationOutcome::Reconciled(_))
+        ));
+        let mut changed = continuation(82, 1);
+        changed.trusted_fence = false;
+        assert_eq!(
+            book.continue_run(&changed),
+            Err(ContinuationDenial::ExistingOperationDifferentIntent)
+        );
+        assert_eq!(
+            book.emitted_continuations(),
+            MAX_SIMULATED_CONTINUATION_RECEIPTS
+        );
+        assert_eq!(book.emitted_starts(), 1);
     }
 }
