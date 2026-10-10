@@ -44,7 +44,10 @@ mod unix_process_tests {
         fs::copy(REAL_SIBLING, &sibling).expect("copy real compiled sibling");
 
         let positive = run(&runner, &repository_root());
-        assert!(positive.status.success(), "direct sibling failed: {positive:?}");
+        assert!(
+            positive.status.success(),
+            "direct sibling failed: {positive:?}"
+        );
         assert_eq!(positive.stdout, b"PASS containment_capacity\n");
         assert!(positive.stderr.is_empty(), "{positive:?}");
 
@@ -59,17 +62,24 @@ mod unix_process_tests {
         permissions.set_mode(0o755);
         fs::set_permissions(&fake, permissions).expect("make counterfeit executable");
         symlink(&fake, &sibling).expect("substitute symlinked sibling");
-        assert!(sibling.is_file(), "legacy is_file() follows the fake symlink");
         assert!(
-            fs::symlink_metadata(&sibling)
-                .expect("symlink metadata")
-                .file_type()
-                .is_symlink()
+            sibling.is_file(),
+            "legacy is_file() follows the fake symlink"
         );
+        assert!(fs::symlink_metadata(&sibling)
+            .expect("symlink metadata")
+            .file_type()
+            .is_symlink());
 
         let negative = run(&runner, &repository_root());
-        assert!(!negative.status.success(), "symlink was admitted: {negative:?}");
-        assert!(negative.stdout.is_empty(), "false aggregate PASS: {negative:?}");
+        assert!(
+            !negative.status.success(),
+            "symlink was admitted: {negative:?}"
+        );
+        assert!(
+            negative.stdout.is_empty(),
+            "false aggregate PASS: {negative:?}"
+        );
         let stderr = String::from_utf8(negative.stderr).expect("UTF-8 diagnostic");
         assert!(
             stderr.contains("compiled sibling executable is missing, nonregular or symlinked"),
