@@ -69,6 +69,21 @@ impl SimulatedReplay {
         })
     }
 
+    // Principal-generation movement cannot silently keep older assignments
+    // active. A recovery hold preserves both the immutable receipts and scopes.
+    fn hold_principal_reservations(&mut self, principal_id: u64) -> Result<(), ReplayError> {
+        let task_ids: BTreeSet<u64> = self
+            .requests
+            .iter()
+            .filter(|((id, _, _), _)| *id == principal_id)
+            .map(|(_, record)| record.task_id)
+            .collect();
+        for task_id in task_ids {
+            self.book.require_recovery(task_id)?;
+        }
+        Ok(())
+    }
+
     /// Only a privileged fake test fixture can enroll a principal. Generation
     /// reuse or rollback cannot resurrect previously revoked test identities.
     pub fn enroll_test_principal(
@@ -83,6 +98,9 @@ impl SimulatedReplay {
             if generation <= existing.generation {
                 return Err(ReplayError::StalePrincipal);
             }
+            // Rotating directly to a newer generation must fence old leases
+            // even when a separate revoke event was never observed.
+            self.hold_principal_reservations(principal_id)?;
         }
         self.principals.insert(
             principal_id,
@@ -102,16 +120,7 @@ impl SimulatedReplay {
             .get_mut(&principal_id)
             .ok_or(ReplayError::InvalidPrincipal)?;
         principal.active = false;
-        let task_ids: Vec<u64> = self
-            .requests
-            .iter()
-            .filter(|((id, _, _), _)| *id == principal_id)
-            .map(|(_, record)| record.task_id)
-            .collect();
-        for task_id in task_ids {
-            self.book.require_recovery(task_id)?;
-        }
-        Ok(())
+        self.hold_principal_reservations(principal_id)
     }
 
     /// Treat the supplied principal as a fixture-authenticated identity.
@@ -315,6 +324,46 @@ mod tests {
             }))
         );
         state.poll(1, 2, &poll("same", 12, &[2]), &basis()).unwrap();
+    }
+
+    #[test]
+    fn direct_generation_rotation_fences_old_leases_without_harming_other_principals() {
+        let mut state = SimulatedReplay::new(basis()).unwrap();
+        state.enroll_test_principal(1, 1).unwrap();
+        state.enroll_test_principal(2, 1).unwrap();
+        let old_request = poll("old", 11, &[10]);
+        state.poll(1, 1, &old_request, &basis()).unwrap();
+        let other_request = poll("other", 21, &[20]);
+        let other_receipt = state.poll(2, 1, &other_request, &basis()).unwrap();
+
+        // No explicit revoke: the new identity generation must still fence
+        // every old assignment and preserve its immutable replay history.
+        state.enroll_test_principal(1, 2).unwrap();
+        assert_eq!(
+            state.book.reservation(11).unwrap().state,
+            SimulationState::RecoveryRequired
+        );
+        assert_eq!(
+            state.book.reservation(21).unwrap().state,
+            SimulationState::Active
+        );
+        assert_eq!(state.request_count(), 2);
+        assert_eq!(
+            state.poll(1, 1, &old_request, &basis()),
+            Err(ReplayError::StalePrincipal)
+        );
+        assert_eq!(
+            state.poll(1, 2, &poll("new", 12, &[10]), &basis()),
+            Err(ReplayError::Scope(AdmissionError::Collision {
+                held_by_task: 11
+            }))
+        );
+        assert_eq!(
+            state.poll(2, 1, &other_request, &basis()),
+            Ok(other_receipt)
+        );
+        state.poll(1, 2, &poll("new", 12, &[30]), &basis()).unwrap();
+        assert_eq!(state.reservation_count(), 3);
     }
 
     #[test]
