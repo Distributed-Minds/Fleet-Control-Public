@@ -1,0 +1,29 @@
+name: Rust issue17 dissent budget synthetic model
+on:
+  push:
+    branches:
+      - 'feat/17-offline-dissent-budget-*'
+  pull_request:
+    branches:
+      - 'phase0/public-v0'
+permissions:
+  contents: read
+jobs:
+  model:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.ref == 'feat/17-offline-dissent-budget-20261010-r8c5'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Toolchain provenance
+        run: rustc --version && cargo --version
+      - name: Deterministic offline tests
+        run: cargo test --manifest-path Phase0/rust-dissent-budget/Cargo.toml --locked --offline
+      - name: Rustfmt verification
+        if: always()
+        run: cargo fmt --manifest-path Phase0/rust-dissent-budget/Cargo.toml --all -- --check
+      - name: Strict Clippy
+        if: always()
+        run: cargo clippy --manifest-path Phase0/rust-dissent-budget/Cargo.toml --all-targets --locked --offline -- -D warnings
