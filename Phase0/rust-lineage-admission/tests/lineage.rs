@@ -179,7 +179,6 @@ fn old_head_restore_or_issuer_denial_does_not_advance() {
     assert_eq!(db.admit(&current, second), Err(Denied::ReplayConflict));
 }
 
-
 #[test]
 fn invalid_registry_scopes_cannot_admit_a_successor() {
     for field in 0..7 {
@@ -220,10 +219,7 @@ fn blank_registry_head_or_obligation_denies_even_selected_issuer() {
             2,
             selected.obligations.clone(),
         );
-        assert_eq!(
-            db.admit(&selected, transition),
-            Err(Denied::UnknownLineage)
-        );
+        assert_eq!(db.admit(&selected, transition), Err(Denied::UnknownLineage));
     }
 
     let (_, mut selected, transition) = fixture();
@@ -235,10 +231,7 @@ fn blank_registry_head_or_obligation_denies_even_selected_issuer() {
         2,
         selected.obligations.clone(),
     );
-    assert_eq!(
-        db.admit(&selected, transition),
-        Err(Denied::UnknownLineage)
-    );
+    assert_eq!(db.admit(&selected, transition), Err(Denied::UnknownLineage));
 }
 
 #[test]
