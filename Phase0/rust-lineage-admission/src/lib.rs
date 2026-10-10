@@ -10,6 +10,10 @@ const MAX_SYNTHETIC_ID_BYTES: usize = 256;
 /// receipts are retained for exact replay; this is not a production quota.
 pub const MAX_SYNTHETIC_LINEAGE_RECEIPTS: usize = 1024;
 
+/// Bound per-receipt copies of inherited obligations in this synthetic model.
+/// This is a conservative fixture guard, not a provider quota or cleanup rule.
+pub const MAX_SYNTHETIC_LINEAGE_OBLIGATIONS: usize = 64;
+
 fn valid_identity(value: &str) -> bool {
     // Offline machine-token identities, not human-facing names. Bounded ASCII
     // syntax rejects invisible/bidi Unicode and whitespace-padded aliases.
@@ -135,6 +139,11 @@ impl Registry {
     }
 
     fn selection_ok(&self, s: &Selection) -> Result<(), Denied> {
+        if self.obligations.len() > MAX_SYNTHETIC_LINEAGE_OBLIGATIONS
+            || s.obligations.len() > MAX_SYNTHETIC_LINEAGE_OBLIGATIONS
+        {
+            return Err(Denied::CapacityExhausted);
+        }
         if !self.scope.is_valid()
             || !valid_identity(&self.head)
             || self.obligations.iter().any(|id| !valid_identity(id))
