@@ -365,25 +365,25 @@ fn unresolved_obligations_require_recovery_even_if_caller_waives_flag() {
 
     // Recovery evidence is still only synthetic input to this model.
     effect.recovery_authorized = true;
-    assert_eq!(db.effect(&receipt, &effect), Ok(Eligibility::SimulationOnly));
+    assert_eq!(
+        db.effect(&receipt, &effect),
+        Ok(Eligibility::SimulationOnly)
+    );
 }
 
 #[test]
 fn empty_obligations_preserve_nonrecovery_effect_and_explicit_hold() {
     let (_, mut selected, transition) = fixture();
     selected.obligations.clear();
-    let mut db = Registry::new(
-        selected.scope.clone(),
-        "h0".into(),
-        0,
-        2,
-        BTreeSet::new(),
-    );
+    let mut db = Registry::new(selected.scope.clone(), "h0".into(), 0, 2, BTreeSet::new());
     let receipt = db.admit(&selected, transition).unwrap();
     let mut effect = request(&selected, &receipt);
     effect.recovery_required = false;
     effect.recovery_authorized = false;
-    assert_eq!(db.effect(&receipt, &effect), Ok(Eligibility::SimulationOnly));
+    assert_eq!(
+        db.effect(&receipt, &effect),
+        Ok(Eligibility::SimulationOnly)
+    );
 
     effect.recovery_required = true;
     assert_eq!(db.effect(&receipt, &effect), Err(Denied::RecoveryHold));
