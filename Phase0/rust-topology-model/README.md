@@ -7,7 +7,8 @@ registry, choose trusted topology, claim package ownership or append AGENT_STATE
 
 Its typed reducer explores:
 - immutable synthetic topology/currentness evidence and duplicate/count rejection;
-- historical role/phase consistency, explicit incompatible migration, and
+- historical role/phase consistency using an explicit state-machine version
+  independent of topology generation, explicit incompatible migration, and
   independently claimed compatible-builder continuation;
 - permanent planner and adversarial-predictor coverage for fleets of 3+;
 - two-NOOP builder bootstrapping, two-agent analytic rotation and FREE loops;

@@ -1,12 +1,13 @@
 use free_energy_topology_model::{
     predict, BasisDisposition, BuildResult, Candidate, CounterProof, Evidence, Input, Lineage,
-    Mode, Phase, Prior, Rejection, ResultClass, State, Topology,
+    Mode, Phase, Prior, Rejection, ResultClass, State, StateMachine, Topology,
 };
 
 fn topology(principals: &[&str], id: &str, generation: u32) -> Topology {
     Topology {
         id: id.into(),
         generation,
+        state_machine: StateMachine::PermanentPredictorV2,
         principals: principals.iter().map(|v| (*v).into()).collect(),
         declared_size: principals.len(),
         evidence: Evidence::SyntheticCoherent,
@@ -36,6 +37,7 @@ fn previous(
         generation,
         size,
         index,
+        source_machine: StateMachine::PermanentPredictorV2,
         state,
         counter: Some(CounterProof {
             basis: basis.into(),
@@ -191,7 +193,8 @@ fn prior_permanent_planner_reordered_to_builder_resets_bootstrap() {
 #[test]
 fn prior_permanent_adversary_reordered_to_builder_resets_bootstrap() {
     let new = topology(&["A1", "A3", "A2"], "v2", 2);
-    let old = previous("A2", "v1", 1, 3, 2, state(Mode::Audit, Phase::Analytic, 1));
+    let mut old = previous("A2", "v1", 1, 3, 2, state(Mode::Audit, Phase::Analytic, 1));
+    old.source_machine = StateMachine::RotatingAnalystV1;
     let result = check(
         &new,
         "A2",
@@ -258,7 +261,7 @@ fn shrinking_to_one_or_two_normalizes_current_role() {
 #[test]
 fn old_rotating_predictor_streak_does_not_count_as_new_second_noop() {
     let top = topology(&["A", "B", "C"], "new", 2);
-    let old = previous(
+    let mut old = previous(
         "B",
         "old",
         1,
@@ -266,6 +269,7 @@ fn old_rotating_predictor_streak_does_not_count_as_new_second_noop() {
         2,
         state(Mode::Predict, Phase::Analytic, 1),
     );
+    old.source_machine = StateMachine::RotatingAnalystV1;
     let c = check(
         &top,
         "B",
@@ -374,7 +378,8 @@ fn torn_forked_revoked_and_unadmitted_topologies_fail_closed() {
 #[test]
 fn missing_or_unproved_source_lineage_cannot_be_fresh_enrollment() {
     let top = topology(&["A", "B", "C"], "v2", 2);
-    let p = previous("B", "v1", 1, 3, 2, state(Mode::Audit, Phase::Analytic, 0));
+    let mut p = previous("B", "v1", 1, 3, 2, state(Mode::Audit, Phase::Analytic, 0));
+    p.source_machine = StateMachine::RotatingAnalystV1;
     assert_eq!(
         check(
             &top,
@@ -532,4 +537,60 @@ fn even_positive_predictions_never_grant_provider_append() {
         .unwrap();
         assert!(!result.provider_append_authorized);
     }
+}
+
+#[test]
+fn historical_machine_semantics_do_not_follow_topology_generation() {
+    let top = topology(&["A", "B", "C"], "new", 13);
+    let mut legacy = previous("B", "old", 12, 3, 2, state(Mode::Audit, Phase::Analytic, 1));
+    legacy.source_machine = StateMachine::RotatingAnalystV1;
+    let migrated = check(
+        &top,
+        "B",
+        Some(legacy),
+        Lineage::SyntheticIncompatible {
+            from: "old".into(),
+            to: "new".into(),
+        },
+        ResultClass::Noop,
+    )
+    .expect("rotating history remains valid at topology generation 12");
+    assert_eq!(migrated.basis, BasisDisposition::IncompatibleReset);
+    assert_eq!(migrated.state, state(Mode::Predict, Phase::Analytic, 1));
+
+    let top = topology(&["A", "B", "C"], "corrected", 1);
+    let invalid = previous("B", "old", 1, 3, 2, state(Mode::Audit, Phase::Analytic, 0));
+    assert_eq!(
+        check(
+            &top,
+            "B",
+            Some(invalid),
+            Lineage::SyntheticIncompatible {
+                from: "old".into(),
+                to: "corrected".into(),
+            },
+            ResultClass::Observe,
+        )
+        .unwrap_err(),
+        Rejection::InvalidHistory,
+        "corrected history rejects a rotating-mode record even at generation 1"
+    );
+}
+
+#[test]
+fn same_basis_cannot_reinterpret_legacy_machine_or_old_current_machine() {
+    let mut top = topology(&["A", "B", "C"], "basis", 12);
+    let mut prior = previous("B", "basis", 12, 3, 2, state(Mode::Predict, Phase::Analytic, 1));
+    prior.source_machine = StateMachine::RotatingAnalystV1;
+    assert_eq!(
+        check(&top, "B", Some(prior), Lineage::SameBasis, ResultClass::Noop).unwrap_err(),
+        Rejection::UnprovenLineage
+    );
+
+    top.state_machine = StateMachine::RotatingAnalystV1;
+    assert_eq!(
+        check(&top, "B", None, Lineage::FirstEnrollment, ResultClass::Observe).unwrap_err(),
+        Rejection::TopologyUnknown,
+        "corrected-topology model cannot claim obsolete current semantics"
+    );
 }

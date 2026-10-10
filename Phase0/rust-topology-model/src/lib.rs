@@ -49,10 +49,19 @@ pub enum Evidence {
     Revoked,
 }
 
+/// Historical transition semantics never follow topology generation.
+/// This synthetic label is not trusted evidence of a real state-machine version.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StateMachine {
+    RotatingAnalystV1,
+    PermanentPredictorV2,
+}
+
 #[derive(Clone, Debug)]
 pub struct Topology {
     pub id: String,
     pub generation: u32,
+    pub state_machine: StateMachine,
     pub principals: Vec<String>,
     pub declared_size: usize,
     pub evidence: Evidence,
@@ -65,6 +74,7 @@ pub struct Prior {
     pub generation: u32,
     pub size: usize,
     pub index: usize,
+    pub source_machine: StateMachine,
     pub state: State,
     /// The fixture's synthetic immediate-predecessor/counter evidence.
     pub counter: Option<CounterProof>,
@@ -145,6 +155,7 @@ fn member_index(top: &Topology, principal: &str) -> Result<usize, Rejection> {
     if top.evidence != Evidence::SyntheticCoherent
         || top.id.is_empty()
         || top.generation == 0
+        || top.state_machine != StateMachine::PermanentPredictorV2
         || top.principals.is_empty()
         || top.principals.len() != top.declared_size
         || top.principals.iter().any(|p| p.is_empty())
@@ -177,10 +188,11 @@ fn valid_historical_state(p: &Prior) -> bool {
             if p.size >= 3 && p.index == 1 {
                 p.state.mode == Mode::Plan
             } else if p.size >= 3 && p.index == 2 {
-                if p.generation >= 2 {
-                    p.state.mode == Mode::Predict
-                } else {
-                    matches!(p.state.mode, Mode::Plan | Mode::Predict | Mode::Audit)
+                match p.source_machine {
+                    StateMachine::PermanentPredictorV2 => p.state.mode == Mode::Predict,
+                    StateMachine::RotatingAnalystV1 => {
+                        matches!(p.state.mode, Mode::Plan | Mode::Predict | Mode::Audit)
+                    }
                 }
             } else {
                 p.size == 2
@@ -345,6 +357,7 @@ pub fn predict(input: &Input) -> Result<Candidate, Rejection> {
             match lineage {
                 Lineage::SameBasis => {
                     if p.source_basis != input.topology.id
+                        || p.source_machine != input.topology.state_machine
                         || p.generation != input.topology.generation
                         || p.size != input.topology.declared_size
                         || p.index != index
