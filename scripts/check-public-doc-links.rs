@@ -416,6 +416,23 @@ fn collect_links(markdown: &str, document: &str, report: &mut Report) -> Vec<Str
 // Reject syntactically active reference definitions explicitly instead of
 // silently treating their destinations as unchecked prose. This is an admission
 // scanner; ordinary inline destinations retain the existing parsing path.
+// CommonMark bare destinations require balanced *unescaped* parentheses.
+fn reference_destination_parens_balanced(path: &str) -> bool {
+    let mut depth = 0usize;
+    for (index, byte) in path.bytes().enumerate() {
+        if preceded_by_escape(path.as_bytes(), index) {
+            continue;
+        }
+        match byte {
+            b'(' => depth += 1,
+            b')' if depth > 0 => depth -= 1,
+            b')' => return false,
+            _ => {}
+        }
+    }
+    depth == 0
+}
+
 fn reference_definition_syntax(line: &str, continuation: Option<&str>) -> bool {
     let bytes = line.as_bytes();
     if bytes.first() != Some(&b'[') {
@@ -471,7 +488,9 @@ fn reference_definition_syntax(line: &str, continuation: Option<&str>) -> bool {
         }
         (first, &value[end..])
     };
-    if destination.contains('\0') {
+    if destination.contains('\0')
+        || (!value.starts_with('<') && !reference_destination_parens_balanced(destination))
+    {
         return false;
     }
     let extra = rest.trim();
@@ -590,6 +609,17 @@ fn collect_reference_definitions(markdown: &str, document: &str, report: &mut Re
         if content.starts_with('#') && content.trim_start_matches('#').starts_with(' ') {
             paragraph = false;
             continue; // ATX heading ends rather than extends a paragraph
+        }
+
+        // Setext headings and thematic breaks end the preceding paragraph.
+        // A following definition can therefore start a new block.
+        let underline = content.trim();
+        if !underline.is_empty()
+            && underline.chars().all(|ch| ch == '-' || ch == '=')
+            && (underline.starts_with('=') || underline.len() >= 3 || paragraph)
+        {
+            paragraph = false;
+            continue;
         }
 
         let continuation = lines.peek().copied().map(str::trim_end);
@@ -1517,6 +1547,33 @@ mod tests {
             assert_eq!(report.errors.iter().any(|error|
                 error.contains("unsupported reference definition")), active,
                 "markdown {markdown:?}: {report:?}");
+        }
+    }
+
+    // Independently checked against Markdown-it and Pandoc CommonMark parsers.
+    #[test]
+    fn reference_definition_bare_path_and_setext_oracle() {
+        let cases: [(&str, bool); 8] = [
+            ("[id]: a(b\n", false),
+            ("[id]: a)b\n", false),
+            ("[id]: a(b).md\n", true),
+            ("[id]: a\\(b\n", true),
+            ("Text\n---\n[id]: target.md\n", true),
+            ("Text\n===\n[id]: target.md\n", true),
+            ("Text\n[id]: target.md\n", false),
+            ("<div>\n[id]: target.md\n</div>\n", false),
+        ];
+        for (i, (markdown, active)) in cases.iter().enumerate() {
+            for eol in ["\n", "\r\n"] {
+                let sandbox = Sandbox::new();
+                sandbox.write("README.md", &markdown.replace('\n', eol));
+                let report = sandbox.scan();
+                assert_eq!(
+                    report.errors.iter().any(|e| e.contains("unsupported reference definition")),
+                    *active,
+                    "new reference case {i}, EOL {eol:?}: {report:?}"
+                );
+            }
         }
     }
 
