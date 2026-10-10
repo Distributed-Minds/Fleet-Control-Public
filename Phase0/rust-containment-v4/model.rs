@@ -73,11 +73,10 @@ impl Frontier {
     }
 
     /// Correlated reports sharing a lineage never become independent votes.
+    /// Reject malformed snapshots even when queried without prior normalization.
     pub fn adverse_lineages(&self) -> Result<usize, Error> {
-        if !self.complete {
-            return Err(Error::IncompleteEvidence);
-        }
-        Ok(self
+        let canonical = self.clone().normalize()?;
+        Ok(canonical
             .observations
             .iter()
             .filter(|o| o.interpretation == Interpretation::Incriminating)
