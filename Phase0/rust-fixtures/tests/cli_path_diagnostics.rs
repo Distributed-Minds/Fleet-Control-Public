@@ -79,14 +79,19 @@ fn bounded_history_cli_does_not_echo_malicious_filename_bytes() {
         .arg(&crafted)
         .output()
         .expect("execute compiled history fixture oracle");
-    assert!(!output.status.success(), "missing fixture unexpectedly passed");
+    assert!(
+        !output.status.success(),
+        "missing fixture unexpectedly passed"
+    );
     assert!(output.stdout.is_empty(), "rejected fixture emitted stdout");
     let stderr = String::from_utf8(output.stderr).expect("UTF-8 Rust diagnostic");
-    assert_eq!(stderr.lines().count(), 1, "forged diagnostic line: {stderr:?}");
+    assert_eq!(
+        stderr.lines().count(),
+        1,
+        "forged diagnostic line: {stderr:?}"
+    );
     assert!(
-        !stderr.contains("FORGED-PASS")
-            && !stderr.contains('\r')
-            && !stderr.contains('\x1b'),
+        !stderr.contains("FORGED-PASS") && !stderr.contains('\r') && !stderr.contains('\x1b'),
         "untrusted path leaked into diagnostic: {stderr:?}"
     );
 }
