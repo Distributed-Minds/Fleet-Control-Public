@@ -96,6 +96,13 @@ fn parse_row(
         }
     }
 
+    // The native Phase0 envelope requires attribution, mission, observed head,
+    // and timestamp on every transition, including terminal releases. These
+    // checks establish structural completeness, never provider authenticity.
+    for key in ["agent", "mission", "head", "ts"] {
+        required(&fields, key)?;
+    }
+
     let run = required(&fields, "run")?.to_owned();
     let state = match required(&fields, "state")? {
         "INTENT" => State::Intent,
@@ -284,9 +291,9 @@ mod tests {
 
     fn sample() -> String {
         concat!(
-            "10\t101\tPHASE0 | seq=1 | run=run-a | agent=agent | state=INTENT | mission=none | issue=22 | pr=none | branch=branch-a | head=abc | seam=fixture-native\n",
-            "11\t102\tPHASE0 | seq=2 | run=run-a | agent=agent | state=OWNED | mission=none | issue=22 | pr=none | branch=branch-a | head=abc | seam=fixture-native | prev=101\n",
-            "12\t103\tPHASE0 | seq=3 | run=run-a | agent=agent | state=WORKING | mission=none | issue=22 | pr=none | branch=branch-a | head=abc | seam=fixture-native | prev=102\n",
+            "10\t101\tPHASE0 | seq=1 | run=run-a | agent=agent | state=INTENT | mission=none | issue=22 | pr=none | branch=branch-a | head=abc | ts=2026-10-10T00:00:00Z | seam=fixture-native\n",
+            "11\t102\tPHASE0 | seq=2 | run=run-a | agent=agent | state=OWNED | mission=none | issue=22 | pr=none | branch=branch-a | head=abc | ts=2026-10-10T00:00:00Z | seam=fixture-native | prev=101\n",
+            "12\t103\tPHASE0 | seq=3 | run=run-a | agent=agent | state=WORKING | mission=none | issue=22 | pr=none | branch=branch-a | head=abc | ts=2026-10-10T00:00:00Z | seam=fixture-native | prev=102\n",
         )
         .to_owned()
     }
@@ -298,11 +305,46 @@ mod tests {
         assert_eq!(active.len(), 1);
         assert_eq!(active[0].latest_comment_id, 103);
         let ended = format!(
-            "{input}13\t104\tPHASE0 | seq=4 | run=run-a | agent=agent | state=HANDOFF | mission=none | head=abc | prev=103 | outcome=verified\n"
+            "{input}13\t104\tPHASE0 | seq=4 | run=run-a | agent=agent | state=HANDOFF | mission=none | head=abc | ts=2026-10-10T00:00:00Z | prev=103 | outcome=verified\n"
         );
         assert!(reduce_model_only(&parse_native(&ended).unwrap())
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn native_envelope_requires_attribution_and_currentness_fields_on_every_transition() {
+        let original = sample();
+        assert!(parse_native(&original).is_ok());
+        let complete = format!(
+            "{original}13\t104\tPHASE0 | seq=4 | run=run-a | agent=agent | state=HANDOFF | mission=none | head=abc | ts=2026-10-10T00:00:00Z | prev=103 | outcome=verified\n"
+        );
+        assert!(reduce_model_only(&parse_native(&complete).unwrap())
+            .unwrap()
+            .is_empty());
+
+        for (key, value) in [
+            ("agent", "agent"),
+            ("mission", "none"),
+            ("head", "abc"),
+            ("ts", "2026-10-10T00:00:00Z"),
+        ] {
+            let fragment = format!(" | {key}={value}");
+            let incomplete = original.replacen(&fragment, "", 1);
+            assert_ne!(incomplete, original);
+            let error = parse_native(&incomplete)
+                .err()
+                .expect("an incomplete active transition must be rejected");
+            assert!(error.contains(&format!("missing {key}")), "{error}");
+
+            let (prefix, terminal) = complete.rsplit_once("13\t104\t").unwrap();
+            let incomplete_terminal = terminal.replacen(&fragment, "", 1);
+            assert_ne!(incomplete_terminal, terminal);
+            let error = parse_native(&format!("{prefix}13\t104\t{incomplete_terminal}"))
+                .err()
+                .expect("an incomplete terminal transition must be rejected");
+            assert!(error.contains(&format!("missing {key}")), "{error}");
+        }
     }
 
     #[test]
