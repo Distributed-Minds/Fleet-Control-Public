@@ -100,7 +100,8 @@ def valid_slot_snapshots(issues: object, errors: list[str]) -> bool:
         errors.append("slots: expected a list of GitHub issue snapshots")
         return False
     for index, item in enumerate(issues):
-        creator = item.get("user") or item.get("author") or {}
+        # A present but malformed API `user` must not be rescued by an `author` alias.
+        creator = item["user"] if "user" in item else item.get("author")
         if (not isinstance(item.get("number"), int) or isinstance(item.get("number"), bool)
                 or not isinstance(item.get("state"), str)
                 or not isinstance(item.get("title"), str)
