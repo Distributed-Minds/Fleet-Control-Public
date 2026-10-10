@@ -495,10 +495,7 @@ mod tests {
         );
         assert_eq!(state.request_count(), 0);
         assert_eq!(state.reservation_count(), 0);
-        assert_eq!(
-            state.poll(1, 1, &original, &basis()).unwrap().task_id,
-            50
-        );
+        assert_eq!(state.poll(1, 1, &original, &basis()).unwrap().task_id, 50);
     }
 
     #[test]
