@@ -285,7 +285,13 @@ pub enum Replay {
     First(Decision),
     Identical(Decision),
     Conflict,
+    CapacityExhausted,
 }
+
+/// Bound the *simulation* receipt ledger. It never evicts a receipt to free
+/// capacity because dropping original operation identities would permit replay
+/// aliasing. Real durable admission requires a separate persistence contract.
+pub const MAX_SIMULATED_RECEIPTS: usize = 1024;
 
 /// In-memory synthetic idempotency reducer; DOES NOT claim crash durability.
 /// No transport calls exist: provider_effects_emitted is always zero.
@@ -325,6 +331,24 @@ impl SimulationJournal {
             return Replay::Conflict;
         }
 
+        // Bound every untrusted textual field before canonical_bytes allocates
+        // a length-prefixed copy. evaluate() also rejects these tokens, but
+        // hashing first would allocate arbitrary attacker-chosen input.
+        if [
+            admission.repository_incarnation.as_str(),
+            admission.source_commit.as_str(),
+            admission.intended_target_head.as_str(),
+            admission.observed_target_head.as_str(),
+            admission.input_digest.as_str(),
+            admission.output_digest.as_str(),
+            admission.reviewed_output_digest.as_str(),
+        ]
+        .into_iter()
+        .any(|value| !bounded_identifier(value))
+        {
+            return Replay::Conflict;
+        }
+
         let payload_digest = canonical_digest(admission);
         if let Some((old_digest, original)) = self.records.get(&key) {
             if old_digest == &payload_digest {
@@ -332,6 +356,10 @@ impl SimulationJournal {
             } else {
                 Replay::Conflict
             }
+        } else if self.records.len() >= MAX_SIMULATED_RECEIPTS {
+            // Preserve all prior receipts and their exact replay disposition.
+            // New operations must fail closed rather than evicting history.
+            Replay::CapacityExhausted
         } else {
             let result = evaluate(admission);
             self.records.insert(key, (payload_digest, result));
