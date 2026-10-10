@@ -20,7 +20,9 @@ fn ambiguous_identity_scalar(ch: char) -> bool {
                 | '\u{034F}'
                 | '\u{0600}'..='\u{0605}' // Arabic numeric format controls
                 | '\u{061C}'
+                | '\u{06DD}' // Arabic end-of-ayah format control
                 | '\u{070F}' // Syriac abbreviation mark
+                | '\u{0890}'..='\u{0891}' // Arabic currency format marks
                 | '\u{08E2}' // Arabic disputed end-of-ayah
                 | '\u{17B4}'..='\u{17B5}' // Khmer inherent vowels (default ignorable)
                 | '\u{180B}'..='\u{180E}' // Mongolian variation selectors and separator
@@ -34,9 +36,11 @@ fn ambiguous_identity_scalar(ch: char) -> bool {
                 | '\u{2060}'..='\u{206F}'
                 | '\u{FE00}'..='\u{FE0F}'
                 | '\u{FEFF}'
+                | '\u{FFF9}'..='\u{FFFB}' // Interlinear annotation controls
                 | '\u{110BD}' // Kaithi number sign
                 | '\u{110CD}' // Kaithi number sign above
                 | '\u{13430}'..='\u{13455}' // Egyptian hieroglyph format controls
+                | '\u{1D173}'..='\u{1D17A}' // Musical beam/tie/slur/phrase controls
                 | '\u{E0001}' // Language tag
                 | '\u{E0020}'..='\u{E007F}' // Invisible Unicode tags
                 | '\u{E0100}'..='\u{E01EF}'
@@ -323,7 +327,10 @@ mod tests {
             "\u{0600}", // Arabic numeric control
             "\u{0605}",
             "\u{061C}",
+            "\u{06DD}",
             "\u{070F}",
+            "\u{0890}",
+            "\u{0891}",
             "\u{08E2}",
             "\u{17B4}", // Khmer invisible vowel
             "\u{17B5}",
@@ -337,11 +344,22 @@ mod tests {
             "\u{110CD}",
             "\u{13430}", // Egyptian hieroglyph format controls
             "\u{13455}",
+            "\u{1D173}",
+            "\u{1D174}",
+            "\u{1D175}",
+            "\u{1D176}",
+            "\u{1D177}",
+            "\u{1D178}",
+            "\u{1D179}",
+            "\u{1D17A}",
             "\u{200B}",
             "\u{202E}",
             "\u{2060}",
             "\u{FE0F}",
             "\u{FEFF}",
+            "\u{FFF9}",
+            "\u{FFFA}",
+            "\u{FFFB}",
             "\u{E0100}",
             "\u{115F}",
             "\u{1160}",
