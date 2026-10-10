@@ -162,6 +162,76 @@ fn attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
     None
 }
 
+
+/// This intentionally accepts only the known single-page head/title/body
+/// structure, not arbitrary HTML. In particular, the source tag scanner sees
+/// markup-looking tokens in title RCDATA that browsers do not render.
+fn has_valid_head_title(elements: &[&str]) -> bool {
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Zone {
+        BeforeHead,
+        Head,
+        BetweenHeadAndBody,
+        Body,
+        AfterBody,
+    }
+    let mut zone = Zone::BeforeHead;
+    let mut seen_head = false;
+    let mut seen_body = false;
+    let mut seen_title = false;
+    let mut in_title = false;
+
+    for tag in elements {
+        let tag = tag.trim();
+        if in_title {
+            if tag.eq_ignore_ascii_case("/title") {
+                in_title = false;
+            } else {
+                // RCDATA does not expose parsed source tags. Rather than let a
+                // forged head/body exit or navigation count, reject ambiguity.
+                return false;
+            }
+            continue;
+        }
+        if tag.eq_ignore_ascii_case("/title") {
+            return false; // Orphan closing title.
+        }
+        if is_open_element(tag, "title") {
+            if zone != Zone::Head || seen_title || tag.ends_with('/') {
+                return false; // Outside head, duplicate, or self-closing-looking.
+            }
+            seen_title = true;
+            in_title = true;
+            continue;
+        }
+        if is_open_element(tag, "head") {
+            if zone != Zone::BeforeHead || seen_head || tag.ends_with('/') {
+                return false;
+            }
+            seen_head = true;
+            zone = Zone::Head;
+        } else if tag.eq_ignore_ascii_case("/head") {
+            if zone != Zone::Head || !seen_title {
+                return false;
+            }
+            zone = Zone::BetweenHeadAndBody;
+        } else if is_open_element(tag, "body") {
+            if zone != Zone::BetweenHeadAndBody || seen_body || tag.ends_with('/') {
+                return false;
+            }
+            seen_body = true;
+            zone = Zone::Body;
+        } else if tag.eq_ignore_ascii_case("/body") {
+            if zone != Zone::Body {
+                return false;
+            }
+            zone = Zone::AfterBody;
+        }
+    }
+
+    seen_head && seen_title && seen_body && !in_title && zone == Zone::AfterBody
+}
+
 /// Count actual participation-card articles rather than matching text that
 /// might appear in comments, quoted attributes, or unrelated elements.
 /// Reject inert template and scripting-dependent noscript containers: their
@@ -410,6 +480,12 @@ fn validate(root: &Path) -> Vec<String> {
     let elements = tags(html);
     let mut errors = Vec::new();
 
+    expect(
+        &mut errors,
+        has_valid_head_title(&elements),
+        "Unexpected title placement outside head or malformed head title",
+    );
+
     let ids: Vec<&str> = elements
         .iter()
         .filter_map(|tag| attribute(tag, "id"))
@@ -622,6 +698,34 @@ mod tests {
                 .replacen("</body>", &format!("{closing}</body>"), 1);
             negatives.push((name, html));
         }
+        // Relocate only the actual primary navigation: source link tokens
+        // remain present, but they are title RCDATA rather than visible nav.
+        let nav_start = original.find("<nav aria-label=\"Main navigation\">")
+            .expect("real primary nav");
+        let nav_end = nav_start
+            + original[nav_start..].find("</nav>").expect("real nav closer")
+            + "</nav>".len();
+        let mut only_nav = original.to_string();
+        only_nav.insert_str(nav_end, "</title>");
+        only_nav.insert_str(nav_start, "<title>");
+        negatives.push(("real-nav-in-title", only_nav));
+
+        // Independently hide the exact three route-card articles while
+        // retaining all source markup for the legacy token counter.
+        let grid_start = original.find("<div class=\"route-grid\"")
+            .expect("real route grid");
+        let card_start = grid_start
+            + original[grid_start..].find("<article class=\"route-card\">")
+                .expect("first real route card");
+        let mut card_end = card_start;
+        for _ in 0..3 {
+            card_end += original[card_end..].find("</article>")
+                .expect("real card closing tag") + "</article>".len();
+        }
+        let mut only_cards = original.to_string();
+        only_cards.insert_str(card_end, "</title>");
+        only_cards.insert_str(card_start, "<title>");
+        negatives.push(("real-three-cards-in-title", only_cards));
         negatives.push((
             "missing-head-title",
             original.replace("<title>FREE ENERGY — Remasters Everything</title>", ""),
