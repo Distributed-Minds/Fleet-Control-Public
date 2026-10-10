@@ -388,7 +388,7 @@ fn collect_links(markdown: &str, document: &str, report: &mut Report) -> Vec<Str
             // otherwise [![badge](missing.svg)](present.md) appears healthy.
             // Ordinary nested links inside image alt text are not links.
             let label = &visible[i + 1..after];
-            if label.starts_with("![") {
+            if label.contains("![") {
                 let mut nested_report = Report::default();
                 paths.extend(collect_links(label, document, &mut nested_report));
                 for error in nested_report.errors {
@@ -928,6 +928,47 @@ mod tests {
         let report = sandbox.scan();
         assert_eq!(report.local_links, 2);
         assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn mixed_text_link_labels_still_check_embedded_badge_assets() {
+        let sandbox = Sandbox::new();
+        sandbox.write("present.md", "existing destination");
+        sandbox.write(
+            "README.md",
+            "[CI status: ![build](missing.svg)](present.md)\n",
+        );
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 2);
+        assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+        assert!(
+            report.errors[0].contains("target missing: missing.svg"),
+            "{:?}",
+            report.errors
+        );
+
+        sandbox.write("missing.svg", "existing badge");
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 2);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn mixed_text_link_labels_cannot_hide_unsafe_badge_scheme() {
+        let sandbox = Sandbox::new();
+        sandbox.write("present.md", "existing destination");
+        sandbox.write(
+            "README.md",
+            "first line\n[Build status: ![badge](javascript:payload)](present.md)\n",
+        );
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 1);
+        assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+        assert!(
+            report.errors[0].contains("README.md:2: unsupported or unsafe URI scheme"),
+            "{:?}",
+            report.errors
+        );
     }
 
     #[test]
