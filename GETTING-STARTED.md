@@ -45,6 +45,8 @@ The upstream repository is still named `Distributed-Minds/Fleet-Control-Public` 
 
 This fork method copies **all** upstream branches, including historical/research branches. Those extra branches are not an indication that their contents are active or part of the starter; only your selected default branch is the installation baseline. Do **not** change the upstream repository's default branch.
 
+**Coordination does not arrive with a fork.** Copying all Git branches does not copy upstream GitHub issue threads. Before making recurring tasks, complete the version-specific coordination setup in step 6a **on your fork**, not in the upstream repository.
+
 **Option B — clean existing repository: install the release ZIP**
 
 Open [FREE ENERGY releases](https://github.com/Distributed-Minds/Fleet-Control-Public/releases), download the latest `FREE-ENERGY-Phase0-Starter-…-preview.zip`, and copy its entire `Phase0/` directory into the root of a repository you own; **commit** the files. Preserve any existing source code and your repository's own root `LICENSE`. This avoids copying upstream work-in-progress branches. The ZIP also contains the Project and automation prompt templates used in later steps.
@@ -73,6 +75,8 @@ Continue only when the verification reports `OK`; **stop** on a missing file or 
 **Keep the Phase0 license notice with the installed files.** Check that your installed `Phase0/LICENSE` contains the [FREE ENERGY Phase0 MIT notice](LICENSE). The current online preview includes that file inside `Phase0/`; the historical v0.1.2 ZIP predates this addition, so when installing from that ZIP, copy the public [Phase0 MIT notice](LICENSE) into `Phase0/LICENSE` yourself before committing. **Do not overwrite your existing repository's root `LICENSE`:** Phase0's MIT notice covers the copied Phase0 files, not unrelated files in your project.
 
 **Published ZIP version caveat:** The existing `v0.1.2-phase0-preview` release ZIP predates the corrected fork/default-branch instructions in this online guide. It is a historical starter package, **not** an archive of the current `phase0/public-v0` head. Follow these up-to-date online steps even if you use the ZIP, confirm `Phase0/05-FLEET-CONFIG.md` appears on **your repository's default branch**, and inspect the installed files before creating or enabling automations; do not rely on bundled older setup text alone.
+
+**Coordination-version caveat:** The separate v0.1.2 **source tag** describes a one-issue coordination protocol, while the present `phase0/public-v0` branch requires two trusted A/B slots. The published ZIP's actual contents are **not proven identical to the tag merely by inspecting the tag**. For a ZIP installation, inspect the downloaded `Phase0/05-FLEET-CONFIG.md`, `Phase0/30-COORDINATION.md` and whether `Phase0/160-COORDINATION-SLOTS.md` exists; use **that installed contract**, not an unconditional preview two-slot instruction. If versions disagree or an upgrade is needed, stop and make an explicit, reviewed installation/upgrade decision rather than silently mixing protocols.
 
 Either way, your fleet must target **your repository**, never the upstream `Distributed-Minds/Fleet-Control-Public` repository. Continue only once `Phase0/05-FLEET-CONFIG.md` is visible on **your repository's default branch**.
 
@@ -152,7 +156,53 @@ DEFAULT_BRANCH_POLICY=HUMAN_MERGE_ONLY
 
 This means agents may prepare branches and PRs, but a human decides what enters the default branch. Technical capability never silently changes this policy authority.
 
+
+### 6a. Bootstrap and verify your own coordination issues **before scheduling**
+
+**Stop gate:** Do this only after the files from your chosen installation are committed and visible on **your repository's default branch**. GitHub issues belong to a repository, not to its branches. A fork or copied `Phase0/` folder does **not** copy the upstream coordination issues. Do not point your fleet at upstream [#168](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/168) or [#186](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/186), and do not have an unattended agent blindly create them.
+
+**First identify your installed protocol.** Inspect `Phase0/05-FLEET-CONFIG.md` and `Phase0/30-COORDINATION.md` on **your repository's default branch**. If `Phase0/160-COORDINATION-SLOTS.md` exists, inspect it too. In the **current preview (Option A)**, the installed [configuration](Phase0/05-FLEET-CONFIG.md) and [slot contract](Phase0/160-COORDINATION-SLOTS.md) require **exactly two trusted open coordination issues**, one for slot A and one for slot B. If your files lack or contradict that contract (notably an older release ZIP), **do not** apply these A/B creation instructions; follow your actual installed `30-COORDINATION.md` and resolve incompatible versions before enabling automations.
+
+**For an installation of the current two-slot preview:**
+
+1. In **your repository** confirm GitHub Issues is available. Search existing *open* issues for the exact title `[fleet-control] coordination` before making anything. If any matching issue is malformed, untrusted, or duplicated, **stop** for maintainer review rather than creating a replacement and hoping the fleet picks it.
+2. Open `Phase0/05-FLEET-CONFIG.md` on **your default branch**. Its `COORDINATION_TRUSTED_AUTHORS=geromet` is an upstream example, **not** automatic permission for your account or your fork. An authorized maintainer must set `COORDINATION_TRUSTED_AUTHORS` to the actual approved GitHub login(s) who will **create** the issues (for example `COORDINATION_TRUSTED_AUTHORS=alice`), and commit that configuration on the installation's default branch. Do not leave `geromet` by accident or trust a user just because a comment or issue body claims their name.
+3. **Verify the fork's effective runtime trusted-author source before creating issues.** The value in `Phase0/05-FLEET-CONFIG.md` is *declared policy*, not the authority actually used by the archiver or GitHub Actions. In the current preview, `scripts/coordination_archive.py` resolves trusted authors from explicit `--trusted-authors`, then process environment `COORDINATION_TRUSTED_AUTHORS`, then the fallback `geromet`. The installed `.github/workflows/coordination-slots.yml` uses its own repository Actions variable `vars.COORDINATION_TRUSTED_AUTHORS` (or `geromet` if unset/empty) and passes it as `--trusted-authors`; the workflow's `issue_comment` jobs also check the raw Actions value independently.
+   
+   - **An authorized maintainer**, in **the fork's own repository**, goes to **Settings → Secrets and variables → Actions → Variables** and verifies/sets the repository variable `COORDINATION_TRUSTED_AUTHORS` to match the committed Markdown creator-login list. Examples: `alice` or `alice,bob`. Use literal commas, **no spaces, empty items or case-insensitive duplicates**. Do not copy the upstream `geromet` fallback for an unrelated new owner's fork. Do not silently change these settings through an agent.
+   - Check that the workflow is actually installed on this repository's **default branch** and that its effective `COORDINATION_SOURCE_REF` selects the intended installed `Phase0/` protocol. Do **not** infer that a preview branch, historical ZIP, or Markdown edit installs the default-branch Actions workflow. Record the actual variable source, not a guessed value. An explicit CLI override must be reported separately; it does not update the workflow's event-admission variable.
+   - **Verify that GitHub Actions and this workflow are enabled in the fork.** GitHub documents that workflows do not run in newly forked repositories by default. In the fork's **Actions** tab, an authorized human maintainer must enable Actions and, if necessary, enable the `Coordination slots maintenance` workflow, including scheduled execution. Confirm that the workflow is active and that applicable repository/organization Actions policies permit it; a committed YAML file and correct variables do not prove dispatch capability. If the enabled state or policy cannot be verified, report **BLOCKED: fork Actions/workflow disabled or unknown** before scheduling. Do not silently change Actions settings through an agent.
+   - If the Actions variable, default-branch workflow, effective source ref, or CLI/environment provenance cannot be checked, or if the declared/effective creator sets differ, record **BLOCKED: trusted-author source unknown or mismatched**. Do not create agents or accept a green slot-only check as installation readiness.
+
+4. An approved human author from that **verified effective and declared** list creates **two open issues in your repository** via **Issues → New issue**, both titled exactly `[fleet-control] coordination`. The first issue body must start *at the first character of the first line*, without a Markdown code fence, with:
+
+   ```text
+   FLEET_COORDINATION_V1
+   COORDINATION_SLOT=A
+   COORDINATION_STATE=ACTIVE
+   COORDINATION_EPOCH=1
+   ```
+
+   The second issue has its own body (also without a wrapping Markdown fence):
+
+   ```text
+   FLEET_COORDINATION_V1
+   COORDINATION_SLOT=B
+   COORDINATION_STATE=STANDBY
+   COORDINATION_EPOCH=0
+   ```
+
+   Extra explanatory text may follow after a blank line. The **GitHub creator account**, not a self-declared field, must be in the configured trusted-author list. These are setup examples only; do not edit any already-running slot state to force it to match them.
+5. Perform a **read-only preflight** against (a) the exact default-branch `Phase0/05-FLEET-CONFIG.md` declared policy, (b) the effective installed workflow/Actions variable and any explicit CLI override, (c) the API-observed GitHub issue creators and bodies, (d) the workflow's raw trusted-commenter admission predicates when installed, and (e) whether fork Actions and the intended workflow are actually enabled. Do not accept whitespace-padded, empty, duplicate, or otherwise invalid new-installation author tokens just because the current Python parser would trim them. A valid installation must agree on who is authorized at every layer; any mismatch, inaccessible source, unrecognized workflow version or unknown provenance is **BLOCKED** before scheduling. Then check exactly one valid *trusted* open issue per slot (A and B), exact title and first-line marker, unique `COORDINATION_SLOT`, recognized `COORDINATION_STATE` and nonnegative integer `COORDINATION_EPOCH`, and actual API creator accounts in the **effective** approved list. Initially A ACTIVE/1 and B STANDBY/0 is valid. During rotation two ACTIVE issues can temporarily coexist; the **higher epoch** wins. No ACTIVE issue, conflicting equal highest ACTIVE epochs, a missing/closed/untrusted/malformed issue, or a duplicate valid slot is **BLOCKED**, never permission to guess a slot or write to a historical issue.
+6. Confirm usable coordination comment capacity (GitHub limits an issue to 2,500 comments; current preview's switch threshold defaults to 2,000 and standby headroom to 500). Confirm that the intended agent execution context can actually **read** both trusted issues and, separately, has the required GitHub action capabilities under step 4 and `Phase0/95-GITHUB-CAPABILITY-ACCEPTANCE.md`. A successful manual inspection does **not** prove scheduled GitHub write access.
+
+**Readiness result:** Only mark coordination **READY** when the installed protocol and effective `COORDINATION_SOURCE_REF`, committed declared trust set, actual Actions/CLI/environment trust sources, enabled fork Actions/workflow state, the workflow's event-admission set where installed, trusted GitHub issue creators, both live slot bodies, unique ACTIVE authority, headroom and required read capability are independently checked. If the Actions variable is unset, the current installed workflow's effective trusted set is **`geromet`**, not the fork owner's login; a Markdown edit alone must never mark a new fork READY. Otherwise report exactly what is **BLOCKED** (for example "B missing", "creator not trusted", "duplicate A", "conflicting ACTIVE epoch", "Issues inaccessible", or "scheduled writes unverified"), fix it through an authorized human action and rerun the read-only check. Do **not** create recurring agents while blocked; do not modify the upstream repository, branch protection, schedules or GitHub permissions merely to make the check pass.
+
+**Historical release ZIP:** Do not assume the two-slot preflight above is applicable. Inspect the *downloaded ZIP's installed* `05-FLEET-CONFIG` and `30-COORDINATION` contract first; use its version-specific issue-count and trust rules. A tagged source tree is not proof of ZIP bytes. If you cannot determine the installed protocol or safely upgrade it, stop scheduling and request maintainer review.
+
 ### 7. Create persistent scheduled agents
+
+**Before creating or enabling any recurring task:** complete step 6a's installed-version coordination preflight on **your repository**, including the fork's actual Actions/workflow enabled state, and independently establish the scheduled-context capability required in step 4. If either is blocked or unknown, stop here; creating a task is not a substitute for trusted slot setup.
 
 Use the automation prompts from your chosen installation path:
 
@@ -214,14 +264,14 @@ The Project instructions turn substantial requests into durable missions. Schedu
 
 The fleet may create:
 
-- one coordination issue;
+- the coordination issue(s) required by the **installed** protocol (two trusted A/B issues for the current preview, not an unconditional single issue);
 - mission issues;
 - implementation issues;
 - non-default branches;
 - pull requests;
 - machine-ish state comments.
 
-That is expected. Do not delete the coordination issue just because it looks repetitive; it is the fleet's durable collision/state log.
+Those artifacts appear only when the installed protocol, permissions and current authority permit them. Do not delete coordination issues just because they look repetitive; they are durable collision/state logs. Initial bootstrap is a deliberate maintainer preflight, **not** a promise that scheduled agents can create missing trusted issues.
 
 ## What the fleet should not do by default
 
