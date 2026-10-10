@@ -122,6 +122,49 @@ fn is_atx_heading(line: &str) -> bool {
         && content.get(markers).is_none_or(|&byte| byte == b' ' || byte == b'\t')
 }
 
+// Only 0-3 ASCII spaces may indent block delimiters. Tabs at the start
+// indent code, and a malformed marker must not terminate an inline code span.
+fn block_marker_content(line: &str) -> Option<&[u8]> {
+    let bytes = line.as_bytes();
+    let indentation = bytes.iter().take_while(|&&byte| byte == b' ').count();
+    (indentation <= 3).then_some(&bytes[indentation..])
+}
+
+fn is_thematic_break(line: &str) -> bool {
+    let Some(content) = block_marker_content(line) else {
+        return false;
+    };
+    let Some(&marker) = content.first() else {
+        return false;
+    };
+    if !matches!(marker, b'-' | b'*' | b'_') {
+        return false;
+    }
+    let mut markers = 0;
+    for &byte in content {
+        if byte == marker {
+            markers += 1;
+        } else if byte != b' ' && byte != b'\t' {
+            return false;
+        }
+    }
+    markers >= 3
+}
+
+fn is_setext_underline(line: &str) -> bool {
+    let Some(content) = block_marker_content(line) else {
+        return false;
+    };
+    let Some(&marker) = content.first() else {
+        return false;
+    };
+    if !matches!(marker, b'=' | b'-') {
+        return false;
+    }
+    let width = content.iter().take_while(|&&byte| byte == marker).count();
+    content[width..].iter().all(|&byte| byte == b' ' || byte == b'\t')
+}
+
 fn mask_paragraph_code_spans(markdown: &str) -> String {
     let mut visible = String::with_capacity(markdown.len());
     let mut paragraph = String::new();
@@ -146,7 +189,14 @@ fn mask_paragraph_code_spans(markdown: &str) -> String {
             None => false,
         };
         let atx_heading = fenced.is_none() && is_atx_heading(line);
-        if fence_boundary || fenced.is_some() || line.trim().is_empty() || atx_heading {
+        // Thematic breaks interrupt even a pending paragraph. A dash Setext
+        // underline completes a heading only when it is not a thematic break.
+        let thematic_break = fenced.is_none() && is_thematic_break(line);
+        let setext_underline = fenced.is_none()
+            && !thematic_break
+            && !paragraph.is_empty()
+            && is_setext_underline(line);
+        if fence_boundary || fenced.is_some() || line.trim().is_empty() || atx_heading || thematic_break {
             if !paragraph.is_empty() {
                 visible.push_str(&mask_inline_code(&paragraph));
                 paragraph.clear();
@@ -156,6 +206,12 @@ fn mask_paragraph_code_spans(markdown: &str) -> String {
             } else {
                 visible.push_str(raw_line);
             }
+        } else if setext_underline {
+            // All heading content lines share one inline-span context. Flush
+            // only AFTER the underline, never between heading content lines.
+            paragraph.push_str(raw_line);
+            visible.push_str(&mask_inline_code(&paragraph));
+            paragraph.clear();
         } else {
             paragraph.push_str(raw_line);
         }
