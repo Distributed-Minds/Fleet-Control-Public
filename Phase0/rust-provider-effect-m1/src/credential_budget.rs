@@ -91,10 +91,13 @@ struct CredentialLane {
     remaining: u32,
     reserved_for_recovery: u32,
     max_pending: usize,
+    // Conservative pending-slot floor for late-arriving recovery, not authority.
+    reserved_pending_for_recovery: usize,
     /// Class-specific limits share the same aggregate credential budget.
     classes: BTreeMap<String, ClassBudget>,
     circuit_open: bool,
     pending_count: usize,
+    normal_pending_count: usize,
     normal: TenantQueues,
     recovery: TenantQueues,
     last_normal_tenant: Option<String>,
@@ -104,14 +107,19 @@ struct CredentialLane {
 
 impl CredentialLane {
     fn new(limit: u32, reserved_for_recovery: u32, max_pending: usize) -> Self {
+        let reserved_pending_for_recovery = usize::try_from(reserved_for_recovery)
+            .unwrap_or(max_pending)
+            .min(max_pending);
         Self {
             limit,
             remaining: limit,
             reserved_for_recovery,
             max_pending,
+            reserved_pending_for_recovery,
             classes: BTreeMap::new(),
             circuit_open: false,
             pending_count: 0,
+            normal_pending_count: 0,
             normal: TenantQueues::new(),
             recovery: TenantQueues::new(),
             last_normal_tenant: None,
@@ -218,7 +226,14 @@ impl Scheduler {
         if !lane.classes.contains_key(&request.operation_class) {
             return Err(Error::UnknownClass);
         }
-        if lane.pending_count >= lane.max_pending {
+        // Reserving dispatch tokens is insufficient if normal work can fill
+        // every pending slot before a safety/recovery request arrives.
+        // Priority is synthetic fixture data, NOT trusted real-world authority.
+        let normal_capacity = lane.max_pending - lane.reserved_pending_for_recovery;
+        if lane.pending_count >= lane.max_pending
+            || (request.priority == Priority::Normal
+                && lane.normal_pending_count >= normal_capacity)
+        {
             return Err(Error::QueueFull);
         }
         // The pending queue bound is NOT a bound on the replay journal:
@@ -237,6 +252,9 @@ impl Scheduler {
             .or_default()
             .push_back(request.clone());
         lane.pending_count += 1;
+        if request.priority == Priority::Normal {
+            lane.normal_pending_count += 1;
+        }
         self.known_operations
             .insert(request.operation_id.clone(), request);
         Ok(true)
@@ -336,6 +354,9 @@ impl Scheduler {
         class_budget.remaining -= 1;
         let estimated_class_remaining = class_budget.remaining;
         lane.pending_count -= 1;
+        if class == Priority::Normal {
+            lane.normal_pending_count -= 1;
+        }
         lane.last_class = Some(class);
         Ok(Some(Candidate {
             request,
@@ -764,6 +785,140 @@ mod tests {
         }
         assert_eq!(s.pending("effective-credential-1"), Ok(1));
         assert_eq!(s.pending("credential-two"), Ok(0));
+    }
+
+    #[test]
+    fn late_recovery_can_enter_a_queue_saturated_by_normal_attempts() {
+        let mut s = scheduler(5, 1, 3);
+        for id in 0..2 {
+            assert_eq!(
+                s.enqueue(request(
+                    &format!("normal-{id}"),
+                    "effective-credential-1",
+                    "repo-a",
+                    "tenant-a",
+                    Priority::Normal,
+                )),
+                Ok(true)
+            );
+        }
+        assert_eq!(
+            s.enqueue(request(
+                "normal-2",
+                "effective-credential-1",
+                "repo-a",
+                "tenant-a",
+                Priority::Normal,
+            )),
+            Err(Error::QueueFull)
+        );
+        assert_eq!(s.pending("effective-credential-1"), Ok(2));
+
+        // No provider effect or eviction occurs. The queued safety operation
+        // is admitted within the same finite limit and selected first.
+        assert_eq!(
+            s.enqueue(request(
+                "late-recovery",
+                "effective-credential-1",
+                "repo-b",
+                "tenant-b",
+                Priority::Recovery,
+            )),
+            Ok(true)
+        );
+        assert_eq!(s.pending("effective-credential-1"), Ok(3));
+        assert_eq!(next(&mut s).unwrap().request.operation_id, "late-recovery");
+        assert_eq!(s.pending("effective-credential-1"), Ok(2));
+        assert_eq!(
+            s.enqueue(request(
+                "normal-2",
+                "effective-credential-1",
+                "repo-a",
+                "tenant-a",
+                Priority::Normal,
+            )),
+            Err(Error::QueueFull)
+        );
+
+        // The protected queue floor does not disappear when recovery leaves.
+        // Actual normal capacity is released only by a normal dequeue.
+        assert_eq!(next(&mut s).unwrap().request.priority, Priority::Normal);
+        assert_eq!(s.pending("effective-credential-1"), Ok(1));
+        let resumed = request(
+            "normal-2",
+            "effective-credential-1",
+            "repo-a",
+            "tenant-a",
+            Priority::Normal,
+        );
+        assert_eq!(s.enqueue(resumed.clone()), Ok(true));
+        assert_eq!(s.enqueue(resumed), Ok(false));
+        assert_eq!(s.pending("effective-credential-1"), Ok(2));
+    }
+
+    #[test]
+    fn pending_recovery_reserve_is_clamped_and_never_exceeds_the_queue_limit() {
+        // Thirty synthetic configurations. Reserve zero retains the existing
+        // truthful QueueFull behavior; positive reserves protect finite slots.
+        for max_pending in 1..=5 {
+            for reserve in 0_u32..=5 {
+                let mut s = Scheduler::new();
+                s.register_group("credential", 10, reserve, max_pending)
+                    .unwrap();
+                s.register_operation_class("credential", "comment-create", 10)
+                    .unwrap();
+                let recovery_floor = usize::try_from(reserve)
+                    .unwrap_or(max_pending)
+                    .min(max_pending);
+                let normal_limit = max_pending - recovery_floor;
+
+                for i in 0..normal_limit {
+                    assert_eq!(
+                        s.enqueue(request(
+                            &format!("normal-{i}"),
+                            "credential",
+                            "repo-a",
+                            "tenant-a",
+                            Priority::Normal,
+                        )),
+                        Ok(true)
+                    );
+                }
+                assert_eq!(
+                    s.enqueue(request(
+                        "normal-overflow",
+                        "credential",
+                        "repo-a",
+                        "tenant-a",
+                        Priority::Normal,
+                    )),
+                    Err(Error::QueueFull)
+                );
+                for i in 0..recovery_floor {
+                    assert_eq!(
+                        s.enqueue(request(
+                            &format!("recovery-{i}"),
+                            "credential",
+                            "repo-b",
+                            "tenant-b",
+                            Priority::Recovery,
+                        )),
+                        Ok(true)
+                    );
+                }
+                assert_eq!(s.pending("credential"), Ok(max_pending));
+                assert_eq!(
+                    s.enqueue(request(
+                        "recovery-overflow",
+                        "credential",
+                        "repo-b",
+                        "tenant-b",
+                        Priority::Recovery,
+                    )),
+                    Err(Error::QueueFull)
+                );
+            }
+        }
     }
 
     #[test]
