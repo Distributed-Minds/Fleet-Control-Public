@@ -237,10 +237,7 @@ pub fn evaluate(s: &Snapshot) -> Result<Selection, Denial> {
         let Some(&model_incarnation) = model_incarnations.get(r.model.as_str()) else {
             return Err(Denial::Malformed);
         };
-        if r.score < 0
-            || r.score > 10_000
-            || r.unit != "basis-points"
-        {
+        if r.score < 0 || r.score > 10_000 || r.unit != "basis-points" {
             return Err(Denial::Malformed);
         }
         let Some(src) = sources.get(r.source.as_str()) else {
