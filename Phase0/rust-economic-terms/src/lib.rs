@@ -176,6 +176,11 @@ pub fn prepare(request: &Request) -> Result<Prepared, Decision> {
     if valuation.generation == 0 || valuation.generation != valuation.current_generation {
         return Err(Decision::Unknown(Reason::StaleValuation));
     }
+    // Exact authorized terms are the primary admission identity: a changed
+    // amount must not be reclassified as only a valuation/ceiling failure.
+    if quote != &mandate.authorized_terms {
+        return Err(Decision::Blocked(Reason::IncompatibleTerms));
+    }
     let Some(minimum_cost) = quote.amount.checked_add(quote.fee_ceiling) else {
         return Err(Decision::Blocked(Reason::MandateExceeded));
     };
@@ -183,9 +188,6 @@ pub fn prepare(request: &Request) -> Result<Prepared, Decision> {
         || valuation.conservative_worst_case > mandate.maximum_worst_case
     {
         return Err(Decision::Blocked(Reason::MandateExceeded));
-    }
-    if quote != &mandate.authorized_terms {
-        return Err(Decision::Blocked(Reason::IncompatibleTerms));
     }
     if exposure.provenance != Evidence::Synthetic
         || exposure.canonical_component != exposure.offered_component

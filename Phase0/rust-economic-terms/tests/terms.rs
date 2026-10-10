@@ -378,7 +378,8 @@ fn full_ledger_never_evicts_old_attempts_for_new_operation() {
 }
 
 #[test]
-fn two_distinct_roots_with_unproved_shared_exposure_do_not_both_prepare() {
+fn stale_shared_exposure_receipt_blocks_second_root_only() {
+    // This fixture does NOT demonstrate #27's cross-root serialized CAS.
     let mut first = request();
     first.mandate.root_generation = 8;
     first.mandate.current_root_generation = 8;
