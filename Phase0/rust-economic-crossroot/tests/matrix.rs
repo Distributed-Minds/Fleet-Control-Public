@@ -22,12 +22,8 @@ fn every_bounded_two_root_order_rejects_stale_cas_and_overspend() {
     for &left in &amounts {
         for &right in &amounts {
             for swap in [false, true] {
-                let mut ledger = Ledger::new(
-                    "shared-domain",
-                    100,
-                    1,
-                    &[("root-a", 1), ("root-b", 1)],
-                );
+                let mut ledger =
+                    Ledger::new("shared-domain", 100, 1, &[("root-a", 1), ("root-b", 1)]);
                 let (first_root, second_root) = if swap {
                     ("root-b", "root-a")
                 } else {
@@ -46,10 +42,7 @@ fn every_bounded_two_root_order_rejects_stale_cas_and_overspend() {
                     ResultKind::Denied(Denial::NoCapacity)
                 };
                 assert_eq!(ledger.reserve(latest), expected);
-                assert_eq!(
-                    ledger.reserve(first),
-                    ResultKind::Identical(State::Pending)
-                );
+                assert_eq!(ledger.reserve(first), ResultKind::Identical(State::Pending));
                 assert!(ledger.charged() <= 100);
                 assert_eq!(ledger.debt(), 0);
                 assert_eq!(ledger.provider_effects(), 0);
@@ -62,12 +55,7 @@ fn every_bounded_two_root_order_rejects_stale_cas_and_overspend() {
 fn refund_invalidation_matrix_preserves_accepted_exposure_and_debt() {
     for first in [1, 20, 60, 80, 100] {
         for second in [1, 20, 60, 80, 100] {
-            let mut ledger = Ledger::new(
-                "shared-domain",
-                100,
-                1,
-                &[("root-a", 1), ("root-b", 1)],
-            );
+            let mut ledger = Ledger::new("shared-domain", 100, 1, &[("root-a", 1), ("root-b", 1)]);
             let original = attempt("first", "root-a", first, 1);
             assert_eq!(ledger.reserve(original.clone()), ResultKind::Accepted);
             assert_eq!(
@@ -79,12 +67,7 @@ fn refund_invalidation_matrix_preserves_accepted_exposure_and_debt() {
                 ResultKind::Accepted
             );
             assert_eq!(
-                ledger.reserve(attempt(
-                    "second",
-                    "root-b",
-                    second,
-                    ledger.generation()
-                )),
+                ledger.reserve(attempt("second", "root-b", second, ledger.generation())),
                 ResultKind::Accepted
             );
             assert_eq!(
@@ -100,12 +83,7 @@ fn refund_invalidation_matrix_preserves_accepted_exposure_and_debt() {
             );
             if first + second >= 100 {
                 assert_eq!(
-                    ledger.reserve(attempt(
-                        "third",
-                        "root-a",
-                        1,
-                        ledger.generation()
-                    )),
+                    ledger.reserve(attempt("third", "root-a", 1, ledger.generation())),
                     ResultKind::Denied(Denial::NoCapacity)
                 );
             }
