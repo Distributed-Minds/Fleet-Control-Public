@@ -1,0 +1,338 @@
+{
+  "schema": "free-energy/public-p0-338/run-source-fence-oracles/v0",
+  "authority": "NON_NORMATIVE_SOURCE_STATIC_PLAN_DATA_ONLY",
+  "issue": "https://github.com/Distributed-Minds/Fleet-Control-Public/issues/338",
+  "canonical_issue_spec": 3,
+  "source_evidence": {
+    "default_branch": "main",
+    "workflow_path": ".github/workflows/coordination-slots.yml",
+    "workflow_commit": "085605f1bd08c2a5c49d158c7a0bdfdb731df54d",
+    "workflow_blob": "1054aa40cab9b9f5476483dae4c358cf3c64e4c4",
+    "preview_ref": "phase0/public-v0",
+    "preview_observed_head": "7a104e112fdbf755f49c4b6c6778335630a271af",
+    "observed_yaml_shape": [
+      "archive/compact/rotate each use an independent checkout with ref = vars.COORDINATION_SOURCE_REF or phase0/public-v0",
+      "compact and rotate additionally checkout the mutable coordination-archive ref independently",
+      "no observed cross-job exact commit-SHA output and equality guard binds these checkouts",
+      "rotate needs archive,compact but checks archive success only; compact failure remains a known separate spec3 blocker",
+      "workflow-level concurrency is shared by schedule, workflow_dispatch and unrestricted issue_comment created triggers"
+    ]
+  },
+  "distinct_scope": "Synthetic cross-job mutable-code/archival-head and current-slot skew predicates; not a hosted Actions parser, a live scheduler, a product implementation, a gate or a replacement for PR #341/#368.",
+  "evidence_limits": [
+    "This model assumes separately established run-wide immutable source pin, trusted source-ref selection, single mutator queue, remote archive readback and effect-time active-slot authority. The installed YAML does not yet enforce them.",
+    "All 3 positive labels mean only that these modeled necessary conditions hold. They do not confer permission or guarantee six-hour liveness, archive integrity or GitHub compare-and-swap.",
+    "Negative cases do not prove that version drift or lost archives happened in hosted Actions.",
+    "No Rust/Cargo, hosted CI, actual GitHub Actions, mutation effects, signing, DCO consent, or production gates are executed or claimed by this JSON file."
+  ],
+  "acceptance_order": [
+    "BLOCK_NON_SCHEDULE_EVENT",
+    "BLOCK_COMMENT_TRIGGER_QUEUE",
+    "BLOCK_STATUS_QUEUE_COLLISION",
+    "BLOCK_MULTI_MUTATOR",
+    "BLOCK_UNBOUNDED_RESCUE",
+    "BLOCK_RESCUE_REPLACED",
+    "BLOCK_UNVERIFIED_WORKFLOW_TOPOLOGY",
+    "BLOCK_CANCELLED",
+    "BLOCK_ARCHIVE_PREDECESSOR",
+    "BLOCK_COMPACT_PREDECESSOR",
+    "BLOCK_SOURCE_PIN_ABSENT",
+    "BLOCK_SOURCE_SHA_SKEW",
+    "BLOCK_ARCHIVE_REF_MISSING",
+    "BLOCK_ARCHIVE_HEAD_SKEW",
+    "BLOCK_ARCHIVE_READBACK",
+    "BLOCK_SOURCE_AUTHORITY",
+    "BLOCK_AMBIGUOUS_SLOT",
+    "BLOCK_SLOT_EPOCH_SKEW",
+    "BLOCK_EFFECT_TIME_AUTHORITY",
+    "SYNTHETIC_NORMAL_ROTATE_CANDIDATE"
+  ],
+  "baseline": {
+    "event": "schedule",
+    "issue_comment_trigger_enabled": false,
+    "status_group_isolated": true,
+    "one_serialized_mutator_lane": true,
+    "bounded_rescue_envelope": true,
+    "schedule_pending_replaced": false,
+    "workflow_shape_verified": true,
+    "run_cancelled": false,
+    "archive_result": "success",
+    "compact_result": "success",
+    "source_sha_at_archive": "pinned-source-A",
+    "source_sha_at_compact": "pinned-source-A",
+    "source_sha_at_rotate": "pinned-source-A",
+    "exact_source_sha_fence": true,
+    "archive_ref_available": true,
+    "archive_remote_sha_after_push": "archive-record-R1",
+    "archive_remote_sha_at_compact": "archive-record-R1",
+    "archive_remote_sha_at_rotate": "archive-record-R1",
+    "remote_archive_readback_ok": true,
+    "trusted_source_selected": true,
+    "authoritative_slot_unique": true,
+    "slot_at_archive": "B:2",
+    "slot_at_compact": "B:2",
+    "slot_at_rotate": "B:2",
+    "effect_time_slot_authorized": true
+  },
+  "tests": [
+    {
+      "id": "P01",
+      "note": "Synthetic schedule-only single-writer path with a run-wide frozen source commit, archive readback and stable trusted slot",
+      "overrides": {},
+      "expected": "SYNTHETIC_NORMAL_ROTATE_CANDIDATE"
+    },
+    {
+      "id": "P02",
+      "note": "A newly selected trusted higher epoch can be valid if all phases rebind to that single current epoch",
+      "overrides": {
+        "slot_at_archive": "A:3",
+        "slot_at_compact": "A:3",
+        "slot_at_rotate": "A:3"
+      },
+      "expected": "SYNTHETIC_NORMAL_ROTATE_CANDIDATE"
+    },
+    {
+      "id": "P03",
+      "note": "Another archive commit lineage is acceptable only if the exact readback identity agrees across every phase",
+      "overrides": {
+        "archive_remote_sha_after_push": "archive-record-R2",
+        "archive_remote_sha_at_compact": "archive-record-R2",
+        "archive_remote_sha_at_rotate": "archive-record-R2"
+      },
+      "expected": "SYNTHETIC_NORMAL_ROTATE_CANDIDATE"
+    },
+    {
+      "id": "N01",
+      "note": "Unrestricted issue_comment trigger still dispatches workflows before job if checks",
+      "overrides": {
+        "issue_comment_trigger_enabled": true
+      },
+      "expected": "BLOCK_COMMENT_TRIGGER_QUEUE"
+    },
+    {
+      "id": "N02",
+      "note": "Read-only manual status shares concurrency with scheduled rescue",
+      "overrides": {
+        "status_group_isolated": false
+      },
+      "expected": "BLOCK_STATUS_QUEUE_COLLISION"
+    },
+    {
+      "id": "N03",
+      "note": "Second archive/slot mutator lane could run concurrently",
+      "overrides": {
+        "one_serialized_mutator_lane": false
+      },
+      "expected": "BLOCK_MULTI_MUTATOR"
+    },
+    {
+      "id": "N04",
+      "note": "Missed schedule or duration envelope is unbounded",
+      "overrides": {
+        "bounded_rescue_envelope": false
+      },
+      "expected": "BLOCK_UNBOUNDED_RESCUE"
+    },
+    {
+      "id": "N05",
+      "note": "Pending scheduled recovery is replaced by another queued event",
+      "overrides": {
+        "schedule_pending_replaced": true
+      },
+      "expected": "BLOCK_RESCUE_REPLACED"
+    },
+    {
+      "id": "N06",
+      "note": "Actual event is issue_comment, not the scheduled mutator",
+      "overrides": {
+        "event": "issue_comment"
+      },
+      "expected": "BLOCK_NON_SCHEDULE_EVENT"
+    },
+    {
+      "id": "N07",
+      "note": "Actual event is manual status dispatch, not the scheduled mutator",
+      "overrides": {
+        "event": "workflow_dispatch"
+      },
+      "expected": "BLOCK_NON_SCHEDULE_EVENT"
+    },
+    {
+      "id": "N08",
+      "note": "Source workflow shape has not been verified at the referenced workflow commit",
+      "overrides": {
+        "workflow_shape_verified": false
+      },
+      "expected": "BLOCK_UNVERIFIED_WORKFLOW_TOPOLOGY"
+    },
+    {
+      "id": "N09",
+      "note": "Run cancellation does not authorize remaining job effects",
+      "overrides": {
+        "run_cancelled": true
+      },
+      "expected": "BLOCK_CANCELLED"
+    },
+    {
+      "id": "N10",
+      "note": "Archive predecessor failed",
+      "overrides": {
+        "archive_result": "failure"
+      },
+      "expected": "BLOCK_ARCHIVE_PREDECESSOR"
+    },
+    {
+      "id": "N11",
+      "note": "Archive predecessor skipped",
+      "overrides": {
+        "archive_result": "skipped"
+      },
+      "expected": "BLOCK_ARCHIVE_PREDECESSOR"
+    },
+    {
+      "id": "N12",
+      "note": "Compact predecessor failed, archive succeeded",
+      "overrides": {
+        "compact_result": "failure"
+      },
+      "expected": "BLOCK_COMPACT_PREDECESSOR"
+    },
+    {
+      "id": "N13",
+      "note": "Compact predecessor skipped, archive succeeded",
+      "overrides": {
+        "compact_result": "skipped"
+      },
+      "expected": "BLOCK_COMPACT_PREDECESSOR"
+    },
+    {
+      "id": "N14",
+      "note": "Compact predecessor cancelled, archive succeeded",
+      "overrides": {
+        "compact_result": "cancelled"
+      },
+      "expected": "BLOCK_COMPACT_PREDECESSOR"
+    },
+    {
+      "id": "N15",
+      "note": "Compact predecessor pending while rotation considered",
+      "overrides": {
+        "compact_result": "pending"
+      },
+      "expected": "BLOCK_COMPACT_PREDECESSOR"
+    },
+    {
+      "id": "N16",
+      "note": "All branch names appear stable but no frozen run-wide source SHA was actually proved",
+      "overrides": {
+        "exact_source_sha_fence": false
+      },
+      "expected": "BLOCK_SOURCE_PIN_ABSENT"
+    },
+    {
+      "id": "N17",
+      "note": "Mutable source branch moves after archive checkout before compact",
+      "overrides": {
+        "source_sha_at_compact": "pinned-source-B"
+      },
+      "expected": "BLOCK_SOURCE_SHA_SKEW"
+    },
+    {
+      "id": "N18",
+      "note": "Mutable source branch moves after compact checkout before rotate",
+      "overrides": {
+        "source_sha_at_rotate": "pinned-source-B"
+      },
+      "expected": "BLOCK_SOURCE_SHA_SKEW"
+    },
+    {
+      "id": "N19",
+      "note": "Archive and compact run newer source, rotate still uses older source",
+      "overrides": {
+        "source_sha_at_archive": "pinned-source-B",
+        "source_sha_at_compact": "pinned-source-B"
+      },
+      "expected": "BLOCK_SOURCE_SHA_SKEW"
+    },
+    {
+      "id": "N20",
+      "note": "First bootstrap archive produced no remote archive branch while compact still attempts checkout",
+      "overrides": {
+        "archive_ref_available": false
+      },
+      "expected": "BLOCK_ARCHIVE_REF_MISSING"
+    },
+    {
+      "id": "N21",
+      "note": "Independent archive-branch writer advanced ref after archive before compact",
+      "overrides": {
+        "archive_remote_sha_at_compact": "archive-record-R2"
+      },
+      "expected": "BLOCK_ARCHIVE_HEAD_SKEW"
+    },
+    {
+      "id": "N22",
+      "note": "Remote archive ref advanced after compact before rotate",
+      "overrides": {
+        "archive_remote_sha_at_rotate": "archive-record-R2"
+      },
+      "expected": "BLOCK_ARCHIVE_HEAD_SKEW"
+    },
+    {
+      "id": "N23",
+      "note": "Archive manifest/segment bytes do not match remote readback",
+      "overrides": {
+        "remote_archive_readback_ok": false
+      },
+      "expected": "BLOCK_ARCHIVE_READBACK"
+    },
+    {
+      "id": "N24",
+      "note": "Untrusted source-ref selection despite apparently consistent commit IDs",
+      "overrides": {
+        "trusted_source_selected": false
+      },
+      "expected": "BLOCK_SOURCE_AUTHORITY"
+    },
+    {
+      "id": "N25",
+      "note": "Two competing selected ACTIVE slot states without a unique highest valid epoch",
+      "overrides": {
+        "authoritative_slot_unique": false
+      },
+      "expected": "BLOCK_AMBIGUOUS_SLOT"
+    },
+    {
+      "id": "N26",
+      "note": "Trusted ACTIVE slot epoch flips between archive and compact",
+      "overrides": {
+        "slot_at_compact": "A:3"
+      },
+      "expected": "BLOCK_SLOT_EPOCH_SKEW"
+    },
+    {
+      "id": "N27",
+      "note": "Trusted ACTIVE slot epoch flips between compact and rotate",
+      "overrides": {
+        "slot_at_rotate": "A:3"
+      },
+      "expected": "BLOCK_SLOT_EPOCH_SKEW"
+    },
+    {
+      "id": "N28",
+      "note": "Trusted ACTIVE issue changes at equal reported epoch",
+      "overrides": {
+        "slot_at_rotate": "A:2"
+      },
+      "expected": "BLOCK_SLOT_EPOCH_SKEW"
+    },
+    {
+      "id": "N29",
+      "note": "Effect-time selection does not independently establish current slot authority",
+      "overrides": {
+        "effect_time_slot_authorized": false
+      },
+      "expected": "BLOCK_EFFECT_TIME_AUTHORITY"
+    }
+  ]
+}
