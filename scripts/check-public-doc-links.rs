@@ -456,6 +456,14 @@ fn decode_markdown_path(path: &str) -> Result<String, String> {
 }
 
 
+// A missing semicolon in a long literal run of ampersands must not trigger
+// a full-suffix search for each '&' (quadratic on valid Markdown input).
+// The existing CommonMark subset allows at most 36 ASCII bytes before ';'.
+// Search exactly those bytes plus the terminator without splitting UTF-8.
+fn bounded_entity_terminator(suffix: &str) -> Option<usize> {
+    suffix.as_bytes().iter().take(37).position(|&byte| byte == b';')
+}
+
 fn decode_character_references(input: &str) -> Result<String, String> {
     // Exactly one CommonMark destination-level entity pass. Legacy
     // no-semicolon HTML aliases do not decode; percent decoding occurs later.
@@ -464,7 +472,7 @@ fn decode_character_references(input: &str) -> Result<String, String> {
     while let Some(ampersand) = remaining.find('&') {
         result.push_str(&remaining[..ampersand]);
         let suffix = &remaining[ampersand + 1..];
-        if let Some(end) = suffix.find(';').filter(|&end| end <= 36) {
+        if let Some(end) = bounded_entity_terminator(suffix) {
             let name = &suffix[..end];
             let replacement = if let Some(number) = name.strip_prefix('#') {
                 let (radix, digits) = match number.strip_prefix('x').or_else(|| number.strip_prefix('X')) {
@@ -2374,6 +2382,73 @@ mod tests {
                 "control byte must be rejected: {raw}"
             );
         }
+    }
+
+    // #335: a bounded byte probe is part of the denial-of-work invariant.
+    // A semicolon beyond byte 36 must not make an overlength entity eligible,
+    // including when multibyte UTF-8 precedes the ASCII terminator.
+    #[test]
+    fn entity_terminator_probe_stops_after_37_bytes() {
+        assert_eq!(bounded_entity_terminator("amp;tail"), Some(3));
+        assert_eq!(
+            bounded_entity_terminator(&format!("{};", "a".repeat(36))),
+            Some(36)
+        );
+        assert_eq!(
+            bounded_entity_terminator(&format!("{};", "a".repeat(37))),
+            None
+        );
+        assert_eq!(
+            bounded_entity_terminator(&format!("{};", "é".repeat(18))),
+            Some(36)
+        );
+        assert_eq!(
+            bounded_entity_terminator(&format!("{};", "é".repeat(19))),
+            None
+        );
+        assert_eq!(
+            bounded_entity_terminator(&format!("{};", "&".repeat(16_384))),
+            None
+        );
+    }
+
+    #[test]
+    fn long_literal_ampersands_preserve_entity_and_path_decisions() {
+        for count in [37_usize, 4096, 16_384] {
+            let literals = "&".repeat(count);
+            let undecoded = format!("docs/{literals}a.md");
+            assert_eq!(
+                decode_character_references(&undecoded).unwrap(),
+                undecoded,
+                "literal count={count}"
+            );
+
+            // The eligible entity after a literal run still decodes once;
+            // earlier ampersands must not consume its terminator.
+            let combined = format!("docs/{literals}&amp;end.md");
+            let normalized = format!("docs/{literals}&end.md");
+            assert_eq!(
+                decode_character_references(&combined).unwrap(),
+                normalized,
+                "mixed count={count}"
+            );
+            assert_eq!(
+                parse_destination(&combined),
+                Ok(Some(normalized)),
+                "path count={count}"
+            );
+        }
+
+        let overlength = format!("a&{};b.md", "a".repeat(37));
+        assert_eq!(
+            decode_character_references(&overlength).unwrap(),
+            overlength
+        );
+        let eligible = format!("a&{};b.md", "a".repeat(36));
+        assert_eq!(
+            decode_character_references(&eligible).unwrap(),
+            eligible
+        );
     }
 
 }
