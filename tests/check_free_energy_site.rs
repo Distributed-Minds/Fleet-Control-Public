@@ -1284,6 +1284,83 @@ data="x"></OBject><EMBED/>"#;
     }
 
     #[test]
+    fn details_cannot_hide_required_disclosures_cards_or_navigation() {
+        // Reproduce #415 against the real landing, CSS and README.
+        // RED on the old source: tags inside a collapsed details tree can
+        // supply apparently required visible content without being shown.
+        let root = env::temp_dir().join(format!(
+            "free-energy-details-site-{}", std::process::id()
+        ));
+        let docs = root.join("docs");
+        fs::create_dir_all(&docs).expect("create details fixture directory");
+        let original = include_str!("../docs/index.html");
+        fs::write(docs.join("index.html"), original).expect("write original landing");
+        fs::write(docs.join("styles.css"), include_str!("../docs/styles.css"))
+            .expect("write fixture stylesheet");
+        fs::write(docs.join("README.md"), include_str!("../docs/README.md"))
+            .expect("write fixture readme");
+        assert!(validate(&root).is_empty(), "unmodified landing must pass");
+
+        let note = r#"<p class="note">Discussions are public. Posting does not enroll a contributor, grant repository access, or authorize an agent task. Do not post secrets or confidential reports.</p>"#;
+        assert_eq!(original.matches(note).count(), 1, "real note fixture drift");
+        let wrap_note = |open: &str, close: &str| {
+            original.replacen(note, &format!("{open}{note}{close}"), 1)
+        };
+        let routes = r#"<div class="route-grid" aria-label="Choose how to participate">"#;
+        assert_eq!(original.matches(routes).count(), 1, "route grid fixture drift");
+        let start = original.find(routes).expect("route grid") + routes.len();
+        let end = start + original[start..].find("</div>").expect("route grid close");
+        let wrap_routes = |open: &str, close: &str| {
+            format!(
+                "{}{open}{}{close}{}",
+                &original[..start],
+                &original[start..end],
+                &original[end..]
+            )
+        };
+        let nav = r#"<nav aria-label="Main navigation">"#;
+        assert_eq!(original.matches(nav).count(), 1, "nav fixture drift");
+        let nav_hidden = original
+            .replacen(nav, &format!("<details><summary>Menu</summary>{nav}"), 1)
+            .replacen("</nav>", "</nav></details>", 1);
+
+        let cases = [
+            ("closed note", wrap_note("<details><summary>Privacy</summary>", "</details>")),
+            ("mixed-case closed", wrap_note("<DeTaIlS><SuMmArY>Privacy</SuMmArY>", "</DeTaIlS>")),
+            ("nested closed", wrap_note("<details><summary>Outer</summary><details><summary>Inner</summary>", "</details></details>")),
+            ("open-note policy", wrap_note("<details open><summary>Privacy</summary>", "</details>")),
+            ("open-false boolean policy", wrap_note(r#"<details open="false"><summary>Privacy</summary>"#, "</details>")),
+            ("cards collapsed", wrap_routes("<details><summary>Routes</summary>", "</details>")),
+            ("mixed-case cards", wrap_routes("<DeTaIlS><SuMmArY>Routes</SuMmArY>", "</DeTaIlS>")),
+            ("navigation collapsed", nav_hidden),
+            ("self-closing-like", original.replacen("</head>", "<details/></head>", 1)),
+        ];
+        for (case, candidate) in cases {
+            assert_ne!(candidate, original, "{case}: mutated fixture missing");
+            fs::write(docs.join("index.html"), candidate).expect("write hidden-details fixture");
+            let errors = validate(&root);
+            assert!(
+                errors.iter().any(|error| {
+                    error == "Unexpected active, embedded, or inert element: details"
+                }),
+                "{case}: expected exact forbidden-details diagnostic, got {errors:?}"
+            );
+        }
+
+        for (case, candidate) in [
+            ("comment decoy", original.replacen("</head>", "<!-- <details> --></head>", 1)),
+            ("quoted attribute decoy", original.replacen("<body", "<body data-example='<details>'", 1)),
+            ("extended name", original.replacen("</head>", "<details-extra></details-extra></head>", 1)),
+        ] {
+            assert_ne!(candidate, original, "{case}: mutated fixture missing");
+            fs::write(docs.join("index.html"), candidate).expect("write harmless lookalike");
+            let errors = validate(&root);
+            assert!(errors.is_empty(), "{case}: should remain accepted: {errors:?}");
+        }
+        fs::remove_dir_all(&root).expect("remove details fixture");
+    }
+
+    #[test]
     fn raw_text_containers_cannot_forge_visible_site_routes() {
         // Full shipping-page fixtures, not synthetic isolated fragments.
         let root = env::temp_dir().join(format!(
