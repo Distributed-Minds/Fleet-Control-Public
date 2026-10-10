@@ -299,8 +299,17 @@ fn run_oracles(selection: Selection, root: &Path) -> Result<(), String> {
 }
 
 fn main() {
-    let args: Vec<String> = env::args().skip(1).collect();
-    let result = parse_args(&args).and_then(|(selection, root)| run_oracles(selection, &root));
+    // OS argv is untrusted; env::args() panics on Unix non-UTF-8 bytes and
+    // bypasses the normal deterministic FAIL diagnostic for rejected input.
+    let result = env::args_os()
+        .skip(1)
+        .map(|arg| {
+            arg.into_string()
+                .map_err(|_| "non-UTF-8 CLI argument".to_owned())
+        })
+        .collect::<Result<Vec<String>, String>>()
+        .and_then(|args| parse_args(&args))
+        .and_then(|(selection, root)| run_oracles(selection, &root));
     if let Err(error) = result {
         eprintln!("FAIL: {error}");
         eprintln!("usage: all_oracles [--all | --list | --family NAME] [--root REPOSITORY]");
