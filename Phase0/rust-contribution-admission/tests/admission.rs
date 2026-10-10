@@ -1,6 +1,6 @@
 use free_energy_contribution_admission::{
     canonical_bytes, canonical_digest, evaluate, Admission, Claim, Context, Decision, Evidence,
-    OperationKey, ProviderObservation, Reason, Replay, SimulationJournal,
+    OperationKey, ProviderObservation, Reason, Replay, SimulationJournal, MAX_SIMULATED_RECEIPTS,
 };
 
 fn good() -> Admission {
@@ -437,5 +437,77 @@ fn malformed_operation_id_cannot_create_or_replace_synthetic_receipt() {
         journal.record(key(), &original),
         Replay::Identical(Decision::ReviewableInSimulation)
     );
+    assert_eq!(journal.provider_effects_emitted(), 0);
+}
+
+#[test]
+fn journal_rejects_unbounded_payload_fields_before_digest_or_receipt_insertion() {
+    let original = good();
+    let mut journal = SimulationJournal::default();
+    assert_eq!(
+        journal.record(key(), &original),
+        Replay::First(Decision::ReviewableInSimulation)
+    );
+
+    // Even an otherwise valid replay operation must not hash caller-controlled
+    // unbounded text. Check every field consumed by canonical_bytes.
+    let oversized = "a".repeat(1024 * 1024);
+    for index in 0..7 {
+        let mut input = original.clone();
+        match index {
+            0 => input.repository_incarnation = oversized.clone(),
+            1 => input.source_commit = oversized.clone(),
+            2 => input.intended_target_head = oversized.clone(),
+            3 => input.observed_target_head = oversized.clone(),
+            4 => input.input_digest = oversized.clone(),
+            5 => input.output_digest = oversized.clone(),
+            6 => input.reviewed_output_digest = oversized.clone(),
+            _ => unreachable!(),
+        }
+        assert_eq!(journal.record(key(), &input), Replay::Conflict);
+    }
+
+    // Rejected oversized attempts cannot replace the historical receipt.
+    assert_eq!(
+        journal.record(key(), &original),
+        Replay::Identical(Decision::ReviewableInSimulation)
+    );
+    assert_eq!(journal.provider_effects_emitted(), 0);
+}
+
+#[test]
+fn journal_capacity_fails_closed_without_eviction_or_replay_downgrade() {
+    let original = good();
+    let mut journal = SimulationJournal::default();
+    for index in 0..MAX_SIMULATED_RECEIPTS {
+        let mut operation = key();
+        operation.operation_id = format!("synthetic-{index:04}");
+        assert_eq!(
+            journal.record(operation, &original),
+            Replay::First(Decision::ReviewableInSimulation)
+        );
+    }
+
+    let mut over_capacity = key();
+    over_capacity.operation_id = "new-operation".into();
+    assert_eq!(
+        journal.record(over_capacity.clone(), &original),
+        Replay::CapacityExhausted
+    );
+    // No failed request was inserted, including on a repeated attempt.
+    assert_eq!(
+        journal.record(over_capacity, &original),
+        Replay::CapacityExhausted
+    );
+
+    let mut first_operation = key();
+    first_operation.operation_id = "synthetic-0000".into();
+    assert_eq!(
+        journal.record(first_operation.clone(), &original),
+        Replay::Identical(Decision::ReviewableInSimulation)
+    );
+    let mut changed = original.clone();
+    changed.output_digest = "different-reviewed-payload".into();
+    assert_eq!(journal.record(first_operation, &changed), Replay::Conflict);
     assert_eq!(journal.provider_effects_emitted(), 0);
 }
