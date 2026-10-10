@@ -333,16 +333,14 @@ mod tests {
             let incomplete = original.replacen(&fragment, "", 1);
             assert_ne!(incomplete, original);
             let error = parse_native(&incomplete)
-                .err()
-                .expect("an incomplete active transition must be rejected");
+                .expect_err("an incomplete active transition must be rejected");
             assert!(error.contains(&format!("missing {key}")), "{error}");
 
             let (prefix, terminal) = complete.rsplit_once("13\t104\t").unwrap();
             let incomplete_terminal = terminal.replacen(&fragment, "", 1);
             assert_ne!(incomplete_terminal, terminal);
             let error = parse_native(&format!("{prefix}13\t104\t{incomplete_terminal}"))
-                .err()
-                .expect("an incomplete terminal transition must be rejected");
+                .expect_err("an incomplete terminal transition must be rejected");
             assert!(error.contains(&format!("missing {key}")), "{error}");
         }
     }
