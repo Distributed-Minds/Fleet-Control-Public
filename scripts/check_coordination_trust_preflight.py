@@ -66,6 +66,29 @@ def job_conditions(path: Path, errors: list[str]) -> dict[str, str]:
     return jobs
 
 
+
+def valid_slot_snapshots(issues: object, errors: list[str]) -> bool:
+    """Reject malformed offline GitHub issue objects before archive discovery.
+
+    This is a read-only input boundary; it does not change installed
+    coordination_archive discovery, trust, or live slot selection rules.
+    """
+    if not isinstance(issues, list) or not all(isinstance(item, dict) for item in issues):
+        errors.append("slots: expected a list of GitHub issue snapshots")
+        return False
+    for index, item in enumerate(issues):
+        creator = item.get("user") or item.get("author") or {}
+        if (not isinstance(item.get("number"), int) or isinstance(item.get("number"), bool)
+                or not isinstance(item.get("state"), str)
+                or not isinstance(item.get("title"), str)
+                or not isinstance(item.get("body"), (str, type(None)))
+                or not isinstance(creator, dict)
+                or not isinstance(creator.get("login"), str)):
+            errors.append(f"slots: malformed issue snapshot at index {index}")
+            return False
+    return True
+
+
 def preflight(config: Path, workflow: Path, actions_variable: str | None,
               runtime_override: str | None, slots_path: Path | None) -> dict:
     errors: list[str] = []
@@ -99,8 +122,8 @@ def preflight(config: Path, workflow: Path, actions_variable: str | None,
     slot_status = "NOT_CHECKED"
     if slots_path is not None:
         issues = json.loads(slots_path.read_text(encoding="utf-8"))
-        if not isinstance(issues, list) or not all(isinstance(x, dict) for x in issues):
-            errors.append("slots: expected a list of GitHub issue snapshots")
+        if not valid_slot_snapshots(issues, errors):
+            slot_status = "INVALID"
         else:
             try:
                 # Reuse the installed Python discovery and epoch rules offline.
@@ -108,7 +131,7 @@ def preflight(config: Path, workflow: Path, actions_variable: str | None,
                     slots = archive.discover_slots("offline/offline", config, effective)
                 chosen = archive.live_slot(slots)
                 slot_status = f"VALID_ACTIVE_{chosen['slot']}_EPOCH_{chosen['epoch']}"
-            except (RuntimeError, KeyError, ValueError, TypeError) as exc:
+            except (RuntimeError, KeyError, ValueError, TypeError, AttributeError) as exc:
                 errors.append(f"slots: {exc}")
                 slot_status = "INVALID"
     return {"status": "BLOCKED" if errors else ("TRUST_AND_OFFLINE_SLOTS_CONSISTENT" if slots_path else "TRUST_CONFIG_CONSISTENT_ONLY"),
