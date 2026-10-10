@@ -189,13 +189,12 @@ fn mask_paragraph_code_spans(markdown: &str) -> String {
             None => false,
         };
         let atx_heading = fenced.is_none() && is_atx_heading(line);
-        // Thematic breaks interrupt even a pending paragraph. A dash Setext
-        // underline completes a heading only when it is not a thematic break.
-        let thematic_break = fenced.is_none() && is_thematic_break(line);
-        let setext_underline = fenced.is_none()
-            && !thematic_break
-            && !paragraph.is_empty()
-            && is_setext_underline(line);
+        // A Setext underline (including three or more dashes) completes
+        // pending paragraph content. Only when no preceding paragraph can be
+        // a heading does a matching dashed line become a thematic break.
+        let setext_underline =
+            fenced.is_none() && !paragraph.is_empty() && is_setext_underline(line);
+        let thematic_break = fenced.is_none() && !setext_underline && is_thematic_break(line);
         if fence_boundary || fenced.is_some() || line.trim().is_empty() || atx_heading || thematic_break {
             if !paragraph.is_empty() {
                 visible.push_str(&mask_inline_code(&paragraph));
@@ -721,8 +720,8 @@ mod tests {
         }
         assert!(!is_thematic_break("--"));
         assert!(!is_thematic_break("=="));
-        // Three dashes match both raw grammars: the caller gives thematic
-        // breaks precedence over a Setext underline.
+        // Three dashes match both raw grammars: with pending paragraph
+        // content, Setext takes precedence (CommonMark thematic example 59).
         assert!(is_setext_underline("---"));
         assert!(is_thematic_break("---"));
     }
@@ -764,6 +763,10 @@ mod tests {
         for (source, expected) in [
             (
                 "Heading `open\n[hidden](missing.md) and `close`\n--\n[visible](later.md)\n",
+                vec!["later.md"],
+            ),
+            (
+                "Heading `open\n[hidden](missing.md) and `close`\n---\n[visible](later.md)\n",
                 vec!["later.md"],
             ),
             (
