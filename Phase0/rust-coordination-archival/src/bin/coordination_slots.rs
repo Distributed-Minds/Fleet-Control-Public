@@ -270,7 +270,21 @@ fn execute(args: &[String]) -> Result<SlotRecord, String> {
 }
 
 fn main() -> ExitCode {
-    let args: Vec<String> = env::args().skip(1).collect();
+    // Untrusted Unix argv may contain non-UTF-8 bytes. env::args() panics,
+    // bypassing the CLI's explicit non-authoritative SLOT_UNKNOWN disposition.
+    let args: Vec<String> = match env::args_os()
+        .skip(1)
+        .map(|arg| arg.into_string())
+        .collect::<Result<Vec<_>, _>>()
+    {
+        Ok(args) => args,
+        Err(_) => {
+            eprintln!(
+                "SLOT_UNKNOWN arguments must be valid UTF-8; no coordination write authority"
+            );
+            return ExitCode::FAILURE;
+        }
+    };
     match execute(&args) {
         Ok(active) => {
             println!(
