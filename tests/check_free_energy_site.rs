@@ -237,10 +237,13 @@ fn has_valid_head_title(elements: &[&str]) -> bool {
 /// Reject inert template and scripting-dependent noscript containers: their
 /// descendants appear in this lexical source scanner but are not reliable
 /// rendered page content. They cannot satisfy Contact/navigation/card checks.
+/// Also reject all details elements on this fixed static site: when initially
+/// collapsed, they can conceal mandatory participation/privacy disclosures.
+/// Even details with an open attribute are denied by the fixed-site policy.
 fn disallowed_site_elements(elements: &[&str]) -> Vec<&'static str> {
     [
         "script", "iframe", "form", "object", "embed", "template", "noscript",
-        "textarea", "xmp", "plaintext", "noembed", "noframes",
+        "textarea", "xmp", "plaintext", "noembed", "noframes", "details",
     ]
         .into_iter()
         .filter(|name| elements.iter().any(|tag| is_open_element(tag, name)))
