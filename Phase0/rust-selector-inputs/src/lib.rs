@@ -203,13 +203,23 @@ pub fn evaluate(s: &Snapshot) -> Result<Selection, Denial> {
             return Err(Denial::Malformed);
         }
         let mut deps = BTreeSet::new();
-        if source.dependencies.iter().any(|d| !atom(d) || !deps.insert(d)) {
+        if source
+            .dependencies
+            .iter()
+            .any(|d| !atom(d) || !deps.insert(d))
+        {
             return Err(Denial::Malformed);
         }
     }
     let mut clean = BTreeSet::new();
     for source in &s.sources {
-        if unsafe_origin(&source.id, &s.claim, &sources, &mut BTreeSet::new(), &mut clean) {
+        if unsafe_origin(
+            &source.id,
+            &s.claim,
+            &sources,
+            &mut BTreeSet::new(),
+            &mut clean,
+        ) {
             return Err(Denial::UntrustedLineage);
         }
     }
@@ -231,7 +241,10 @@ pub fn evaluate(s: &Snapshot) -> Result<Selection, Denial> {
         {
             return Err(Denial::Incomplete);
         }
-        if ranks.insert((r.model.as_str(), r.source.as_str()), r.score).is_some() {
+        if ranks
+            .insert((r.model.as_str(), r.source.as_str()), r.score)
+            .is_some()
+        {
             return Err(Denial::AmbiguousEvidence);
         }
     }
@@ -253,8 +266,14 @@ pub fn evaluate(s: &Snapshot) -> Result<Selection, Denial> {
         }
         let score = agreed.ok_or(Denial::Incomplete)?;
         match winner {
-            None => { winner = Some((model, score)); tied = false; }
-            Some((_, old)) if score < old => { winner = Some((model, score)); tied = false; }
+            None => {
+                winner = Some((model, score));
+                tied = false;
+            }
+            Some((_, old)) if score < old => {
+                winner = Some((model, score));
+                tied = false;
+            }
             Some((_, old)) if score == old => tied = true,
             _ => {}
         }
@@ -298,8 +317,10 @@ impl Journal {
         if decision.semantic_basis != evaluate(effect)?.semantic_basis {
             return Err(Denial::EffectTimeDrift);
         }
-        self.records
-            .insert(operation, (decision.semantic_basis.clone(), decision.clone()));
+        self.records.insert(
+            operation,
+            (decision.semantic_basis.clone(), decision.clone()),
+        );
         Ok(Outcome::Committed(decision))
     }
 }
