@@ -1,0 +1,11 @@
+version	operation	transport	positive_ack	lost_ack_attribution	automatic_replay	target_cas	proof_root
+1	create_issue	github-rest	UNKNOWN	UNSUPPORTED	UNSUPPORTED	UNKNOWN	none
+1	create_comment	github-rest	UNKNOWN	UNSUPPORTED	UNSUPPORTED	UNKNOWN	none
+1	create_pr	github-rest	UNKNOWN	UNSUPPORTED	UNSUPPORTED	UNKNOWN	none
+1	edit_metadata	github-rest	UNKNOWN	UNKNOWN	UNSUPPORTED	UNKNOWN	none
+1	contents_update	github-rest	UNKNOWN	UNKNOWN	UNSUPPORTED	UNKNOWN	none
+1	move_ref	github-rest	UNKNOWN	UNKNOWN	UNSUPPORTED	UNKNOWN	none
+1	merge_pr	github-rest	UNKNOWN	UNSUPPORTED	UNSUPPORTED	UNKNOWN	none
+1	rerun_workflow	github-rest	UNKNOWN	UNSUPPORTED	UNSUPPORTED	UNKNOWN	none
+1	create_comment	github-connected-chat	UNKNOWN	UNSUPPORTED	UNSUPPORTED	UNKNOWN	none
+1	merge_pr	github-connected-chat	UNKNOWN	UNSUPPORTED	UNSUPPORTED	UNKNOWN	none
