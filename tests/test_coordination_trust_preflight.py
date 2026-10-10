@@ -175,6 +175,24 @@ class TrustPreflightTests(unittest.TestCase):
                     self.assertEqual(exit_code, 2)
                     self.assertEqual(json.loads(output.getvalue())["status"], "BLOCKED")
 
+    def test_present_malformed_user_must_not_fall_back_to_author_alias(self):
+        # The offline author alias is only a fallback when user is absent.
+        # A present but falsey malformed API field must fail closed.
+        for bad_user in (None, False, 0, "", [], {}):
+            with self.subTest(bad_user=bad_user):
+                malformed = issue(186, "B", "ACTIVE", 2)
+                malformed["user"] = bad_user
+                malformed["author"] = {"login": "geromet"}
+                self.slots.write_text(json.dumps([
+                    issue(168, "A", "DRAINING", 1), malformed]))
+                with mock.patch.dict(os.environ, {}, clear=True):
+                    result = preflight.preflight(
+                        self.policy, self.workflow, "geromet", None, self.slots)
+                self.assertEqual(result["status"], "BLOCKED", result)
+                self.assertEqual(result["slots"], "INVALID", result)
+                self.assertTrue(any("malformed issue snapshot at index 1" in e
+                                    for e in result["errors"]), result)
+
     def test_offline_author_fallback_preserves_valid_slot_selection(self):
         fallback = issue(186, "B", "ACTIVE", 2)
         fallback["author"] = fallback.pop("user")
