@@ -283,3 +283,36 @@ fn forged_rank_model_incarnation_is_denied_without_state_change() {
     assert_eq!(evaluate(&s), Err(Denial::Incomplete));
     assert_eq!(evaluate(&fixture()).unwrap().model, "conservative");
 }
+
+#[test]
+fn full_journal_denies_new_operations_without_evicting_replay_receipts() {
+    let stable = fixture();
+    let mut journal = Journal::default();
+    for operation in 1..=MAX_SYNTHETIC_JOURNAL_RECORDS as u64 {
+        assert!(matches!(
+            journal.submit(operation, &stable, &stable),
+            Ok(Outcome::Committed(_))
+        ));
+    }
+    assert_eq!(journal.records.len(), MAX_SYNTHETIC_JOURNAL_RECORDS);
+
+    let extra_operation = MAX_SYNTHETIC_JOURNAL_RECORDS as u64 + 1;
+    assert_eq!(
+        journal.submit(extra_operation, &stable, &stable),
+        Err(Denial::CapacityExceeded)
+    );
+    assert_eq!(journal.records.len(), MAX_SYNTHETIC_JOURNAL_RECORDS);
+
+    // Capacity exhaustion must not destroy a previously verified result.
+    assert_eq!(
+        journal.submit(1, &stable, &stable),
+        Ok(Outcome::Reconciled(evaluate(&stable).unwrap()))
+    );
+    let mut retargeted = stable.clone();
+    retargeted.policy_generation += 1;
+    assert_eq!(
+        journal.submit(1, &retargeted, &retargeted),
+        Err(Denial::ConflictingReplay)
+    );
+    assert_eq!(journal.records.len(), MAX_SYNTHETIC_JOURNAL_RECORDS);
+}
