@@ -223,7 +223,7 @@ fn valid_historical_state(p: &Prior) -> bool {
                 && p.state.mode == Mode::Plan
                 && p.state.noop_streak == 0
                 && p.state.last_build == BuildResult::None
-        },
+        }
         Phase::Analytic => {
             if p.size >= 3 && p.index == 1 {
                 p.state.mode == Mode::Plan
