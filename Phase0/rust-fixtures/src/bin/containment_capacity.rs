@@ -595,7 +595,35 @@ fn read_fixture_with_metadata(path: &Path, before: &fs::Metadata) -> Result<Stri
     String::from_utf8(bytes).map_err(|_| "containment-capacity fixture must be UTF-8".to_owned())
 }
 
+// O_NOFOLLOW on a leaf does not reject symbolic links in parent directories.
+// This is a static input-path admission check, not an atomic defense against
+// concurrent parent-directory replacement or a directory-handle sandbox.
+fn reject_symlinked_ancestors(path: &Path) -> Result<(), String> {
+    let mut prefix = PathBuf::new();
+    let mut components = path.components().peekable();
+    while let Some(component) = components.next() {
+        prefix.push(component.as_os_str());
+        if components.peek().is_none() || !matches!(component, std::path::Component::Normal(_)) {
+            continue;
+        }
+        let observed = fs::symlink_metadata(&prefix)
+            .map_err(|error| format!("cannot stat fixture ancestor {prefix:?}: {error}"))?;
+        if observed.file_type().is_symlink() {
+            return Err(format!(
+                "containment-capacity fixture has symbolic-link ancestor {prefix:?}"
+            ));
+        }
+        if !observed.is_dir() {
+            return Err(format!(
+                "containment-capacity fixture ancestor is not a directory {prefix:?}"
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn read_fixture_bounded(path: &Path) -> Result<String, String> {
+    reject_symlinked_ancestors(path)?;
     let before =
         fs::symlink_metadata(path).map_err(|error| format!("cannot stat {path:?}: {error}"))?;
     read_fixture_with_metadata(path, &before)
