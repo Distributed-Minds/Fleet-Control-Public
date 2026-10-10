@@ -10,8 +10,14 @@ fn fixture() -> Snapshot {
         complete: true,
         jointly_fenced: true,
         models: vec![
-            Model { id: "conservative".into(), incarnation: "m1".into() },
-            Model { id: "optimistic".into(), incarnation: "m2".into() },
+            Model {
+                id: "conservative".into(),
+                incarnation: "m1".into(),
+            },
+            Model {
+                id: "optimistic".into(),
+                incarnation: "m2".into(),
+            },
         ],
         sources: ["registry-a", "registry-b"]
             .iter()
@@ -227,8 +233,5 @@ fn unknown_policy_or_schema_and_zero_operation_not_accepted() {
     s.schema = 2;
     assert_eq!(evaluate(&s), Err(Denial::Incomplete));
     let s = fixture();
-    assert_eq!(
-        Journal::default().submit(0, &s, &s),
-        Err(Denial::Malformed)
-    );
+    assert_eq!(Journal::default().submit(0, &s, &s), Err(Denial::Malformed));
 }
