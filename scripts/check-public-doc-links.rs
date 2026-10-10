@@ -718,6 +718,12 @@ mod tests {
     fn non_atx_markers_leave_real_multiline_code_spans_intact() {
         for not_heading in [
             "    ### Indented",
+            "\t# Leading tab",
+            " \t# Leading tab after space",
+            "  \t# Leading tab after two spaces",
+            "#\u{00a0}Nonbreaking space",
+            "#\u{2003}Em space",
+            "##\u{00a0}Nonbreaking space",
             "#not-a-heading",
             "###Heading",
             "####### Heading",
@@ -748,6 +754,12 @@ mod tests {
         }
         for line in [
             "    # Code",
+            "\t# Leading tab",
+            " \t# Leading tab after space",
+            "  \t# Leading tab after two spaces",
+            "#\u{00a0}Nonbreaking space",
+            "#\u{2003}Em space",
+            "##\u{00a0}Nonbreaking space",
             "####### Too many",
             "#Not-a-heading",
             "\\# Escaped",
