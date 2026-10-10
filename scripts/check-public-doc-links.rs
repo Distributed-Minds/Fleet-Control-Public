@@ -572,13 +572,15 @@ fn parse_destination(raw: &str) -> Result<Option<String>, String> {
         return Ok(None);
     }
     let decoded = decode_markdown_path(path)?;
+    // Reject decoded control bytes first so an attacker cannot smuggle
+    // synthetic diagnostic lines or path segments ahead of scheme handling.
+    if decoded.chars().any(char::is_control) {
+        return Err("unsafe percent-decoded control".into());
+    }
     // Percent escapes must not smuggle a new scheme/colon into the first
     // filesystem path component after the raw URI-scheme check.
     if decoded.split('/').next().is_some_and(|segment| segment.contains(':')) {
         return Err("unsupported or unsafe URI scheme".into());
-    }
-    if decoded.chars().any(char::is_control) {
-        return Err("unsafe percent-decoded control".into());
     }
     if decoded.is_empty() || decoded.contains('\0') {
         return Err("empty or NUL destination".into());
