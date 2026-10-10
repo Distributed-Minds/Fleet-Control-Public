@@ -2233,4 +2233,67 @@ mod tests {
         }
     }
 
+
+    // #412: same-kind escaped title delimiters are real CommonMark links.
+    // A terminal quote escaped by an odd backslash run is not a closer.
+    #[test]
+    fn escaped_link_title_quote_parity_and_real_missing_targets() {
+        let cases = [
+            ("double", r#"[good](present.md "say \"hi\"") [bad](missing.md "say \"hi\"")"#, "present.md"),
+            ("single", r#"[good](present.md 'say \'hi\'') [bad](missing.md 'say \'hi\'')"#, "present.md"),
+            ("angle", r#"[good](<present.md> "say \"hi\"") [bad](<missing.md> "say \"hi\"")"#, "present.md"),
+            ("image", r#"![good](present.svg "say \"hi\"") [bad](missing.md "say \"hi\"")"#, "present.svg"),
+        ];
+        for (name, markdown, existing) in cases {
+            let mut diagnostics = Report::default();
+            let links = collect_links(markdown, "README.md", &mut diagnostics);
+            assert_eq!(links, vec![existing.to_string(), "missing.md".to_string()], "{name}");
+            assert!(diagnostics.errors.is_empty(), "{name}: {:?}", diagnostics.errors);
+
+            let sandbox = Sandbox::new();
+            sandbox.write(existing, "exists");
+            sandbox.write("README.md", markdown);
+            let result = sandbox.scan();
+            assert_eq!(result.local_links, 2, "{name}");
+            assert_eq!(result.errors.len(), 1, "{name}: {:?}", result.errors);
+            assert!(
+                result.errors[0].contains("target missing: missing.md"),
+                "{name}: {:?}", result.errors
+            );
+        }
+
+        for quote in ['"', '\''] {
+            for count in 0..=8 {
+                let slashes = "\\".repeat(count);
+                let interior = format!("[x](present.md {quote}before{slashes}{quote}after{quote})");
+                let terminal = format!("[x](present.md {quote}before{slashes}{quote})");
+                for (kind, markdown, valid) in [
+                    ("interior", &interior, count % 2 == 1),
+                    ("terminal", &terminal, count % 2 == 0),
+                ] {
+                    let mut diagnostics = Report::default();
+                    let links = collect_links(markdown, "README.md", &mut diagnostics);
+                    if valid {
+                        assert_eq!(
+                            links, vec!["present.md".to_string()],
+                            "{kind} quote={quote:?} count={count}: {:?}",
+                            diagnostics.errors
+                        );
+                        assert!(
+                            diagnostics.errors.is_empty(),
+                            "{kind} quote={quote:?} count={count}: {:?}",
+                            diagnostics.errors
+                        );
+                    } else {
+                        assert!(
+                            links.is_empty() && !diagnostics.errors.is_empty(),
+                            "{kind} quote={quote:?} count={count}: links={links:?} errors={:?}",
+                            diagnostics.errors
+                        );
+                    }
+                }
+            }
+        }
+    }
+
 }
