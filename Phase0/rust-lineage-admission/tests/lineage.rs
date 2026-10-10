@@ -1,19 +1,56 @@
 //! LA6 admission and effect-cut regressions; no provider actions are exercised.
-use free_energy_lineage_admission::{Denied, EffectInput, Eligibility, Receipt, Registry, Scope, Selection, Transition};
+use free_energy_lineage_admission::{
+    Denied, EffectInput, Eligibility, Receipt, Registry, Scope, Selection, Transition,
+};
 use std::collections::BTreeSet;
 
 fn fixture() -> (Registry, Selection, Transition) {
-    let scope = Scope { repository: 1360059617, repo_incarnation: "repo-A".into(), installation: "install-A".into(), tenant: "tenant-A".into(), namespace: "probe-A".into() };
+    let scope = Scope {
+        repository: 1360059617,
+        repo_incarnation: "repo-A".into(),
+        installation: "install-A".into(),
+        tenant: "tenant-A".into(),
+        namespace: "probe-A".into(),
+    };
     let obligations = BTreeSet::from(["original-probe".into()]);
-    let s = Selection { scope: scope.clone(), head: "h0".into(), generation: 0, policy: 2, obligations: obligations.clone(), selected_issuer: true, unique_current: true, frontier_complete: true, forked: false, revoked: false };
-    let t = Transition { id: "op1".into(), scope: scope.clone(), predecessor: "h0".into(), previous_generation: 0, policy: 2, successor: "worker-B".into(), new_head: "h1".into(), admitted_by_issuer: true };
+    let s = Selection {
+        scope: scope.clone(),
+        head: "h0".into(),
+        generation: 0,
+        policy: 2,
+        obligations: obligations.clone(),
+        selected_issuer: true,
+        unique_current: true,
+        frontier_complete: true,
+        forked: false,
+        revoked: false,
+    };
+    let t = Transition {
+        id: "op1".into(),
+        scope: scope.clone(),
+        predecessor: "h0".into(),
+        previous_generation: 0,
+        policy: 2,
+        successor: "worker-B".into(),
+        new_head: "h1".into(),
+        admitted_by_issuer: true,
+    };
     (Registry::new(scope, "h0".into(), 0, 2, obligations), s, t)
 }
 fn request(s: &Selection, r: &Receipt) -> EffectInput {
     let mut cut = s.clone();
     cut.head = r.transition.new_head.clone();
     cut.generation = r.generation;
-    EffectInput { cut, operation_id: r.transition.id.clone(), actor: r.transition.successor.clone(), authorized_action: true, recovery_required: true, recovery_authorized: true, observed_resource: "inc-1".into(), expected_resource: "inc-1".into() }
+    EffectInput {
+        cut,
+        operation_id: r.transition.id.clone(),
+        actor: r.transition.successor.clone(),
+        authorized_action: true,
+        recovery_required: true,
+        recovery_authorized: true,
+        observed_resource: "inc-1".into(),
+        expected_resource: "inc-1".into(),
+    }
 }
 #[test]
 fn la6_10_positive_simulation_only() {
@@ -21,7 +58,10 @@ fn la6_10_positive_simulation_only() {
     let receipt = db.admit(&s, t).unwrap();
     assert_eq!(db.head(), ("h1", 1));
     assert_eq!(receipt.obligations, s.obligations);
-    assert_eq!(db.effect(&receipt, &request(&s, &receipt)), Ok(Eligibility::SimulationOnly));
+    assert_eq!(
+        db.effect(&receipt, &request(&s, &receipt)),
+        Ok(Eligibility::SimulationOnly)
+    );
 }
 #[test]
 fn la6_01_self_declared_issuer_is_not_selected() {
@@ -34,7 +74,9 @@ fn la6_02_competing_successors_only_one_wins_in_both_orders() {
     for reversed in [false, true] {
         let (mut db, s, a) = fixture();
         let mut b = a.clone();
-        b.id = "op2".into(); b.successor = "worker-C".into(); b.new_head = "h2".into();
+        b.id = "op2".into();
+        b.successor = "worker-C".into();
+        b.new_head = "h2".into();
         let (first, second) = if reversed { (b, a) } else { (a, b) };
         let receipt = db.admit(&s, first).unwrap();
         assert_eq!(db.admit(&s, second), Err(Denied::Stale));
@@ -46,7 +88,11 @@ fn la6_02_competing_successors_only_one_wins_in_both_orders() {
 fn la6_03_cloned_forks_and_unselected_heads_denied() {
     for which in [0, 1] {
         let (mut db, mut s, t) = fixture();
-        if which == 0 { s.forked = true; } else { s.unique_current = false; }
+        if which == 0 {
+            s.forked = true;
+        } else {
+            s.unique_current = false;
+        }
         assert_eq!(db.admit(&s, t), Err(Denied::UnknownLineage));
     }
 }
@@ -75,7 +121,8 @@ fn la6_06_wrong_resource_or_missing_recovery_denied() {
     e.observed_resource = "inc-1".into();
     e.recovery_authorized = false;
     assert_eq!(db.effect(&receipt, &e), Err(Denied::RecoveryHold));
-    e.recovery_authorized = true; e.authorized_action = false;
+    e.recovery_authorized = true;
+    e.authorized_action = false;
     assert_eq!(db.effect(&receipt, &e), Err(Denied::NoActionAuthority));
 }
 #[test]
@@ -85,7 +132,8 @@ fn la6_07_effect_time_policy_or_head_drift_denied() {
     let mut e = request(&s, &receipt);
     e.cut.policy += 1;
     assert_eq!(db.effect(&receipt, &e), Err(Denied::Stale));
-    e.cut.policy -= 1; e.cut.head = "old-head".into();
+    e.cut.policy -= 1;
+    e.cut.head = "old-head".into();
     assert_eq!(db.effect(&receipt, &e), Err(Denied::Stale));
 }
 #[test]
@@ -109,7 +157,8 @@ fn exact_lost_ack_replay_is_idempotent_but_changed_retry_denied() {
     let receipt = db.admit(&s, t.clone()).unwrap();
     assert_eq!(db.admit(&s, t.clone()), Ok(receipt));
     assert_eq!(db.admitted_count(), 1);
-    let mut altered = t; altered.successor = "attacker".into();
+    let mut altered = t;
+    altered.successor = "attacker".into();
     assert_eq!(db.admit(&s, altered), Err(Denied::ReplayConflict));
 }
 #[test]
@@ -120,8 +169,12 @@ fn old_head_restore_or_issuer_denial_does_not_advance() {
     t.admitted_by_issuer = true;
     let receipt = db.admit(&s, t).unwrap();
     let mut second = receipt.transition;
-    second.id = "next".into(); second.predecessor = "h1".into();
-    second.previous_generation = 1; second.new_head = "h0".into();
-    let mut current = s; current.head = "h1".into(); current.generation = 1;
+    second.id = "next".into();
+    second.predecessor = "h1".into();
+    second.previous_generation = 1;
+    second.new_head = "h0".into();
+    let mut current = s;
+    current.head = "h1".into();
+    current.generation = 1;
     assert_eq!(db.admit(&current, second), Err(Denied::ReplayConflict));
 }

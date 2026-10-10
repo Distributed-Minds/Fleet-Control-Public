@@ -85,14 +85,29 @@ pub struct Registry {
 }
 
 impl Registry {
-    pub fn new(scope: Scope, head: String, generation: u64, policy: u64, obligations: BTreeSet<String>) -> Self {
+    pub fn new(
+        scope: Scope,
+        head: String,
+        generation: u64,
+        policy: u64,
+        obligations: BTreeSet<String>,
+    ) -> Self {
         let mut seen_heads = BTreeSet::new();
         seen_heads.insert(head.clone());
-        Self { scope, head, generation, policy, obligations, seen_heads, receipts: BTreeMap::new() }
+        Self {
+            scope,
+            head,
+            generation,
+            policy,
+            obligations,
+            seen_heads,
+            receipts: BTreeMap::new(),
+        }
     }
 
     fn selection_ok(&self, s: &Selection) -> Result<(), Denied> {
-        if !s.selected_issuer || !s.unique_current || !s.frontier_complete || s.forked || s.revoked {
+        if !s.selected_issuer || !s.unique_current || !s.frontier_complete || s.forked || s.revoked
+        {
             return Err(Denied::UnknownLineage);
         }
         if s.scope != self.scope {
@@ -108,7 +123,11 @@ impl Registry {
     }
 
     /// Exact-operation retry returns historical receipt, not fresh authority.
-    pub fn admit(&mut self, selected: &Selection, transition: Transition) -> Result<Receipt, Denied> {
+    pub fn admit(
+        &mut self,
+        selected: &Selection,
+        transition: Transition,
+    ) -> Result<Receipt, Denied> {
         if let Some(previous) = self.receipts.get(&transition.id) {
             return if previous.transition == transition {
                 Ok(previous.clone())
@@ -120,20 +139,27 @@ impl Registry {
         if transition.scope != self.scope {
             return Err(Denied::Scope);
         }
-        if !transition.admitted_by_issuer || transition.id.is_empty()
-            || transition.successor.is_empty() || transition.new_head.is_empty()
-            || transition.new_head == transition.predecessor {
+        if !transition.admitted_by_issuer
+            || transition.id.is_empty()
+            || transition.successor.is_empty()
+            || transition.new_head.is_empty()
+            || transition.new_head == transition.predecessor
+        {
             return Err(Denied::InvalidTransition);
         }
         if transition.predecessor != self.head
             || transition.previous_generation != self.generation
-            || transition.policy != self.policy {
+            || transition.policy != self.policy
+        {
             return Err(Denied::Stale);
         }
         if self.seen_heads.contains(&transition.new_head) {
             return Err(Denied::ReplayConflict);
         }
-        let generation = self.generation.checked_add(1).ok_or(Denied::InvalidTransition)?;
+        let generation = self
+            .generation
+            .checked_add(1)
+            .ok_or(Denied::InvalidTransition)?;
         let receipt = Receipt {
             transition: transition.clone(),
             generation,
@@ -154,13 +180,16 @@ impl Registry {
             || receipt.transition.new_head != self.head
             || receipt.generation != self.generation
             || receipt.obligations != self.obligations
-            || request.actor != receipt.transition.successor {
+            || request.actor != receipt.transition.successor
+        {
             return Err(Denied::Stale);
         }
         if !request.authorized_action {
             return Err(Denied::NoActionAuthority);
         }
-        if request.observed_resource.is_empty() || request.observed_resource != request.expected_resource {
+        if request.observed_resource.is_empty()
+            || request.observed_resource != request.expected_resource
+        {
             return Err(Denied::WrongResource);
         }
         if request.recovery_required && !request.recovery_authorized {
