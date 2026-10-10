@@ -165,6 +165,23 @@ fn is_setext_underline(line: &str) -> bool {
     content[width..].iter().all(|&byte| byte == b' ' || byte == b'\t')
 }
 
+// An indented CommonMark code line starts at >=4 visual columns at a fresh
+// block boundary. Callers must preserve indented lazy paragraph continuations.
+fn is_indented_code_line(line: &str) -> bool {
+    let mut column = 0;
+    for byte in line.bytes() {
+        column += match byte {
+            b' ' => 1,
+            b'\t' => 4 - column % 4,
+            _ => break,
+        };
+        if column >= 4 {
+            return true;
+        }
+    }
+    false
+}
+
 fn mask_paragraph_code_spans(markdown: &str) -> String {
     let mut visible = String::with_capacity(markdown.len());
     let mut paragraph = String::new();
@@ -204,6 +221,17 @@ fn mask_paragraph_code_spans(markdown: &str) -> String {
                 visible.push_str(&mask_inline_code(raw_line));
             } else {
                 visible.push_str(raw_line);
+            }
+        } else if paragraph.is_empty() && is_indented_code_line(line) {
+            // Indented literal code must neither emit links nor contribute
+            // backticks to adjacent paragraph-wide inline-code spans.
+            // Preserve source byte count and line breaks for diagnostics.
+            for byte in raw_line.bytes() {
+                visible.push(if byte == b'\n' || byte == b'\r' {
+                    byte as char
+                } else {
+                    ' '
+                });
             }
         } else if setext_underline {
             // All heading content lines share one inline-span context. Flush
@@ -705,6 +733,94 @@ mod tests {
 
 
 
+
+    #[test]
+    fn indented_code_blocks_do_not_emit_markdown_destinations() {
+        for source in [
+            "    [hidden](missing.md)\n",
+            "     [hidden](missing.md)\n",
+            "\t[hidden](missing.md)\n",
+            " \t[hidden](missing.md)\n",
+            "   \t[hidden](missing.md)\n",
+            "    [hidden](missing.md)\n    [also-hidden](other.md)\n",
+            "    ```md\n    [hidden](missing.md)\n    ```\n",
+            "intro\n\n    [hidden](missing.md)\n",
+            "\n    [hidden](missing.md)\n",
+            "    [hidden](missing.md)\r\n",
+            "# heading\n    [hidden](missing.md)\n",
+            "Heading\n==\n    [hidden](missing.md)\n",
+            "intro\n* * *\n    [hidden](missing.md)\n",
+        ] {
+            let mut report = Report::default();
+            assert!(
+                collect_links(source, "README.md", &mut report).is_empty(),
+                "incorrect code link: {source:?}"
+            );
+            assert!(report.errors.is_empty(), "{source:?}: {:?}", report.errors);
+        }
+    }
+
+    #[test]
+    fn indented_code_backticks_cannot_mask_later_paragraph_links() {
+        for (source, expected) in [
+            (
+                "    `literal backtick inside code\n[real](missing.md) and `later unmatched backtick\n",
+                vec!["missing.md"],
+            ),
+            (
+                "    [code-example](missing.md) and `literal backtick\n[real](present.md) and `later unmatched backtick\n",
+                vec!["present.md"],
+            ),
+            (
+                "    [code-example](missing.md) and `literal backtick\n\n[real](present.md) and `later unmatched backtick\n",
+                vec!["present.md"],
+            ),
+            (
+                "    [hidden](missing.md)\n[real](present.md)\n",
+                vec!["present.md"],
+            ),
+            (
+                "    [hidden](missing.md)\n\n[real](present.md)\n",
+                vec!["present.md"],
+            ),
+            (
+                "intro\n    [real](missing.md)\n",
+                vec!["missing.md"],
+            ),
+            (
+                "intro\n\t[real](missing.md)\n",
+                vec!["missing.md"],
+            ),
+            (
+                "   [real](missing.md)\n",
+                vec!["missing.md"],
+            ),
+        ] {
+            let mut report = Report::default();
+            assert_eq!(
+                collect_links(source, "README.md", &mut report),
+                expected,
+                "source: {source:?}"
+            );
+            assert!(report.errors.is_empty(), "{source:?}: {:?}", report.errors);
+        }
+    }
+
+    #[test]
+    fn indented_code_does_not_generate_missing_target_diagnostics() {
+        let sandbox = Sandbox::new();
+        sandbox.write("README.md", "    [code](missing.md)\n\n[real](present.md)\n");
+        sandbox.write("present.md", "present\n");
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 1);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+
+        sandbox.write("README.md", "    `literal\n[broken](missing.md) and `later\n");
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 1);
+        assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+        assert!(report.errors[0].contains("target missing: missing.md"));
+    }
 
     #[test]
     fn block_delimiter_recognizers_reject_near_misses() {
