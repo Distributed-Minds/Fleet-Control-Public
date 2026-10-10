@@ -9,7 +9,8 @@ use serde::Deserialize;
 use std::collections::HashSet;
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::process;
 
 #[cfg(test)]
@@ -207,6 +208,32 @@ fn validate(suite: &Suite) -> Result<usize, Vec<String>> {
         if case.id.trim().is_empty() || !ids.insert(case.id.as_str()) {
             failures.push(format!("duplicate or blank scenario id: {}", case.id));
         }
+        // Historical sparse fixtures inherit their independently pinned
+        // all-current control for backwards comparison only. An additive case
+        // must bring its own complete prerequisite facts, or a missing fact
+        // silently becomes true and can fabricate a positive test outcome.
+        if !REQUIRED_HISTORICAL_CASE_IDS.contains(&case.id.as_str()) {
+            let facts = &case.facts;
+            let complete = [
+                facts.archive_exact,
+                facts.order_current,
+                facts.manifest_current,
+                facts.snapshot_coherent,
+                facts.source_current,
+                facts.authority_current,
+                facts.horizon_current,
+                facts.durability_current,
+            ]
+            .iter()
+            .all(Option::is_some)
+                && facts.protected.is_some();
+            if !complete {
+                failures.push(format!(
+                    "{}: additive scenario must explicitly supply all safety prerequisites and protected state",
+                    case.id
+                ));
+            }
+        }
         let actual = evaluate(&case.facts);
         if actual != case.expect {
             failures.push(format!(
@@ -223,6 +250,72 @@ fn validate(suite: &Suite) -> Result<usize, Vec<String>> {
     }
 }
 
+const MAX_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
+
+/// Advisory fixture input only. The on-disk path and its contents remain
+/// caller-controlled and cannot establish provider history or mutation rights.
+/// A bounded read must not hang on a substituted FIFO or trust a prior stat
+/// after the pathname has been replaced.
+fn read_fixture_with_observed_metadata(
+    path: &Path,
+    observed: &fs::Metadata,
+) -> Result<String, String> {
+    if !observed.file_type().is_file() {
+        return Err("fixture must be a regular, non-symlink file".to_owned());
+    }
+    if observed.len() > MAX_FIXTURE_BYTES {
+        return Err("fixture exceeds the 8 MiB input limit".to_owned());
+    }
+
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // Prevent an open-time symlink substitution and avoid blocking on a
+        // FIFO that replaces the regular file after the initial stat.
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let file = options
+        .open(path)
+        .map_err(|error| format!("cannot open fixture: {error}"))?;
+    let opened = file
+        .metadata()
+        .map_err(|error| format!("cannot stat opened fixture: {error}"))?;
+    if !opened.file_type().is_file() {
+        return Err("opened fixture is not a regular file".to_owned());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if opened.dev() != observed.dev() || opened.ino() != observed.ino() {
+            return Err("fixture replaced between metadata check and open".to_owned());
+        }
+    }
+    if opened.len() > MAX_FIXTURE_BYTES {
+        return Err("opened fixture exceeds the 8 MiB input limit".to_owned());
+    }
+
+    // Check bytes actually read, not just pre-open metadata: a concurrent
+    // writer could extend the file after both stat observations.
+    let mut bytes = Vec::new();
+    file.take(MAX_FIXTURE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("cannot read opened fixture: {error}"))?;
+    if bytes.len() as u64 > MAX_FIXTURE_BYTES {
+        return Err("fixture exceeds the 8 MiB input limit".to_owned());
+    }
+    String::from_utf8(bytes).map_err(|_| "fixture must be UTF-8".to_owned())
+}
+
+fn read_fixture_bounded(path: &Path) -> Result<String, String> {
+    let observed =
+        fs::symlink_metadata(path).map_err(|error| format!("cannot stat fixture: {error}"))?;
+    read_fixture_with_observed_metadata(path, &observed)
+}
+
 fn execute() -> Result<(), String> {
     let mut args = env::args_os().skip(1);
     let path = args
@@ -232,8 +325,7 @@ fn execute() -> Result<(), String> {
     if args.next().is_some() {
         return Err("usage: coordination_history [fixtures.json]".to_owned());
     }
-    let input =
-        fs::read_to_string(&path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    let input = read_fixture_bounded(&path)?;
     let suite: Suite = serde_json::from_str(&input)
         .map_err(|e| format!("malformed coordination-history fixture: {e}"))?;
     match validate(&suite) {
@@ -311,6 +403,45 @@ mod tests {
     }
 
     #[test]
+    fn additive_cases_require_explicit_facts_instead_of_inherited_success() {
+        let mut suite = source();
+        let mut new_case = suite
+            .cases
+            .iter()
+            .find(|case| case.id == "positive-all-current")
+            .expect("historical positive control")
+            .clone();
+        new_case.id = "additive-unproved-positive".to_owned();
+        new_case.facts = Facts::default();
+        suite.cases.push(new_case);
+        let failures = validate(&suite).expect_err("unproved additive case must fail");
+        assert!(
+            failures
+                .iter()
+                .any(|error| error.contains("additive scenario must explicitly")),
+            "{failures:?}"
+        );
+
+        // An independently authored complete positive remains admissible.
+        suite.cases.last_mut().unwrap().facts = source()
+            .cases
+            .iter()
+            .find(|case| case.id == "positive-all-current")
+            .unwrap()
+            .facts
+            .clone();
+        assert_eq!(validate(&suite), Ok(19));
+
+        // A complete additive negative is also evaluated, not rejected
+        // simply because its necessary authority witness is false.
+        let new_case = suite.cases.last_mut().unwrap();
+        new_case.id = "additive-revoked-authority".to_owned();
+        new_case.facts.authority_current = Some(false);
+        new_case.expect = Verdict::Ineligible;
+        assert_eq!(validate(&suite), Ok(19));
+    }
+
+    #[test]
     fn revoked_authority_invalidates_an_otherwise_eligible_cut() {
         let mut suite = source();
         suite.cases[0].facts.authority_current = Some(false);
@@ -371,5 +502,56 @@ mod tests {
             .unwrap_err()
             .join(" ")
             .contains("unsupported"));
+    }
+
+    #[test]
+    fn fixture_reader_rejects_nonregular_oversized_and_non_utf8_inputs() {
+        let root = env::temp_dir().join(format!("free-energy-history-reader-{}", process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let valid = root.join("valid.json");
+        fs::write(&valid, BASELINE).unwrap();
+        assert_eq!(read_fixture_bounded(&valid).unwrap(), BASELINE);
+        assert!(read_fixture_bounded(&root).is_err());
+
+        let oversized = root.join("oversized.json");
+        fs::File::create(&oversized)
+            .unwrap()
+            .set_len(MAX_FIXTURE_BYTES + 1)
+            .unwrap();
+        assert!(read_fixture_bounded(&oversized)
+            .unwrap_err()
+            .contains("8 MiB"));
+        let non_utf8 = root.join("non-utf8.json");
+        fs::write(&non_utf8, [0xff, 0xfe]).unwrap();
+        assert!(read_fixture_bounded(&non_utf8)
+            .unwrap_err()
+            .contains("UTF-8"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn fixture_reader_rejects_same_path_inode_swap_and_symlink_replacement() {
+        let root = env::temp_dir().join(format!("free-energy-history-inode-{}", process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("history.json");
+        let next = root.join("next.json");
+        fs::write(&path, BASELINE).unwrap();
+        fs::write(&next, BASELINE).unwrap();
+        let observed = fs::symlink_metadata(&path).unwrap();
+        fs::rename(&next, &path).unwrap();
+        assert_eq!(
+            read_fixture_with_observed_metadata(&path, &observed).unwrap_err(),
+            "fixture replaced between metadata check and open"
+        );
+
+        let current = fs::symlink_metadata(&path).unwrap();
+        let target = root.join("target.json");
+        fs::write(&target, BASELINE).unwrap();
+        fs::remove_file(&path).unwrap();
+        std::os::unix::fs::symlink(&target, &path).unwrap();
+        assert!(read_fixture_with_observed_metadata(&path, &current).is_err());
+        assert!(read_fixture_bounded(&path).is_err());
+        fs::remove_dir_all(root).unwrap();
     }
 }

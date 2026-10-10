@@ -6,7 +6,12 @@ use serde::Deserialize;
 use std::collections::HashSet;
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::io::Read;
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
+#[cfg(target_os = "linux")]
+use std::os::unix::fs::OpenOptionsExt;
+use std::path::{Path, PathBuf};
 use std::process;
 
 fn yes() -> bool {
@@ -99,7 +104,27 @@ fn outcome(disposition: &str, level: Option<Level>) -> DecisionOutcome {
     }
 }
 
+// Validate every supplied safety proof before any early denial can mask a
+// contradictory declaration. A fixture's expected disposition is not a
+// substitute for admitting its declared safety inputs.
+fn preflight_decision_proofs(c: &DecisionCase) -> Result<(), String> {
+    if c.required_independent_lineages
+        .is_some_and(|required| required < 2)
+    {
+        return Err(
+            "high-impact restriction requires at least two independent lineages".to_owned(),
+        );
+    }
+    if c.max_level_with_contradiction
+        .is_some_and(|maximum| maximum >= Level::Isolate)
+    {
+        return Err("contradictory evidence cannot preserve high-impact severity".to_owned());
+    }
+    Ok(())
+}
+
 fn decide(c: &DecisionCase) -> Result<DecisionOutcome, String> {
+    preflight_decision_proofs(c)?;
     if !c.subject_current {
         return Ok(outcome("IDENTITY_STALE", None));
     }
@@ -131,11 +156,6 @@ fn decide(c: &DecisionCase) -> Result<DecisionOutcome, String> {
         // A fixture cannot waive the independently governed evidence requirement
         // by declaring zero or one lineage sufficient for high-impact action.
         let required = c.required_independent_lineages.unwrap_or(2);
-        if required < 2 {
-            return Err(
-                "high-impact restriction requires at least two independent lineages".to_owned(),
-            );
-        }
         if c.independent_lineages < required {
             return Ok(outcome("INDEPENDENCE_INSUFFICIENT", None));
         }
@@ -451,6 +471,56 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
     }
 }
 
+const MAX_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
+
+/// Only fixture data is admitted: never block on ordinary Linux FIFO/symlink
+/// substitution, and never allocate unbounded memory for a caller-supplied path.
+/// This is local CLI input hygiene, not a provider authorization primitive.
+fn read_fixture(path: &Path) -> Result<String, String> {
+    let before = fs::symlink_metadata(path)
+        .map_err(|error| format!("cannot read fixture {path:?}: {error}"))?;
+    if !before.file_type().is_file() {
+        return Err(format!("fixture {path:?} is not a regular file"));
+    }
+    if before.len() > MAX_FIXTURE_BYTES {
+        return Err(format!("fixture {path:?} exceeds 8 MiB"));
+    }
+
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        // Linux O_NONBLOCK and O_NOFOLLOW: reject a swapped FIFO/symlink
+        // instead of blocking forever or following an unexpected target.
+        options.custom_flags(0o4000 | 0o400000);
+    }
+    let file = options
+        .open(path)
+        .map_err(|error| format!("cannot open fixture {path:?}: {error}"))?;
+    let opened = file
+        .metadata()
+        .map_err(|error| format!("cannot inspect opened fixture {path:?}: {error}"))?;
+    if !opened.file_type().is_file() {
+        return Err(format!("opened fixture {path:?} is not a regular file"));
+    }
+    if opened.len() > MAX_FIXTURE_BYTES {
+        return Err(format!("opened fixture {path:?} exceeds 8 MiB"));
+    }
+    #[cfg(unix)]
+    if before.dev() != opened.dev() || before.ino() != opened.ino() {
+        return Err(format!("fixture {path:?} changed identity during open"));
+    }
+
+    let mut bytes = Vec::new();
+    file.take(MAX_FIXTURE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("cannot read fixture {path:?}: {error}"))?;
+    if bytes.len() as u64 > MAX_FIXTURE_BYTES {
+        return Err(format!("fixture {path:?} grew beyond 8 MiB"));
+    }
+    String::from_utf8(bytes).map_err(|error| format!("fixture {path:?} is not UTF-8: {error}"))
+}
+
 fn run() -> Result<(), String> {
     let mut args = env::args_os().skip(1);
     let input = args
@@ -460,10 +530,9 @@ fn run() -> Result<(), String> {
     if args.next().is_some() {
         return Err("usage: free-energy-phase0-fixtures [fixture.json]".to_owned());
     }
-    let content =
-        fs::read_to_string(&input).map_err(|e| format!("cannot read {}: {e}", input.display()))?;
-    let fixture: Fixture = serde_json::from_str(&content)
-        .map_err(|e| format!("invalid fixture {}: {e}", input.display()))?;
+    let content = read_fixture(&input)?;
+    let fixture: Fixture =
+        serde_json::from_str(&content).map_err(|e| format!("invalid fixture {input:?}: {e}"))?;
     match validate(&fixture) {
         Ok(count) => {
             println!("containment fixtures (Rust): {count} passed");
@@ -536,6 +605,52 @@ mod tests {
             .unwrap()
             .push(additional);
         assert_eq!(validate(&fixture(changed)), Ok(36));
+    }
+
+    #[test]
+    fn invalid_lineage_threshold_is_rejected_before_independent_early_denials() {
+        // Previously these cases returned IDENTITY_STALE, EVIDENCE_STALE and
+        // AUTHORITY_MISSING without inspecting an explicitly unsafe threshold.
+        for (index, threshold) in [(2, 0), (3, 1), (16, 1)] {
+            let mut changed = original();
+            changed["decision_cases"][index]["required_independent_lineages"] = json!(threshold);
+            let typed = fixture(changed);
+            assert!(
+                decide(&typed.decision_cases[index]).is_err(),
+                "case {index}: unsafe threshold {threshold} was masked by early denial"
+            );
+            assert!(validate(&typed).is_err());
+        }
+    }
+
+    #[test]
+    fn invalid_contradiction_cap_is_rejected_even_when_an_earlier_guard_denies() {
+        // A high-impact contradiction ceiling is malformed proof even when
+        // identity, evidence, or authority would independently deny the case.
+        for (index, cap) in [(2, "ISOLATE"), (3, "TERMINATE"), (8, "DESTRUCTIVE_CLEANUP")] {
+            let mut changed = original();
+            changed["decision_cases"][index]["max_level_with_contradiction"] = json!(cap);
+            let typed = fixture(changed);
+            assert!(
+                decide(&typed.decision_cases[index]).is_err(),
+                "case {index}: unsafe contradiction cap {cap} was masked"
+            );
+            assert!(validate(&typed).is_err());
+        }
+    }
+
+    #[test]
+    fn preflight_preserves_valid_historical_denials_and_low_impact_caps() {
+        let baseline = fixture(original());
+        assert_eq!(validate(&baseline), Ok(35));
+
+        let mut changed = original();
+        changed["decision_cases"][12]["max_level_with_contradiction"] = json!("SUSPEND_CAPABILITY");
+        let typed = fixture(changed);
+        assert_eq!(
+            decide(&typed.decision_cases[12]),
+            Ok(outcome("AUTHORIZED", Some(Level::SuspendCapability)))
+        );
     }
 
     #[test]
@@ -771,5 +886,52 @@ mod tests {
             decide(&typed.decision_cases[12]),
             Ok(outcome("AUTHORIZED", Some(Level::FreezeNewAuthority)))
         );
+    }
+    #[test]
+    fn caller_supplied_containment_fixture_is_bounded_and_regular() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let unique = NEXT.fetch_add(1, Ordering::Relaxed);
+        let input = env::temp_dir().join(format!(
+            "free-energy-containment-input-{}-{unique}.json",
+            process::id()
+        ));
+        fs::write(&input, BASELINE).expect("write historical fixture");
+        assert_eq!(read_fixture(&input).expect("historical fixture"), BASELINE);
+
+        // Exact limit remains admissible, and trailing JSON whitespace does
+        // not alter the independently computed historical oracle decisions.
+        let mut exact = BASELINE.to_owned();
+        exact.push_str(&" ".repeat(MAX_FIXTURE_BYTES as usize - exact.len()));
+        fs::write(&input, &exact).expect("write exact-size fixture");
+        let decoded = read_fixture(&input).expect("8 MiB accepted");
+        assert_eq!(decoded.len(), MAX_FIXTURE_BYTES as usize);
+        let fixture: Fixture = serde_json::from_str(&decoded).expect("typed fixture");
+        assert!(validate(&fixture).is_ok());
+
+        // Sparse length is checked before reading (no oversized allocation).
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&input)
+            .expect("open fixture for resize")
+            .set_len(MAX_FIXTURE_BYTES + 1)
+            .expect("make oversized fixture");
+        assert!(read_fixture(&input).unwrap_err().contains("exceeds 8 MiB"));
+        assert!(read_fixture(&env::temp_dir())
+            .unwrap_err()
+            .contains("not a regular file"));
+
+        fs::write(&input, [0xff, 0xfe]).expect("write invalid UTF-8");
+        assert!(read_fixture(&input).unwrap_err().contains("not UTF-8"));
+        #[cfg(unix)]
+        {
+            let link = input.with_extension("link");
+            std::os::unix::fs::symlink(&input, &link).expect("make symlink");
+            assert!(read_fixture(&link)
+                .unwrap_err()
+                .contains("not a regular file"));
+            fs::remove_file(&link).expect("remove link");
+        }
+        fs::remove_file(&input).expect("remove fixture");
     }
 }

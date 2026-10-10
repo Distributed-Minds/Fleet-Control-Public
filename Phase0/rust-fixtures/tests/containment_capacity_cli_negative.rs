@@ -117,3 +117,51 @@ fn process_rejects_identity_collisions_and_invalid_schema_or_capacity() {
     unknown_scheduler["workload_cases"][0]["scheduler"] = json!("ignore_limits");
     rejected(run_mutated(&unknown_scheduler), "invalid fixture");
 }
+
+#[test]
+fn process_accepts_valid_inactive_capacity_traces_without_changing_verdicts() {
+    // A supplied, well-formed trace must remain admissible even when the
+    // selected capacity mode (or a terminal state) does not consume it.
+    for (case_index, field, valid) in [
+        (0, "adjudication_capacity", json!([4, 4, 4, 4])),
+        (0, "restoration_capacity", json!([8, 8, 8, 8])),
+        (7, "restoration_capacity", json!([2, 2])),
+        (8, "service_capacity", json!([200, 200])),
+    ] {
+        let mut fixture = baseline();
+        fixture["workload_cases"][case_index][field] = valid;
+        let output = run_mutated(&fixture);
+        assert!(
+            output.status.success(),
+            "{field} rejected despite valid inactive evidence: {output:?}"
+        );
+        assert!(
+            output.stderr.is_empty(),
+            "{field}: unexpected stderr: {output:?}"
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            "containment-capacity fixtures (Rust): 17 passed",
+            "{field}: historical verdicts changed"
+        );
+    }
+}
+
+#[test]
+fn process_rejects_malformed_inactive_capacity_even_on_restored_fast_path() {
+    // The baseline supplies no inactive trace for these cases. Before #241's
+    // preflight, every changed input below could reach a PASS from the real
+    // compiled CLI despite contradictory or truncated capacity evidence.
+    for (case_index, field, malformed) in [
+        (0, "adjudication_capacity", json!([-1, 0, 0, 0])),
+        (0, "restoration_capacity", json!([1])),
+        (7, "adjudication_capacity", json!(-1)),
+        (7, "restoration_capacity", json!([1])),
+        (8, "service_capacity", json!(-1)),
+        (8, "service_capacity", json!([1])),
+    ] {
+        let mut fixture = baseline();
+        fixture["workload_cases"][case_index][field] = malformed;
+        rejected(run_mutated(&fixture), field);
+    }
+}
