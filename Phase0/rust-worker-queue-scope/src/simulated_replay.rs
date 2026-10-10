@@ -302,11 +302,13 @@ impl SimulatedReplay {
         principal_id: u64,
         principal_generation: u64,
         request_id: &str,
-        task_id: u64,
-        assignment_generation: u64,
+        assignment: (u64, u64),
         payload_digest: &str,
         current_basis: &ScopeConflictBasis,
     ) -> Result<DeliveryOutcome, DeliveryError> {
+        // The tuple retains the exact immutable (task, assignment-generation)
+        // pair. It is never an authorization token by itself.
+        let (task_id, assignment_generation) = assignment;
         let key = self.delivery_key(
             principal_id,
             principal_generation,
@@ -586,7 +588,7 @@ mod tests {
             Err(DeliveryError::AssignmentMismatch)
         );
         assert_eq!(
-            state.submit_result(1, 7, "r1", 40, generation, "digest1", &basis()),
+            state.submit_result(1, 7, "r1", (40, generation), "digest1", &basis()),
             Err(DeliveryError::MissingAcknowledgement)
         );
         assert_eq!(
@@ -598,15 +600,15 @@ mod tests {
             Ok(DeliveryOutcome::Reconciled)
         );
         assert_eq!(
-            state.submit_result(1, 7, "r1", 40, generation, "digest1", &basis()),
+            state.submit_result(1, 7, "r1", (40, generation), "digest1", &basis()),
             Ok(DeliveryOutcome::Recorded)
         );
         assert_eq!(
-            state.submit_result(1, 7, "r1", 40, generation, "digest1", &basis()),
+            state.submit_result(1, 7, "r1", (40, generation), "digest1", &basis()),
             Ok(DeliveryOutcome::Reconciled)
         );
         assert_eq!(
-            state.submit_result(1, 7, "r1", 40, generation, "digest2", &basis()),
+            state.submit_result(1, 7, "r1", (40, generation), "digest2", &basis()),
             Err(DeliveryError::ConflictingResult)
         );
         assert_eq!(state.acknowledgement_count(), 1);
@@ -630,8 +632,7 @@ mod tests {
                 1,
                 1,
                 "first",
-                10,
-                first.assignment_generation,
+                (10, first.assignment_generation),
                 "digest",
                 &basis()
             ),
@@ -643,8 +644,7 @@ mod tests {
                 1,
                 1,
                 "first",
-                10,
-                first.assignment_generation,
+                (10, first.assignment_generation),
                 "digest",
                 &basis()
             ),
@@ -662,8 +662,7 @@ mod tests {
                 1,
                 2,
                 "second",
-                20,
-                second.assignment_generation,
+                (20, second.assignment_generation),
                 "digest",
                 &basis()
             ),
@@ -697,16 +696,16 @@ mod tests {
             .unwrap();
         for digest in ["", "bad digest", "bad\nvalue"] {
             assert_eq!(
-                state.submit_result(1, 1, "result", 12, generation, digest, &basis()),
+                state.submit_result(1, 1, "result", (12, generation), digest, &basis()),
                 Err(DeliveryError::InvalidDigest)
             );
         }
         assert_eq!(
-            state.submit_result(1, 1, "result", 13, generation, "valid", &basis()),
+            state.submit_result(1, 1, "result", (13, generation), "valid", &basis()),
             Err(DeliveryError::AssignmentMismatch)
         );
         assert_eq!(
-            state.submit_result(1, 1, "result", 12, generation, "valid", &moved),
+            state.submit_result(1, 1, "result", (12, generation), "valid", &moved),
             Err(DeliveryError::StaleBasis)
         );
         assert_eq!(state.result_count(), 0);
