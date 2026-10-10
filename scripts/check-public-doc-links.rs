@@ -823,8 +823,37 @@ fn inspect_help_guide_contract(guide: &str) -> Result<(), &'static str> {
 }
 
 
+// Only stderr presentation is encoded. Parsing, filesystem lookup, and
+// failure/exit decisions retain their exact original strings and outcomes.
+// ASCII control characters, Unicode format controls, and line separators
+// must not create fake CI log lines or alter terminal rendering.
 fn render_failure(problem: &str) -> String {
-    format!("FAIL: {problem}")
+    let mut rendered = String::with_capacity(problem.len() + 6);
+    rendered.push_str("FAIL: ");
+    for ch in problem.chars() {
+        match ch {
+            '\n' => rendered.push_str("\\n"),
+            '\r' => rendered.push_str("\\r"),
+            '\t' => rendered.push_str("\\t"),
+            c if c.is_control()
+                || matches!(c,
+                    '\u{00AD}' | '\u{034F}' | '\u{061C}' | '\u{06DD}'
+                    | '\u{070F}' | '\u{08E2}' | '\u{180E}'
+                    | '\u{200B}'..='\u{200F}' | '\u{2028}'..='\u{202E}'
+                    | '\u{2060}'..='\u{206F}' | '\u{FEFF}'
+                    | '\u{FFF9}'..='\u{FFFB}'
+                    | '\u{13430}'..='\u{13440}'
+                    | '\u{1BCA0}'..='\u{1BCA3}'
+                    | '\u{1D173}'..='\u{1D17A}'
+                    | '\u{E0001}' | '\u{E0020}'..='\u{E007F}'
+                ) =>
+            {
+                rendered.push_str(&format!("\\u{{{:X}}}", c as u32));
+            }
+            c => rendered.push(c),
+        }
+    }
+    rendered
 }
 
 fn main() {
