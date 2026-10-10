@@ -366,8 +366,8 @@ fn malformed_synthetic_resource_tokens_and_zero_generations_fail_closed() {
     let invalid = [
         " ".to_owned(),
         "has space".to_owned(),
-        "line\\nfeed".to_owned(),
-        "bidi\\u{202e}reversal".to_owned(),
+        "line\nfeed".to_owned(),
+        "bidi\u{202e}reversal".to_owned(),
         "path/segment".to_owned(),
         "x".repeat(257),
     ];
@@ -421,8 +421,8 @@ fn malformed_operation_id_cannot_create_or_replace_synthetic_receipt() {
     );
     for invalid in [
         " ".to_owned(),
-        "a\\nb".to_owned(),
-        "spoof\\u{202e}".to_owned(),
+        "a\nb".to_owned(),
+        "spoof\u{202e}".to_owned(),
         "a/b".to_owned(),
         "o".repeat(257),
     ] {
