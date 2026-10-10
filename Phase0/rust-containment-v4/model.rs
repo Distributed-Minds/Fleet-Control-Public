@@ -453,6 +453,33 @@ mod tests {
     }
 
     #[test]
+    fn direct_lineage_query_rejects_conflicting_observation_identity() {
+        let f = frontier();
+        assert_eq!(f.adverse_lineages(), Ok(1));
+        let mut conflicted = f.clone();
+        let mut changed = conflicted.observations[0].clone();
+        changed.lineage = "distinct-lineage".into();
+        conflicted.observations.push(changed);
+        assert_eq!(conflicted.clone().normalize(), Err(Error::ConflictingEvidence));
+        // RED before the fix: the public method counts both lineages anyway.
+        assert_eq!(conflicted.adverse_lineages(), Err(Error::ConflictingEvidence));
+    }
+
+    #[test]
+    fn direct_lineage_query_rejects_invalid_frontier_generations() {
+        let f = frontier();
+        assert_eq!(f.adverse_lineages(), Ok(1));
+
+        let mut policy_unknown = f.clone();
+        policy_unknown.policy_generation = 0;
+        assert_eq!(policy_unknown.adverse_lineages(), Err(Error::IncompleteEvidence));
+
+        let mut partition_unknown = f;
+        partition_unknown.partition_generation = 0;
+        assert_eq!(partition_unknown.adverse_lineages(), Err(Error::IncompleteEvidence));
+    }
+
+    #[test]
     fn independent_comparable_narrow_control_wins() {
         let narrow = control("narrow", &[Action::Write], [1, 1, 1]);
         let broad = control("broad", &[Action::Write, Action::Delete], [2, 3, 2]);
