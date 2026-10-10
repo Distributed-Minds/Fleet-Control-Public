@@ -226,6 +226,15 @@ fn has_valid_head_title(elements: &[&str]) -> bool {
                 return false;
             }
             zone = Zone::AfterBody;
+        } else if zone == Zone::Head
+            && !["meta", "link"]
+                .iter()
+                .any(|name| is_open_element(tag, name))
+        {
+            // The fixed landing head permits only metadata, its one title,
+            // and its closing head tag. A body-starting element implicitly
+            // closes head in HTML, even without an explicit </head>.
+            return false;
         }
     }
 
