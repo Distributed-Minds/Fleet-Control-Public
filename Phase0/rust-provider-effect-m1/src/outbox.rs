@@ -57,6 +57,7 @@ pub enum Action {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     InvalidEnvelope,
+    OperationHistoryFull,
     OperationIdentityConflict,
     UnknownOperation,
     StaleVersion,
@@ -120,6 +121,11 @@ impl Entry {
     }
 }
 
+/// Maximum unique identities retained in this offline journal. Do not evict
+/// terminal records: deleting them permits ambiguous late replay under the same
+/// operation ID. A real broker requires durable bounded history/reconciliation.
+pub const MAX_OUTBOX_OPERATIONS: usize = 1024;
+
 /// Deterministic, single-threaded, *non-durable* model. A production outbox
 /// needs trusted admission, a transactional journal, locks/fences and replay
 /// reconciliation; this type deliberately provides none of those effects.
@@ -145,6 +151,11 @@ impl Outbox {
             } else {
                 Err(Error::OperationIdentityConflict)
             };
+        }
+        // Check *after* exact duplicate/conflict resolution so callers may
+        // reconcile old IDs even when fresh admission is refused at capacity.
+        if self.entries.len() >= MAX_OUTBOX_OPERATIONS {
+            return Err(Error::OperationHistoryFull);
         }
         self.entries.insert(
             envelope.operation_id.clone(),
@@ -456,4 +467,45 @@ mod tests {
         maximum.operation_id = "x".repeat(512);
         assert_eq!(outbox.submit(maximum), Ok(true));
     }
+
+    #[test]
+    fn bounded_history_preserves_terminal_tombstones_and_duplicate_identity() {
+        let mut outbox = Outbox::new();
+        for index in 0..MAX_OUTBOX_OPERATIONS {
+            let mut request = envelope();
+            request.operation_id = format!("bounded-{index}");
+            assert_eq!(outbox.submit(request), Ok(true));
+        }
+        assert_eq!(outbox.entries.len(), MAX_OUTBOX_OPERATIONS);
+
+        let mut oldest = envelope();
+        oldest.operation_id = "bounded-0".into();
+        assert_eq!(
+            outbox
+                .apply("bounded-0", 0, Action::Reject, CURRENT)
+                .unwrap()
+                .status(),
+            Status::Rejected
+        );
+
+        let mut new_request = envelope();
+        new_request.operation_id = "fresh-over-capacity".into();
+        assert_eq!(
+            outbox.submit(new_request),
+            Err(Error::OperationHistoryFull)
+        );
+        assert!(outbox.entry("fresh-over-capacity").is_none());
+
+        // A known identity remains idempotent at capacity, even after it has
+        // reached a terminal state. Changing its payload cannot reuse its slot.
+        assert_eq!(outbox.submit(oldest.clone()), Ok(false));
+        oldest.payload_digest = "sha256:changed".into();
+        assert_eq!(
+            outbox.submit(oldest),
+            Err(Error::OperationIdentityConflict)
+        );
+        assert_eq!(outbox.entry("bounded-0").unwrap().status(), Status::Rejected);
+        assert_eq!(outbox.entries.len(), MAX_OUTBOX_OPERATIONS);
+    }
+
 }
