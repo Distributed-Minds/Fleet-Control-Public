@@ -388,3 +388,93 @@ fn empty_obligations_preserve_nonrecovery_effect_and_explicit_hold() {
     effect.recovery_required = true;
     assert_eq!(db.effect(&receipt, &effect), Err(Denied::RecoveryHold));
 }
+
+#[test]
+fn invisible_or_padded_synthetic_scope_and_obligations_fail_closed() {
+    // These are machine tokens, never display names or human legal identities.
+    for invalid in [
+        " leading",
+        "trailing ",
+        "two words",
+        "worker\u{202e}B",
+        "work\u{200b}er",
+        "worker\u{180f}",
+        "caf\u{e9}",
+    ] {
+        let (_, mut selected, mut transition) = fixture();
+        selected.scope.installation = invalid.into();
+        transition.scope = selected.scope.clone();
+        let mut db = Registry::new(
+            selected.scope.clone(),
+            "h0".into(),
+            0,
+            2,
+            selected.obligations.clone(),
+        );
+        assert_eq!(
+            db.admit(&selected, transition),
+            Err(Denied::UnknownLineage),
+            "invalid installation {invalid:?}"
+        );
+        assert_eq!(db.admitted_count(), 0);
+
+        let (_, mut selected, transition) = fixture();
+        selected.obligations.insert(invalid.into());
+        let mut db = Registry::new(
+            selected.scope.clone(),
+            "h0".into(),
+            0,
+            2,
+            selected.obligations.clone(),
+        );
+        assert_eq!(
+            db.admit(&selected, transition),
+            Err(Denied::UnknownLineage),
+            "invalid inherited obligation {invalid:?}"
+        );
+        assert_eq!(db.admitted_count(), 0);
+    }
+}
+
+#[test]
+fn invisible_or_padded_synthetic_transition_ids_fail_closed() {
+    for invalid in [" x", "x ", "a b", "a\u{202e}b", "a\u{200b}b", "a\u{180f}b"] {
+        for field in 0..3 {
+            let (mut db, selected, mut transition) = fixture();
+            match field {
+                0 => transition.id = invalid.into(),
+                1 => transition.successor = invalid.into(),
+                2 => transition.new_head = invalid.into(),
+                _ => unreachable!(),
+            }
+            assert_eq!(
+                db.admit(&selected, transition),
+                Err(Denied::InvalidTransition),
+                "field {field}, value {invalid:?}"
+            );
+            assert_eq!(db.admitted_count(), 0);
+            assert_eq!(db.head(), ("h0", 0));
+        }
+    }
+}
+
+#[test]
+fn invisible_resource_identity_never_admits_even_when_both_sides_match() {
+    let (mut db, selected, transition) = fixture();
+    let receipt = db.admit(&selected, transition).unwrap();
+    for invalid in [" x", "x ", "a b", "a\u{202e}b", "a\u{200b}b", "a\u{180f}b"] {
+        let mut effect = request(&selected, &receipt);
+        effect.observed_resource = invalid.into();
+        effect.expected_resource = invalid.into();
+        assert_eq!(
+            db.effect(&receipt, &effect),
+            Err(Denied::WrongResource),
+            "matching but unsafe resource identity {invalid:?}"
+        );
+    }
+    let mut valid = request(&selected, &receipt);
+    valid.observed_resource = "refs/heads/demo:inc-1".into();
+    valid.expected_resource = valid.observed_resource.clone();
+    assert_eq!(db.effect(&receipt, &valid), Ok(Eligibility::SimulationOnly));
+    assert_eq!(db.admitted_count(), 1);
+}
