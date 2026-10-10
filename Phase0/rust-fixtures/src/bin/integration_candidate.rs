@@ -135,9 +135,7 @@ fn reject_symlinked_ancestors(path: &str) -> Result<(), String> {
     let mut components = std::path::Path::new(path).components().peekable();
     while let Some(component) = components.next() {
         prefix.push(component.as_os_str());
-        if components.peek().is_none()
-            || !matches!(component, std::path::Component::Normal(_))
-        {
+        if components.peek().is_none() || !matches!(component, std::path::Component::Normal(_)) {
             continue;
         }
         let metadata = fs::symlink_metadata(&prefix).map_err(|error| error.to_string())?;
