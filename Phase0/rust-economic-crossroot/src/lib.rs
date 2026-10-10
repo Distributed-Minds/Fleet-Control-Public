@@ -337,7 +337,13 @@ mod tests {
         request_with_component("shared-risk", id, root, units, expected)
     }
 
-    fn request_with_component(component: &str, id: &str, root: &str, units: u64, expected: u64) -> Request {
+    fn request_with_component(
+        component: &str,
+        id: &str,
+        root: &str,
+        units: u64,
+        expected: u64,
+    ) -> Request {
         Request {
             id: id.into(),
             component: component.into(),
@@ -552,12 +558,21 @@ mod tests {
                 3 => changed.terms_basis = "different-terms".into(),
                 _ => unreachable!(),
             }
-            assert_eq!(ledger.reserve(changed), ResultKind::Denied(Denial::Conflict));
+            assert_eq!(
+                ledger.reserve(changed),
+                ResultKind::Denied(Denial::Conflict)
+            );
         }
         let mut fresh = request("fresh", "root-b", 10, 2);
         fresh.component = "other-domain".into();
-        assert_eq!(ledger.reserve(fresh), ResultKind::Denied(Denial::WrongComponent));
-        assert_eq!(ledger.reserve(original), ResultKind::Identical(State::Pending));
+        assert_eq!(
+            ledger.reserve(fresh),
+            ResultKind::Denied(Denial::WrongComponent)
+        );
+        assert_eq!(
+            ledger.reserve(original),
+            ResultKind::Identical(State::Pending)
+        );
         assert_eq!(ledger.charged(), 20);
     }
 
@@ -566,12 +581,24 @@ mod tests {
         let mut l = Ledger::new("bounded", 2000, 1, &[("root-a", 1)]);
         for i in 0..MAX_RECEIPTS {
             assert_eq!(
-                l.reserve(request_with_component("bounded", &format!("id-{i}"), "root-a", 1, l.generation())),
+                l.reserve(request_with_component(
+                    "bounded",
+                    &format!("id-{i}"),
+                    "root-a",
+                    1,
+                    l.generation()
+                )),
                 ResultKind::Accepted
             );
         }
         assert_eq!(
-            l.reserve(request_with_component("bounded", "new", "root-a", 1, l.generation())),
+            l.reserve(request_with_component(
+                "bounded",
+                "new",
+                "root-a",
+                1,
+                l.generation()
+            )),
             ResultKind::Denied(Denial::HistoryFull)
         );
         assert_eq!(
