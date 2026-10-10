@@ -408,7 +408,10 @@ fn malformed_synthetic_resource_tokens_and_zero_generations_fail_closed() {
     boundary.source_commit = "a".repeat(256);
     assert_eq!(evaluate(&boundary), Decision::ReviewableInSimulation);
     boundary.source_commit.push('a');
-    assert_eq!(evaluate(&boundary), Decision::Unknown(Reason::MalformedIdentity));
+    assert_eq!(
+        evaluate(&boundary),
+        Decision::Unknown(Reason::MalformedIdentity)
+    );
 }
 
 #[test]
