@@ -114,7 +114,8 @@ impl Ledger {
     }
 
     pub fn headroom(&self) -> u64 {
-        self.capacity.saturating_sub(self.charged.saturating_add(self.debt))
+        self.capacity
+            .saturating_sub(self.charged.saturating_add(self.debt))
     }
 
     pub fn provider_effects(&self) -> usize {
@@ -180,16 +181,25 @@ impl Ledger {
         }
         self.charged = charged;
         self.generation = next;
-        self.receipts.insert(r.id.clone(), Receipt {
-            request: r,
-            state: State::Pending,
-        });
+        self.receipts.insert(
+            r.id.clone(),
+            Receipt {
+                request: r,
+                state: State::Pending,
+            },
+        );
         ResultKind::Accepted
     }
 
     /// Represents observation of an externally independently proved effect,
     /// not an effect itself. An unproved acknowledgement retains PENDING.
-    pub fn observe_commit(&mut self, id: &str, expected: u64, effect: &str, proved: bool) -> ResultKind {
+    pub fn observe_commit(
+        &mut self,
+        id: &str,
+        expected: u64,
+        effect: &str,
+        proved: bool,
+    ) -> ResultKind {
         if !proved || !token(effect) {
             return ResultKind::Denied(Denial::Unproven);
         }
@@ -325,8 +335,14 @@ mod tests {
     #[test]
     fn two_roots_may_not_oversubscribe_one_component() {
         let mut l = shared();
-        assert_eq!(l.reserve(request("a", "root-a", 80, 1)), ResultKind::Accepted);
-        assert_eq!(l.reserve(request("b", "root-b", 30, 2)), ResultKind::Denied(Denial::NoCapacity));
+        assert_eq!(
+            l.reserve(request("a", "root-a", 80, 1)),
+            ResultKind::Accepted
+        );
+        assert_eq!(
+            l.reserve(request("b", "root-b", 30, 2)),
+            ResultKind::Denied(Denial::NoCapacity)
+        );
         assert_eq!(l.headroom(), 20);
     }
 
@@ -334,8 +350,14 @@ mod tests {
     fn genuinely_disjoint_components_have_separate_headroom() {
         let mut a = Ledger::new("domain-a", 100, 1, &[("root-a", 1)]);
         let mut b = Ledger::new("domain-b", 100, 1, &[("root-b", 1)]);
-        assert_eq!(a.reserve(request("a", "root-a", 95, 1)), ResultKind::Accepted);
-        assert_eq!(b.reserve(request("b", "root-b", 95, 1)), ResultKind::Accepted);
+        assert_eq!(
+            a.reserve(request("a", "root-a", 95, 1)),
+            ResultKind::Accepted
+        );
+        assert_eq!(
+            b.reserve(request("b", "root-b", 95, 1)),
+            ResultKind::Accepted
+        );
         assert_ne!(a.component(), b.component());
     }
 
@@ -344,7 +366,10 @@ mod tests {
         let mut l = shared();
         let first = request("x", "root-a", 60, 1);
         assert_eq!(l.reserve(first.clone()), ResultKind::Accepted);
-        assert_eq!(l.reserve(request("y", "root-b", 10, 1)), ResultKind::Denied(Denial::StaleLedger));
+        assert_eq!(
+            l.reserve(request("y", "root-b", 10, 1)),
+            ResultKind::Denied(Denial::StaleLedger)
+        );
         assert_eq!(l.reserve(first), ResultKind::Identical(State::Pending));
         assert_eq!(l.charged(), 60);
     }
@@ -352,14 +377,23 @@ mod tests {
     #[test]
     fn different_payload_same_id_is_never_an_identical_replay() {
         let mut l = shared();
-        assert_eq!(l.reserve(request("x", "root-a", 30, 1)), ResultKind::Accepted);
-        assert_eq!(l.reserve(request("x", "root-a", 31, 1)), ResultKind::Denied(Denial::Conflict));
+        assert_eq!(
+            l.reserve(request("x", "root-a", 30, 1)),
+            ResultKind::Accepted
+        );
+        assert_eq!(
+            l.reserve(request("x", "root-a", 31, 1)),
+            ResultKind::Denied(Denial::Conflict)
+        );
     }
 
     #[test]
     fn untrusted_root_authority_rate_and_terms_are_independent_blocks() {
         let mut l = shared();
-        assert_eq!(l.reserve(request("x", "unknown", 10, 1)), ResultKind::Denied(Denial::UnknownRoot));
+        assert_eq!(
+            l.reserve(request("x", "unknown", 10, 1)),
+            ResultKind::Denied(Denial::UnknownRoot)
+        );
         let mut r = request("x", "root-a", 10, 1);
         r.authority_current = false;
         assert_eq!(l.reserve(r), ResultKind::Denied(Denial::MissingAuthority));
@@ -379,7 +413,10 @@ mod tests {
         assert_eq!(l.reserve(original.clone()), ResultKind::Accepted);
         l.synthetic_move_topology(2, &[("root-a", 2), ("root-b", 1)]);
         assert_eq!(l.reserve(original), ResultKind::Identical(State::Pending));
-        assert_eq!(l.reserve(request("b", "root-b", 10, 3)), ResultKind::Denied(Denial::StaleTopology));
+        assert_eq!(
+            l.reserve(request("b", "root-b", 10, 3)),
+            ResultKind::Denied(Denial::StaleTopology)
+        );
         let mut r = request("b", "root-a", 10, 3);
         r.topology_generation = 2;
         assert_eq!(l.reserve(r), ResultKind::Denied(Denial::StaleRoot));
@@ -388,31 +425,64 @@ mod tests {
     #[test]
     fn lost_ack_does_not_spend_twice_or_change_effect_identity() {
         let mut l = shared();
-        assert_eq!(l.reserve(request("x", "root-a", 50, 1)), ResultKind::Accepted);
-        assert_eq!(l.observe_commit("x", 2, "effect-a", false), ResultKind::Denied(Denial::Unproven));
+        assert_eq!(
+            l.reserve(request("x", "root-a", 50, 1)),
+            ResultKind::Accepted
+        );
+        assert_eq!(
+            l.observe_commit("x", 2, "effect-a", false),
+            ResultKind::Denied(Denial::Unproven)
+        );
         assert_eq!(l.receipt("x"), Some(State::Pending));
-        assert_eq!(l.observe_commit("x", 2, "effect-a", true), ResultKind::Accepted);
-        assert_eq!(l.observe_commit("x", 2, "effect-a", true), ResultKind::Identical(State::Committed("effect-a".into())));
-        assert_eq!(l.observe_commit("x", 3, "effect-b", true), ResultKind::Denied(Denial::Conflict));
+        assert_eq!(
+            l.observe_commit("x", 2, "effect-a", true),
+            ResultKind::Accepted
+        );
+        assert_eq!(
+            l.observe_commit("x", 2, "effect-a", true),
+            ResultKind::Identical(State::Committed("effect-a".into()))
+        );
+        assert_eq!(
+            l.observe_commit("x", 3, "effect-b", true),
+            ResultKind::Denied(Denial::Conflict)
+        );
         assert_eq!(l.charged(), 50);
     }
 
     #[test]
     fn reclaim_needs_fence_and_late_effect_stays_rejected() {
         let mut l = shared();
-        assert_eq!(l.reserve(request("x", "root-a", 95, 1)), ResultKind::Accepted);
-        assert_eq!(l.reclaim("x", 2, false), ResultKind::Denied(Denial::Unproven));
+        assert_eq!(
+            l.reserve(request("x", "root-a", 95, 1)),
+            ResultKind::Accepted
+        );
+        assert_eq!(
+            l.reclaim("x", 2, false),
+            ResultKind::Denied(Denial::Unproven)
+        );
         assert_eq!(l.reclaim("x", 2, true), ResultKind::Accepted);
-        assert_eq!(l.observe_commit("x", 3, "late", true), ResultKind::Denied(Denial::Fenced));
-        assert_eq!(l.reserve(request("y", "root-b", 100, 3)), ResultKind::Accepted);
+        assert_eq!(
+            l.observe_commit("x", 3, "late", true),
+            ResultKind::Denied(Denial::Fenced)
+        );
+        assert_eq!(
+            l.reserve(request("y", "root-b", 100, 3)),
+            ResultKind::Accepted
+        );
     }
 
     #[test]
     fn uncertain_refund_retains_charge() {
         let mut l = shared();
-        assert_eq!(l.reserve(request("x", "root-a", 80, 1)), ResultKind::Accepted);
+        assert_eq!(
+            l.reserve(request("x", "root-a", 80, 1)),
+            ResultKind::Accepted
+        );
         assert_eq!(l.observe_commit("x", 2, "fx", true), ResultKind::Accepted);
-        assert_eq!(l.refund("x", 3, false), ResultKind::Denied(Denial::Unproven));
+        assert_eq!(
+            l.refund("x", 3, false),
+            ResultKind::Denied(Denial::Unproven)
+        );
         assert_eq!(l.headroom(), 20);
         assert_eq!(l.refund("x", 3, true), ResultKind::Accepted);
         assert_eq!(l.headroom(), 100);
@@ -421,15 +491,27 @@ mod tests {
     #[test]
     fn invalidated_refund_preserves_debt_and_blocks_new_admission() {
         let mut l = shared();
-        assert_eq!(l.reserve(request("x", "root-a", 80, 1)), ResultKind::Accepted);
+        assert_eq!(
+            l.reserve(request("x", "root-a", 80, 1)),
+            ResultKind::Accepted
+        );
         assert_eq!(l.observe_commit("x", 2, "fx", true), ResultKind::Accepted);
         assert_eq!(l.refund("x", 3, true), ResultKind::Accepted);
-        assert_eq!(l.reserve(request("y", "root-b", 40, 4)), ResultKind::Accepted);
+        assert_eq!(
+            l.reserve(request("y", "root-b", 40, 4)),
+            ResultKind::Accepted
+        );
         assert_eq!(l.invalidate_refund("x", 5, true), ResultKind::Accepted);
         assert_eq!(l.debt(), 80);
         assert_eq!(l.headroom(), 0);
-        assert_eq!(l.reserve(request("z", "root-a", 1, 6)), ResultKind::Denied(Denial::NoCapacity));
-        assert_eq!(l.invalidate_refund("x", 5, true), ResultKind::Identical(State::Debt("fx".into())));
+        assert_eq!(
+            l.reserve(request("z", "root-a", 1, 6)),
+            ResultKind::Denied(Denial::NoCapacity)
+        );
+        assert_eq!(
+            l.invalidate_refund("x", 5, true),
+            ResultKind::Identical(State::Debt("fx".into()))
+        );
         assert_eq!(l.provider_effects(), 0);
     }
 
@@ -437,9 +519,18 @@ mod tests {
     fn full_receipt_history_preserves_old_replay_and_blocks_new_ids() {
         let mut l = Ledger::new("bounded", 2000, 1, &[("root-a", 1)]);
         for i in 0..MAX_RECEIPTS {
-            assert_eq!(l.reserve(request(&format!("id-{i}"), "root-a", 1, l.generation())), ResultKind::Accepted);
+            assert_eq!(
+                l.reserve(request(&format!("id-{i}"), "root-a", 1, l.generation())),
+                ResultKind::Accepted
+            );
         }
-        assert_eq!(l.reserve(request("new", "root-a", 1, l.generation())), ResultKind::Denied(Denial::HistoryFull));
-        assert_eq!(l.reserve(request("id-0", "root-a", 1, 1)), ResultKind::Identical(State::Pending));
+        assert_eq!(
+            l.reserve(request("new", "root-a", 1, l.generation())),
+            ResultKind::Denied(Denial::HistoryFull)
+        );
+        assert_eq!(
+            l.reserve(request("id-0", "root-a", 1, 1)),
+            ResultKind::Identical(State::Pending)
+        );
     }
 }
