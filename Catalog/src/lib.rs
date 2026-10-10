@@ -1293,6 +1293,15 @@ pub fn validate_manifest(json: &str) -> Result<Project, Vec<String>> {
         PlayStatus::UpstreamLinkOnly if record.play.upstream_download_url.is_none() => {
             problems.push("UPSTREAM_LINK_ONLY requires an upstream download link".to_string());
         }
+        // A record explicitly declaring evidence of unavailability must not
+        // simultaneously advertise a downloadable upstream play action. A
+        // stale/vendor URL can be preserved in evidence, but it is not an
+        // admissible download action under this negative play status.
+        PlayStatus::Unavailable if record.play.upstream_download_url.is_some() => {
+            problems.push(
+                "UNAVAILABLE_EVIDENCED must not advertise an upstream download URL".to_string(),
+            );
+        }
         // The current v0 schema has no complete artifact hash, platform and
         // execution-result contract. Fail closed rather than accept a string.
         PlayStatus::FreeEnergyVerified => {
@@ -1389,6 +1398,39 @@ mod tests {
             validate_manifest(&forged).is_err(),
             "the unpublished short alias must not be admitted"
         );
+    }
+
+    #[test]
+    fn evidenced_unavailability_cannot_advertise_an_upstream_download() {
+        // The upstream vendor URL is not play verification, and the
+        // UNAVAILABLE_EVIDENCED status must not become a clickable action.
+        let contradictory = changed(OPENRA, |record| {
+            record["play"]["status"] = json!("UNAVAILABLE_EVIDENCED");
+        });
+        let errors = validate_manifest(&contradictory).expect_err("negative status and action");
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.contains("UNAVAILABLE_EVIDENCED must not advertise")),
+            "{errors:?}"
+        );
+
+        // The same negative status without a download action remains valid,
+        // and a qualified upstream-only link must remain available to users.
+        let unavailable = changed(OPENRA, |record| {
+            record["play"]["status"] = json!("UNAVAILABLE_EVIDENCED");
+            record["play"]["upstream_download_url"] = Value::Null;
+        });
+        assert!(validate_manifest(&unavailable).is_ok());
+        assert!(validate_manifest(OPENRA).is_ok());
+
+        // Unknown is not the same as an evidenced negative. A vendor link
+        // under UNKNOWN is still unverified, but must not become a claim of
+        // FREE_ENERGY_VERIFIED execution or rights.
+        let unknown = changed(OPENRA, |record| {
+            record["play"]["status"] = json!("UNKNOWN");
+        });
+        assert!(validate_manifest(&unknown).is_ok());
     }
 
     #[test]
