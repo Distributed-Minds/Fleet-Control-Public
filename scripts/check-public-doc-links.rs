@@ -1976,6 +1976,8 @@ mod tests {
             ("wide quote", "> ~~~~\n> [ghost](missing.md)\n> ~~~~~\n[real](present.md)\n", &["present.md"]),
             ("double quote", ">> ~~~\n>> [ghost](missing.md)\n>> ~~~\n[real](present.md)\n", &["present.md"]),
             ("spaced double", "> > ~~~\n> > [ghost](missing.md)\n> > ~~~\n[real](present.md)\n", &["present.md"]),
+            ("quote backticks", "> ```md\n> [ghost](missing.md)\n> ````\n[real](present.md)\n", &["present.md"]),
+            ("list backticks", "- ```md\n  [ghost](missing.md)\n  ````\n[real](present.md)\n", &["present.md"]),
             ("quote image", "> ~~~\n> ![ghost](missing.png)\n> ~~~\n[real](present.md)\n", &["present.md"]),
             ("bullet list", "- ~~~md\n  [ghost](missing.md)\n  ~~~\n[real](present.md)\n", &["present.md"]),
             ("numbered list", "1. ~~~\n   [ghost](missing.md)\n   ~~~\n[real](present.md)\n", &["present.md"]),
