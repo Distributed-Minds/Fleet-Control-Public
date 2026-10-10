@@ -1,0 +1,32 @@
+name: Rust economic cross-root synthetic model
+
+on:
+  pull_request:
+    paths:
+      - "Phase0/rust-economic-crossroot/**"
+      - ".github/workflows/rust-economic-crossroot.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-crossroot:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Git checkout exact pull-request SHA without npm tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          git fetch --depth=1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - name: Install pinned Rust 1.85.1
+        run: rustup toolchain install 1.85.1 --profile minimal --component rustfmt --component clippy
+      - name: Compile test and lint offline
+        working-directory: Phase0/rust-economic-crossroot
+        run: |
+          set -euo pipefail
+          cargo +1.85.1 fmt --all --check
+          cargo +1.85.1 test --locked --offline
+          cargo +1.85.1 clippy --all-targets --locked --offline -- -D warnings
