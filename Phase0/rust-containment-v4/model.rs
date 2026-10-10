@@ -73,11 +73,10 @@ impl Frontier {
     }
 
     /// Correlated reports sharing a lineage never become independent votes.
+    /// Reject malformed snapshots even when queried without prior normalization.
     pub fn adverse_lineages(&self) -> Result<usize, Error> {
-        if !self.complete {
-            return Err(Error::IncompleteEvidence);
-        }
-        Ok(self
+        let canonical = self.clone().normalize()?;
+        Ok(canonical
             .observations
             .iter()
             .filter(|o| o.interpretation == Interpretation::Incriminating)
@@ -450,6 +449,33 @@ mod tests {
         conflicting.digest = "other".into();
         f.observations.push(conflicting);
         assert_eq!(f.normalize(), Err(Error::ConflictingEvidence));
+    }
+
+    #[test]
+    fn direct_lineage_query_rejects_conflicting_observation_identity() {
+        let f = frontier();
+        assert_eq!(f.adverse_lineages(), Ok(1));
+        let mut conflicted = f.clone();
+        let mut changed = conflicted.observations[0].clone();
+        changed.lineage = "distinct-lineage".into();
+        conflicted.observations.push(changed);
+        assert_eq!(conflicted.clone().normalize(), Err(Error::ConflictingEvidence));
+        // RED before the fix: the public method counts both lineages anyway.
+        assert_eq!(conflicted.adverse_lineages(), Err(Error::ConflictingEvidence));
+    }
+
+    #[test]
+    fn direct_lineage_query_rejects_invalid_frontier_generations() {
+        let f = frontier();
+        assert_eq!(f.adverse_lineages(), Ok(1));
+
+        let mut policy_unknown = f.clone();
+        policy_unknown.policy_generation = 0;
+        assert_eq!(policy_unknown.adverse_lineages(), Err(Error::IncompleteEvidence));
+
+        let mut partition_unknown = f;
+        partition_unknown.partition_generation = 0;
+        assert_eq!(partition_unknown.adverse_lineages(), Err(Error::IncompleteEvidence));
     }
 
     #[test]
