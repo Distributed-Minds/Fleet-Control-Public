@@ -642,12 +642,15 @@ fn check(root: &Path, docs: &[&str]) -> Report {
 }
 
 fn inspect_help_guide_contract(guide: &str) -> Result<(), &'static str> {
-    // Reuse the production Markdown fence recognizer: a short inner
-    // delimiter must not close a longer fence or create a phantom prompt.
+    // Reuse the existing Markdown comment/inline-code mask. A code fence
+    // inside a CommonMark HTML block is not a rendered, copyable prompt.
+    // Preserve the existing fence-width and mandatory prompt guard rules.
+    let visible_source = mask_paragraph_code_spans(guide);
     let mut opening: Option<(u8, usize, bool)> = None;
     let mut contents = String::new();
     let mut prompts = Vec::new();
-    for line in guide.lines() {
+    let mut visible_prose = String::new();
+    for line in visible_source.lines() {
         if let Some((marker, width, closing_suffix)) = fence_marker(line) {
             if let Some((open_marker, open_width, is_prompt)) = opening {
                 if marker == open_marker && width >= open_width && closing_suffix {
@@ -669,6 +672,9 @@ fn inspect_help_guide_contract(guide: &str) -> Result<(), &'static str> {
         if opening.is_some() {
             contents.push_str(line);
             contents.push('\n');
+        } else {
+            visible_prose.push_str(line);
+            visible_prose.push('\n');
         }
     }
     if opening.is_some() {
@@ -695,15 +701,21 @@ fn inspect_help_guide_contract(guide: &str) -> Result<(), &'static str> {
             return Err(diagnostic);
         }
     }
-    if !guide.contains("**Not available yet:**") {
+    // Visible prose is outside code blocks, HTML comments, and inline code.
+    // A raw substring in a hidden sample must not satisfy a reader-facing
+    // disclosure or Phase0 link contract.
+    if !visible_prose.contains("**Not available yet:**") {
         return Err("manual versus future capability disclosure missing");
     }
-    if !guide.contains("](GETTING-STARTED.md)") {
+    let mut link_diagnostics = Report::default();
+    if !collect_links(&visible_prose, "HELP-A-PROJECT.md", &mut link_diagnostics)
+        .iter()
+        .any(|path| path == "GETTING-STARTED.md")
+    {
         return Err("distinct Phase0 installation link missing");
     }
     Ok(())
 }
-
 fn main() {
     let mut arguments = env::args().skip(1);
     let mut root: Option<PathBuf> = None;
@@ -1848,6 +1860,71 @@ mod tests {
         );
         assert_ne!(broken, guide, "fixture must lengthen the real prompt opener");
         assert_eq!(inspect_help_guide_contract(&broken), Err("unclosed code fence"));
+    }
+
+    // #346 spec 2: rendered HELP contract, not raw strings inside comments
+    // or fenced examples. Exercise both newline forms and EOF variants.
+    #[test]
+    fn help_guide_visible_prompt_disclosure_and_link() {
+        let guide = include_str!("../HELP-A-PROJECT.md");
+        let notice = guide.lines().find(|line| line.contains("**Not available yet:**"))
+            .expect("real disclosure");
+        let install = guide.lines().find(|line| line.contains("](GETTING-STARTED.md)"))
+            .expect("real installation link");
+        let stripped = guide.replacen(notice, "", 1).replacen(install, "", 1);
+        let prompt_start = guide.find("```text\nI want to help [")
+            .expect("real prompt opener");
+        let prompt_end = guide[prompt_start..].find("\n```\n")
+            .map(|offset| prompt_start + offset + 5).expect("real prompt closer");
+        let prompt_fence = &guide[prompt_start..prompt_end];
+        let hidden_prompt = guide.replacen(
+            prompt_fence, &format!("<!--\n{prompt_fence}\n-->\n"), 1,
+        );
+        let commented_duplicate = format!("{guide}\n<!--\n{prompt_fence}\n-->\n");
+        let missing_guard = guide.replacen("Never merge into default yourself", "", 1);
+        let cases: Vec<(&str, String, Result<(), &'static str>)> = vec![
+            ("H11a", format!("{stripped}\n<!--\n{notice}\n{install}\n-->\n"),
+                Err("manual versus future capability disclosure missing")),
+            ("H11b", guide.to_owned(), Ok(())),
+            ("H11c", format!("{}\n<!--\n{notice}\n-->\n", guide.replacen(notice, "", 1)),
+                Err("manual versus future capability disclosure missing")),
+            ("H11d", format!("{}\n<!--\n{install}\n-->\n", guide.replacen(install, "", 1)),
+                Err("distinct Phase0 installation link missing")),
+            ("H11e", format!("{stripped}\n{notice} {install}\n"), Ok(())),
+            ("H11f", format!("{stripped}\n~~~md\n{notice}\n{install}\n~~~\n"),
+                Err("manual versus future capability disclosure missing")),
+            ("H1-hidden-prompt", hidden_prompt,
+                Err("expected one copyable HELP prompt")),
+            ("H2-commented-duplicate", commented_duplicate, Ok(())),
+            ("H3-ordinary-visible", guide.to_owned(), Ok(())),
+            ("H4-closed-one-line", format!("<!-- inactive ```text -->\n{guide}"), Ok(())),
+            ("compound-guard-substitution",
+                format!("<!--\n```text\nI want to help [FAKE]\n-->\n{missing_guard}"),
+                Err("default merge guard missing")),
+            ("visible-prompt-missing-rights",
+                guide.replacen("Never commit proprietary game assets", "", 1),
+                Err("rights guard missing")),
+        ];
+        for (case, source, expected) in cases {
+            for (newline_name, newline) in [("LF", "\n"), ("CRLF", "\r\n")] {
+                for trailing in [false, true] {
+                    let mut fixture = source.replace('\n', newline);
+                    if trailing {
+                        if !fixture.ends_with(newline) {
+                            fixture.push_str(newline);
+                        }
+                    } else {
+                        while fixture.ends_with(newline) {
+                            fixture.truncate(fixture.len() - newline.len());
+                        }
+                    }
+                    assert_eq!(
+                        inspect_help_guide_contract(&fixture), expected,
+                        "case={case} newline={newline_name} trailing={trailing}",
+                    );
+                }
+            }
+        }
     }
 
     // Issue #333: CommonMark blank lines contain ASCII spaces/tabs only.
