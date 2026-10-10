@@ -1,0 +1,31 @@
+name: Offline containment spec-4 Rust model
+
+# Proposed on a non-default branch only. No provider credentials or mutation.
+on:
+  pull_request:
+    branches: [phase0/public-v0]
+    paths:
+      - Phase0/rust-containment-v4/**
+      - .github/workflows/rust-containment-v4.yml
+
+permissions:
+  contents: read
+
+jobs:
+  test-offline-model:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out proposed branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install pinned minimal Rust
+        run: rustup toolchain install 1.85.1 --profile minimal
+      - name: Compile strict Rust and execute deterministic offline tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup run 1.85.1 rustc --edition=2021 -D warnings --test \
+            Phase0/rust-containment-v4/model.rs -o "$RUNNER_TEMP/containment-v4-tests"
+          "$RUNNER_TEMP/containment-v4-tests" --test-threads=1
