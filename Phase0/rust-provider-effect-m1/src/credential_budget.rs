@@ -82,6 +82,8 @@ type TenantQueues = BTreeMap<String, VecDeque<Request>>;
 struct ClassBudget {
     limit: u32,
     remaining: u32,
+    // Conservative, synthetic per-class floor, clamped to class capacity.
+    reserved_for_recovery: u32,
 }
 
 struct CredentialLane {
@@ -179,11 +181,18 @@ impl Scheduler {
         if lane.classes.contains_key(class) {
             return Err(Error::DuplicateClass);
         }
+        // Normal requests must not exhaust an endpoint-specific class before
+        // a late-arriving recovery can use the group's reserved safety budget.
+        // This offline default is deliberately conservative: a tiny class
+        // may be entirely reserved. A future provider adapter needs its own
+        // proven policy, not this model's simulated budget.
+        let reserved_for_recovery = lane.reserved_for_recovery.min(limit);
         lane.classes.insert(
             class.to_owned(),
             ClassBudget {
                 limit,
                 remaining: limit,
+                reserved_for_recovery,
             },
         );
         Ok(())
@@ -293,9 +302,10 @@ impl Scheduler {
             return Err(Error::CircuitOpen);
         }
 
-        let can_recover = lane.remaining > 0 && has_eligible(&lane.recovery, &lane.classes);
+        let can_recover =
+            lane.remaining > 0 && has_eligible(&lane.recovery, &lane.classes, Priority::Recovery);
         let can_normal = lane.remaining > lane.reserved_for_recovery
-            && has_eligible(&lane.normal, &lane.classes);
+            && has_eligible(&lane.normal, &lane.classes, Priority::Normal);
         let class = match (can_normal, can_recover, lane.last_class) {
             (false, false, _) => return Ok(None),
             (true, false, _) => Priority::Normal,
@@ -308,11 +318,13 @@ impl Scheduler {
                 &mut lane.normal,
                 &mut lane.last_normal_tenant,
                 &lane.classes,
+                Priority::Normal,
             ),
             Priority::Recovery => take_round_robin(
                 &mut lane.recovery,
                 &mut lane.last_recovery_tenant,
                 &lane.classes,
+                Priority::Recovery,
             ),
         }
         .expect("eligible queue has at least one request");
@@ -336,12 +348,23 @@ impl Scheduler {
 /// A depleted endpoint class must not block unrelated operation classes.
 /// This is a deterministic simulation of finite class quotas, not a quota
 /// measurement, provider-side reservation, or an authorization to dispatch.
-fn has_eligible(queues: &TenantQueues, classes: &BTreeMap<String, ClassBudget>) -> bool {
+fn class_quota_allows(budget: &ClassBudget, priority: Priority) -> bool {
+    match priority {
+        Priority::Normal => budget.remaining > budget.reserved_for_recovery,
+        Priority::Recovery => budget.remaining > 0,
+    }
+}
+
+fn has_eligible(
+    queues: &TenantQueues,
+    classes: &BTreeMap<String, ClassBudget>,
+    priority: Priority,
+) -> bool {
     queues.values().any(|pending| {
         pending.iter().any(|request| {
             classes
                 .get(&request.operation_class)
-                .is_some_and(|budget| budget.remaining > 0)
+                .is_some_and(|budget| class_quota_allows(budget, priority))
         })
     })
 }
@@ -350,6 +373,7 @@ fn take_round_robin(
     queues: &mut TenantQueues,
     previous_tenant: &mut Option<String>,
     classes: &BTreeMap<String, ClassBudget>,
+    priority: Priority,
 ) -> Option<Request> {
     let tenants: Vec<String> = queues.keys().cloned().collect();
     if tenants.is_empty() {
@@ -365,7 +389,7 @@ fn take_round_robin(
         let eligible_position = queue.iter().position(|request| {
             classes
                 .get(&request.operation_class)
-                .is_some_and(|budget| budget.remaining > 0)
+                .is_some_and(|budget| class_quota_allows(budget, priority))
         });
         if let Some(position) = eligible_position {
             // Keep blocked requests intact; scheduling other classes cannot
@@ -528,6 +552,133 @@ mod tests {
                 Priority::Normal
             ]
         );
+    }
+
+    #[test]
+    fn late_recovery_cannot_be_starved_by_normal_class_quota() {
+        let mut s = Scheduler::new();
+        s.register_group("credential", 8, 1, 12).unwrap();
+        s.register_operation_class("credential", "comment-create", 2)
+            .unwrap();
+        s.register_operation_class("credential", "ref-update", 5)
+            .unwrap();
+
+        for i in 0..4 {
+            s.enqueue(request(
+                &format!("normal-comment-{i}"),
+                "credential",
+                "repo-a",
+                "tenant-a",
+                Priority::Normal,
+            ))
+            .unwrap();
+        }
+        for i in 0..3 {
+            let mut req = request(
+                &format!("normal-ref-{i}"),
+                "credential",
+                "repo-b",
+                "tenant-b",
+                Priority::Normal,
+            );
+            req.operation_class = "ref-update".into();
+            s.enqueue(req).unwrap();
+        }
+
+        // Class-specific reserves apply even though aggregate capacity is
+        // still available. Unrelated classes may use their own normal budget.
+        let mut selected = 0;
+        while let Some(candidate) = s.simulate_candidate("credential", CURRENT).unwrap() {
+            assert_eq!(candidate.request.priority, Priority::Normal);
+            if candidate.request.operation_class == "comment-create" {
+                assert!(candidate.estimated_class_remaining >= 1);
+            }
+            selected += 1;
+        }
+        assert_eq!(selected, 4);
+        assert_eq!(s.remaining("credential"), Ok(4));
+        assert_eq!(s.remaining_class("credential", "comment-create"), Ok(1));
+        assert_eq!(s.remaining_class("credential", "ref-update"), Ok(2));
+        assert_eq!(s.pending("credential"), Ok(3));
+
+        // A newly arriving safety operation consumes the protected class token
+        // without an additional refill and without discarding blocked normals.
+        s.enqueue(request(
+            "late-recovery",
+            "credential",
+            "repo-a",
+            "tenant-c",
+            Priority::Recovery,
+        ))
+        .unwrap();
+        let recovery = s
+            .simulate_candidate("credential", CURRENT)
+            .unwrap()
+            .unwrap();
+        assert_eq!(recovery.request.operation_id, "late-recovery");
+        assert_eq!(recovery.request.priority, Priority::Recovery);
+        assert_eq!(recovery.estimated_class_remaining, 0);
+        assert_eq!(s.remaining("credential"), Ok(3));
+        assert_eq!(s.pending("credential"), Ok(3));
+        assert!(s
+            .simulate_candidate("credential", CURRENT)
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn recovery_class_reserve_matrix_clamps_and_refills() {
+        // Sixteen independent endpoint/reserve combinations, including an
+        // endpoint entirely protected from normal work. No provider effects.
+        for reserve in 1..=4 {
+            for class_limit in 1..=4 {
+                let mut s = Scheduler::new();
+                s.register_group("credential", 12, reserve, 12).unwrap();
+                s.register_operation_class("credential", "comment-create", class_limit)
+                    .unwrap();
+                for i in 0..4 {
+                    s.enqueue(request(
+                        &format!("normal-{i}"),
+                        "credential",
+                        "repo-a",
+                        "tenant-a",
+                        Priority::Normal,
+                    ))
+                    .unwrap();
+                }
+                let mut normals = 0;
+                while let Some(candidate) = s.simulate_candidate("credential", CURRENT).unwrap() {
+                    assert_eq!(candidate.request.priority, Priority::Normal);
+                    normals += 1;
+                }
+                let kept = reserve.min(class_limit);
+                assert_eq!(normals, class_limit - kept);
+                assert_eq!(s.remaining_class("credential", "comment-create"), Ok(kept));
+
+                s.enqueue(request(
+                    "recovery",
+                    "credential",
+                    "repo-b",
+                    "tenant-b",
+                    Priority::Recovery,
+                ))
+                .unwrap();
+                let recovered = s
+                    .simulate_candidate("credential", CURRENT)
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(recovered.request.priority, Priority::Recovery);
+                assert_eq!(recovered.estimated_class_remaining, kept - 1);
+
+                // A new window restores the class floor without reopening
+                // any unrelated circuit or establishing effect authority.
+                s.replenish("credential").unwrap();
+                assert_eq!(
+                    s.remaining_class("credential", "comment-create"),
+                    Ok(class_limit)
+                );
+            }
+        }
     }
 
     #[test]
