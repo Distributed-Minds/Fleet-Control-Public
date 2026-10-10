@@ -1,0 +1,10 @@
+[package]
+name = "free-energy-topology-model"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85.1"
+publish = false
+description = "Synthetic deterministic Phase0 topology and migration model (issue 7)"
+
+[lib]
+path = "src/lib.rs"

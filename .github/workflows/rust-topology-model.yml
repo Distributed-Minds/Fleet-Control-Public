@@ -1,0 +1,24 @@
+name: Validate synthetic Phase0 topology model (#7)
+
+on:
+  pull_request:
+    paths:
+      - "Phase0/rust-topology-model/**"
+      - ".github/workflows/rust-topology-model.yml"
+  workflow_dispatch:
+
+jobs:
+  model:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install exact Rust toolchain
+        run: rustup toolchain install 1.85.1 --profile minimal --component rustfmt,clippy
+      - name: Check formatting
+        run: cargo +1.85.1 fmt --manifest-path Phase0/rust-topology-model/Cargo.toml --all --check
+      - name: Run locked offline synthetic fixtures
+        run: cargo +1.85.1 test --manifest-path Phase0/rust-topology-model/Cargo.toml --locked --offline
+      - name: Strict Clippy
+        run: cargo +1.85.1 clippy --manifest-path Phase0/rust-topology-model/Cargo.toml --all-targets --locked --offline -- -D warnings
