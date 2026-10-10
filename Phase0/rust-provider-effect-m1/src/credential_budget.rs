@@ -374,13 +374,15 @@ fn take_round_robin(
     // Strict successor first, then wrap through the previous cursor. This
     // also works if that cursor's queue was deleted after the prior selection.
     let selected = match previous_tenant.as_ref() {
-        Some(last) => first_eligible_tenant(
-            queues.range((Excluded(last.clone()), Unbounded)),
-            classes,
-        )
-        .or_else(|| {
-            first_eligible_tenant(queues.range((Unbounded, Included(last.clone()))), classes)
-        }),
+        Some(last) => {
+            first_eligible_tenant(queues.range((Excluded(last.clone()), Unbounded)), classes)
+                .or_else(|| {
+                    first_eligible_tenant(
+                        queues.range((Unbounded, Included(last.clone()))),
+                        classes,
+                    )
+                })
+        }
         None => first_eligible_tenant(queues.iter(), classes),
     }?;
     let (tenant, position) = selected;
