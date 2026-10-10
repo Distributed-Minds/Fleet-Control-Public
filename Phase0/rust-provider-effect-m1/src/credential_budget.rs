@@ -900,10 +900,7 @@ mod tests {
             "tenant-a",
             Priority::Normal,
         );
-        assert_eq!(
-            s.enqueue(fresh.clone()),
-            Err(Error::OperationHistoryFull)
-        );
+        assert_eq!(s.enqueue(fresh.clone()), Err(Error::OperationHistoryFull));
         assert_eq!(s.pending("group-history"), Ok(0));
         assert_eq!(s.remaining("group-history"), Ok(1));
         s.replenish("group-history").unwrap();
