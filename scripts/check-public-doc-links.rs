@@ -1247,15 +1247,90 @@ mod tests {
     }
 
     #[test]
-    fn escaped_backtick_cannot_close_a_real_code_span() {
+    fn backslash_before_backtick_closes_active_code_span() {
         let mut report = Report::default();
         let paths = collect_links(
             r#"`literal \`[not-real](ignore.md) remains code` [real](exists.md)"#,
             "README.md",
             &mut report,
         );
-        assert_eq!(paths, vec!["exists.md"]);
+        assert_eq!(paths, vec!["ignore.md", "exists.md"]);
         assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn active_code_span_closer_ignores_backslash_escape_parity() {
+        for (source, expected) in [
+            (r#"`code\` [real](missing.md) `later"#, vec!["missing.md"]),
+            (r#"``code\`` [real](missing.md) ``later"#, vec!["missing.md"]),
+            (
+                r#"Some ``code\`` [real](missing.md) ``later"#,
+                vec!["missing.md"],
+            ),
+            (
+                "`start\ncode\\` [real](missing.md) `later\n",
+                vec!["missing.md"],
+            ),
+            (
+                r#"`code\` [real](missing.md) `and [next](present.md)"#,
+                vec!["missing.md", "present.md"],
+            ),
+            // Controls: even-parity backslashes, normal closers, escaped
+            // openers outside code and unrelated in-span backslashes.
+            (r#"`code\\` [real](missing.md) `later"#, vec!["missing.md"]),
+            (r#"`code` [real](missing.md) `later"#, vec!["missing.md"]),
+            (r#"\` opener [real](missing.md)"#, vec!["missing.md"]),
+            (r#"`code\x` [real](missing.md)"#, vec!["missing.md"]),
+            (r#"`code\` [real](missing.md)"#, vec!["missing.md"]),
+        ] {
+            let mut report = Report::default();
+            assert_eq!(
+                collect_links(source, "README.md", &mut report),
+                expected,
+                "source: {source:?}"
+            );
+            assert!(report.errors.is_empty(), "{source:?}: {:?}", report.errors);
+        }
+
+        // A mismatched two-backtick run cannot be split into a
+        // one-backtick closer after a backslash.
+        let mut report = Report::default();
+        let source = r#"`code\`` [hidden](missing.md) `tail"#;
+        assert!(
+            collect_links(source, "README.md", &mut report).is_empty(),
+            "source: {source:?}"
+        );
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn active_code_span_closer_reports_real_missing_targets() {
+        for source in [
+            "`code\\` [real](missing.md) `later\n",
+            "``code\\`` [real](missing.md) ``later\n",
+        ] {
+            let sandbox = Sandbox::new();
+            sandbox.write("README.md", source);
+            let report = sandbox.scan();
+            assert_eq!(report.local_links, 1, "{source:?}");
+            assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+            assert!(
+                report.errors[0].contains("README.md: target missing: missing.md"),
+                "{:?}",
+                report.errors
+            );
+        }
+
+        let sandbox = Sandbox::new();
+        sandbox.write("present.md", "present");
+        sandbox.write(
+            "README.md",
+            "`code\\` [real](missing.md) `and [next](present.md)\n",
+        );
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 2);
+        assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+        assert!(report.errors[0].contains("target missing: missing.md"));
     }
 
     #[test]
