@@ -1,13 +1,83 @@
 //! Independent Rust evaluator for the historical authority-closure spec-2 fixtures.
 //! This is an inert fixture oracle, NOT permission to revoke any real authority.
 
-use serde::Deserialize;
+use serde::de::{self, MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer};
 use serde_json::{Map, Value};
 use std::collections::HashSet;
 use std::env;
+use std::fmt;
 use std::fs;
 use std::io::Read;
 use std::process;
+
+// Reject conflicting raw object members before serde_json's normal struct
+// decoding. JSON object membership is checked at *every* depth, including
+// escaped spellings of the same decoded key. This is input admission only,
+// not a claim that the fixture is an independent capability oracle.
+struct UniqueJsonMemberCheck;
+
+impl<'de> Deserialize<'de> for UniqueJsonMemberCheck {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(UniqueJsonMemberVisitor)
+    }
+}
+
+struct UniqueJsonMemberVisitor;
+
+impl<'de> Visitor<'de> for UniqueJsonMemberVisitor {
+    type Value = UniqueJsonMemberCheck;
+
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("a JSON value with no duplicate object keys")
+    }
+
+    fn visit_bool<E: de::Error>(self, _: bool) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_i64<E: de::Error>(self, _: i64) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_u64<E: de::Error>(self, _: u64) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_f64<E: de::Error>(self, _: f64) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_str<E: de::Error>(self, _: &str) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_string<E: de::Error>(self, _: String) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+        while seq.next_element::<UniqueJsonMemberCheck>()?.is_some() {}
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+        let mut seen = HashSet::new();
+        while let Some(key) = map.next_key::<String>()? {
+            if !seen.insert(key.clone()) {
+                return Err(de::Error::custom(format!(
+                    "duplicate JSON object key: {key:?}"
+                )));
+            }
+            map.next_value::<UniqueJsonMemberCheck>()?;
+        }
+        Ok(UniqueJsonMemberCheck)
+    }
+}
 
 const REQUIRED: [&str; 26] = [
     "child-after-cutoff-denied",
@@ -345,6 +415,9 @@ fn evaluate(case: &Map<String, Value>) -> Result<(String, Value), String> {
 }
 
 fn validate_fixture(source: &str) -> Result<usize, String> {
+    // Validate raw member multiplicity before serde_json's Map/struct decoding
+    // erases duplicate semantic and expectation keys, including escaped aliases.
+    let _: UniqueJsonMemberCheck = serde_json::from_str(source).map_err(|e| e.to_string())?;
     let fixture: Fixture = serde_json::from_str(source).map_err(|e| e.to_string())?;
     if fixture.spec != 2 {
         return Err(format!(
@@ -834,6 +907,33 @@ mod tests {
         check(
             json!({"handoff_independent":true,"retained_scope_exact":true}),
             "PRESERVE_BOUNDED",
+        );
+    }
+
+    #[test]
+    fn duplicate_json_members_fail_before_expected_or_authority_interpretation() {
+        // Duplicate decoded names are invalid at every nesting depth, even
+        // when serde_json::Value would otherwise keep only the last member.
+        for source in [
+            r#"{"spec":2,"spec":2}"#,
+            r#"{"cases":[{"fleet_authority_revoked":true,"fleet_authority_revoked":false}]}"#,
+            r#"{"cases":[{"fleet_authority_revoked":true,"\u0066leet_authority_revoked":false}]}"#,
+            r#"{"cases":[{"nested":[{"expected":"DENY","expected":"BOUNDED_AUTHORITY"}]}]}"#,
+            r#"{"cases":[{"name":"a","expected":"DENY","expected":"DENY"}]}"#,
+        ] {
+            let error = validate_fixture(source).expect_err("duplicate member must fail closed");
+            assert!(
+                error.contains("duplicate JSON object key"),
+                "duplicate admission failed unexpectedly: {error}"
+            );
+        }
+
+        // The unmodified tracked 26-case fixture remains accepted.
+        assert_eq!(
+            validate_fixture(include_str!(
+                "../../../fixtures/authority-closure-spec2.json"
+            )),
+            Ok(26)
         );
     }
 }
