@@ -451,7 +451,19 @@ fn candidate_ids(fixture_text: &str) -> Result<Vec<(String, String)>, String> {
 }
 
 fn main() {
-    let args: Vec<String> = env::args().skip(1).collect();
+    // OS arguments may contain non-UTF-8 bytes; env::args() would panic and
+    // bypass the digest CLI's deterministic failure/exit contract.
+    let args: Vec<String> = match env::args_os()
+        .skip(1)
+        .map(|arg| arg.into_string())
+        .collect::<Result<Vec<String>, _>>()
+    {
+        Ok(args) => args,
+        Err(_) => {
+            eprintln!("FAIL: non-UTF-8 CLI argument");
+            process::exit(1);
+        }
+    };
     if args.len() > 1 {
         eprintln!("usage: integration_candidate_digest [fixture-path]");
         process::exit(2);
