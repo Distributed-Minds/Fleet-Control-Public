@@ -841,34 +841,38 @@ mod tests {
     fn changed_semantic_bytes_change_digest_without_changing_case_name() {
         let original = candidate_ids(HISTORICAL).unwrap();
         let mut fixture: Value = serde_json::from_str(HISTORICAL).unwrap();
+        // An unsupported cardinality still has a distinct prediction identity.
+        // Mutating its envelope preserves the required negative verdict.
         let cases = fixture["cases"].as_array_mut().unwrap();
-        cases[0]["candidate"]["metadata"]["message"] = Value::String("Changed\n".to_owned());
+        cases[2]["candidate"]["metadata"]["message"] = Value::String("Changed\n".to_owned());
         let mutated = candidate_ids(&fixture.to_string()).unwrap();
-        assert_ne!(original[0].1, mutated[0].1);
-        assert_eq!(original[1..], mutated[1..]);
+        assert_ne!(original[2].1, mutated[2].1);
+        assert_eq!(original[..2], mutated[..2]);
+        assert_eq!(original[3..], mutated[3..]);
     }
 
     #[test]
     fn unicode_is_utf8_not_ascii_escaped_and_order_is_semantic() {
+        // Keep semantic acceptance stable while exercising canonical hashing.
         let mut fixture: Value = serde_json::from_str(HISTORICAL).unwrap();
-        fixture["cases"][0]["candidate"]["metadata"]["author"] =
+        fixture["cases"][2]["candidate"]["metadata"]["author"] =
             Value::String("Jörg ∑ 東京".to_owned());
         let unicode = candidate_ids(&fixture.to_string()).unwrap();
-        fixture["cases"][0]["candidate"]["metadata"]["author"] =
+        fixture["cases"][2]["candidate"]["metadata"]["author"] =
             Value::String("J\\u00f6rg".to_owned());
         assert_ne!(
-            unicode[0].1,
-            candidate_ids(&fixture.to_string()).unwrap()[0].1
+            unicode[2].1,
+            candidate_ids(&fixture.to_string()).unwrap()[2].1
         );
         let baseline: Value = serde_json::from_str(HISTORICAL).unwrap();
         let mut reordered = baseline.clone();
-        let a = reordered["cases"][0]["candidate"]["parents"][0].clone();
-        let b = reordered["cases"][0]["candidate"]["parents"][1].clone();
-        reordered["cases"][0]["candidate"]["parents"][0] = b;
-        reordered["cases"][0]["candidate"]["parents"][1] = a;
+        let a = reordered["cases"][2]["candidate"]["parents"][0].clone();
+        let b = reordered["cases"][2]["candidate"]["parents"][1].clone();
+        reordered["cases"][2]["candidate"]["parents"][0] = b;
+        reordered["cases"][2]["candidate"]["parents"][1] = a;
         assert_ne!(
-            candidate_ids(&baseline.to_string()).unwrap()[0].1,
-            candidate_ids(&reordered.to_string()).unwrap()[0].1
+            candidate_ids(&baseline.to_string()).unwrap()[2].1,
+            candidate_ids(&reordered.to_string()).unwrap()[2].1
         );
     }
 
