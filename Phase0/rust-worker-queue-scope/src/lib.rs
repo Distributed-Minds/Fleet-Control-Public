@@ -131,16 +131,14 @@ pub fn compile_footprint(
                 }
             }
             ScopeSelector::ExactBranchRef(_) => return Err(AdmissionError::InvalidResource),
-            ScopeSelector::Conversation(number) if *number > 0 => {
-                CanonicalResource::Conversation {
-                    repository_id: current_basis.repository_id,
-                    number: *number,
-                }
-            }
+            ScopeSelector::Conversation(number) if *number > 0 => CanonicalResource::Conversation {
+                repository_id: current_basis.repository_id,
+                number: *number,
+            },
             ScopeSelector::Conversation(_) => return Err(AdmissionError::InvalidResource),
-            ScopeSelector::Path(_)
-            | ScopeSelector::Alias(_)
-            | ScopeSelector::Hierarchical(_) => return Err(AdmissionError::UnsupportedScope),
+            ScopeSelector::Path(_) | ScopeSelector::Alias(_) | ScopeSelector::Hierarchical(_) => {
+                return Err(AdmissionError::UnsupportedScope)
+            }
         };
         if !keys.insert(key) {
             return Err(AdmissionError::DuplicateResource);
