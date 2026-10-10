@@ -15,6 +15,11 @@
 use std::env;
 use std::process::ExitCode;
 
+// GitHub issue threads stop accepting new comments at 2,500. This offline
+// GitHub-specific advisor must not accept a caller-inflated provider limit:
+// doing so can report rotation capacity after the actual slot is exhausted.
+const GITHUB_COMMENT_HARD_LIMIT: u64 = 2_500;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum OtherState {
     Standby,
@@ -47,8 +52,8 @@ enum Decision {
 /// A nonzero observed budget is mandatory: without a bounded number of
 /// pending writes we cannot prove that the headroom will survive this run.
 fn assess(o: Observation) -> Result<Decision, &'static str> {
-    if o.hard_limit == 0 {
-        return Err("hard limit must be positive");
+    if o.hard_limit != GITHUB_COMMENT_HARD_LIMIT {
+        return Err("GitHub coordination hard limit must be exactly 2500");
     }
     // The installed two-slot policy permits proactive switches only in the
     // inclusive 100..=2400 window (GitHub hard limit: 2,500 comments).
@@ -323,6 +328,32 @@ mod tests {
         assert!(assess(o).is_err());
         o.active_count = 2500;
         assert_eq!(assess(o), Ok(Decision::Exhausted));
+    }
+
+    #[test]
+    fn caller_supplied_hard_limit_cannot_redefine_github_capacity() {
+        let saturated = snapshot(2_500);
+        assert_eq!(assess(saturated), Ok(Decision::Exhausted));
+
+        // Previously 2,501 or 5,000 could label an actually exhausted
+        // GitHub issue as having a viable rotation candidate.
+        for forged_limit in [2_499, 2_501, 5_000, u64::MAX] {
+            let mut forged = saturated;
+            forged.hard_limit = forged_limit;
+            assert!(
+                assess(forged).is_err(),
+                "caller-supplied hard limit {forged_limit} was trusted"
+            );
+        }
+
+        // The false-capacity input must also fail at the CLI's parsing
+        // boundary, not only when calling the model directly.
+        let mut args = argv([
+            "2500", "2000", "1500", "3", "STANDBY", "300", "2", "500", "8", "2",
+        ]);
+        assert!(preflight(&args).is_ok());
+        args[0] = "5000".to_owned();
+        assert!(preflight(&args).is_err());
     }
 
     #[test]
