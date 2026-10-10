@@ -1,6 +1,7 @@
 //! M1 offline provider-effect feasibility and ambiguous-create attribution model.
 //! This crate has NO network access, credentials, repository-write adapter or
 //! authority to admit an actual provider mutation. It is not the #91 broker.
+pub mod outbox;
 use std::collections::BTreeSet;
 
 pub const EMBEDDED_MANIFEST: &str = include_str!("../manifest/provider_effects_v1.tsv");
