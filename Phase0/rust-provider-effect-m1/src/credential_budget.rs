@@ -21,6 +21,8 @@ pub struct Request {
     pub repository: String,
     pub tenant: String,
     pub target: String,
+    /// Versioned operation class, not a client-supplied authority claim.
+    pub operation_class: String,
     pub priority: Priority,
 }
 
@@ -32,6 +34,7 @@ impl Request {
             &self.repository,
             &self.tenant,
             &self.target,
+            &self.operation_class,
         ]
         .iter()
         .all(|field| crate::bounded_machine_id(field))
@@ -56,9 +59,12 @@ pub enum Error {
     InvalidConfig,
     DuplicateGroup,
     UnknownGroup,
+    DuplicateClass,
+    UnknownClass,
     InvalidRequest,
     OperationIdentityConflict,
     QueueFull,
+    OperationHistoryFull,
     CircuitOpen,
     StaleBoundary,
 }
@@ -68,15 +74,23 @@ pub struct Candidate {
     /// A simulated admission candidate; no actual provider call is sent.
     pub request: Request,
     pub estimated_remaining: u32,
+    pub estimated_class_remaining: u32,
 }
 
 type TenantQueues = BTreeMap<String, VecDeque<Request>>;
+
+struct ClassBudget {
+    limit: u32,
+    remaining: u32,
+}
 
 struct CredentialLane {
     limit: u32,
     remaining: u32,
     reserved_for_recovery: u32,
     max_pending: usize,
+    /// Class-specific limits share the same aggregate credential budget.
+    classes: BTreeMap<String, ClassBudget>,
     circuit_open: bool,
     pending_count: usize,
     normal: TenantQueues,
@@ -93,6 +107,7 @@ impl CredentialLane {
             remaining: limit,
             reserved_for_recovery,
             max_pending,
+            classes: BTreeMap::new(),
             circuit_open: false,
             pending_count: 0,
             normal: TenantQueues::new(),
@@ -103,6 +118,12 @@ impl CredentialLane {
         }
     }
 }
+
+/// Maximum number of operation identities retained by this *offline simulation*.
+/// The journal never evicts completed identities: evicting one would allow a
+/// changed payload to reuse an old operation ID without a replay conflict.
+/// A real broker needs a durable, bounded receipt/reconciliation contract.
+pub const MAX_TRACKED_OPERATIONS: usize = 1024;
 
 /// All repositories sharing an effective credential group consume ONE budget.
 /// Different group keys in fixtures model separately proved credential buckets;
@@ -142,6 +163,32 @@ impl Scheduler {
         Ok(())
     }
 
+    /// Register explicit synthetic operation-class limits for this effective credential.
+    /// A real broker must source these classes and capacities from trusted policy,
+    /// and must not interpret a fixture label as provider budget authority.
+    pub fn register_operation_class(
+        &mut self,
+        group: &str,
+        class: &str,
+        limit: u32,
+    ) -> Result<(), Error> {
+        if !crate::bounded_machine_id(class) || limit == 0 {
+            return Err(Error::InvalidConfig);
+        }
+        let lane = self.groups.get_mut(group).ok_or(Error::UnknownGroup)?;
+        if lane.classes.contains_key(class) {
+            return Err(Error::DuplicateClass);
+        }
+        lane.classes.insert(
+            class.to_owned(),
+            ClassBudget {
+                limit,
+                remaining: limit,
+            },
+        );
+        Ok(())
+    }
+
     /// Exact duplicate enqueue is a no-op. The same operation ID may NEVER
     /// silently change credential group, repository, target, tenant or class.
     pub fn enqueue(&mut self, request: Request) -> Result<bool, Error> {
@@ -159,8 +206,18 @@ impl Scheduler {
             .groups
             .get_mut(&request.credential_group)
             .ok_or(Error::UnknownGroup)?;
+        if !lane.classes.contains_key(&request.operation_class) {
+            return Err(Error::UnknownClass);
+        }
         if lane.pending_count >= lane.max_pending {
             return Err(Error::QueueFull);
+        }
+        // The pending queue bound is NOT a bound on the replay journal:
+        // completed operations remain in known_operations indefinitely.
+        // Fail closed when the simulation reaches its retained-history limit;
+        // never evict an old identity to admit an apparently fresh replay.
+        if self.known_operations.len() >= MAX_TRACKED_OPERATIONS {
+            return Err(Error::OperationHistoryFull);
         }
         let queues = match request.priority {
             Priority::Normal => &mut lane.normal,
@@ -189,6 +246,9 @@ impl Scheduler {
     pub fn replenish(&mut self, group: &str) -> Result<(), Error> {
         let lane = self.groups.get_mut(group).ok_or(Error::UnknownGroup)?;
         lane.remaining = lane.limit;
+        for budget in lane.classes.values_mut() {
+            budget.remaining = budget.limit;
+        }
         Ok(())
     }
 
@@ -197,6 +257,16 @@ impl Scheduler {
             .get(group)
             .map(|lane| lane.remaining)
             .ok_or(Error::UnknownGroup)
+    }
+
+    pub fn remaining_class(&self, group: &str, class: &str) -> Result<u32, Error> {
+        self.groups
+            .get(group)
+            .ok_or(Error::UnknownGroup)?
+            .classes
+            .get(class)
+            .map(|budget| budget.remaining)
+            .ok_or(Error::UnknownClass)
     }
 
     pub fn pending(&self, group: &str) -> Result<usize, Error> {
@@ -223,8 +293,9 @@ impl Scheduler {
             return Err(Error::CircuitOpen);
         }
 
-        let can_recover = lane.remaining > 0 && !lane.recovery.is_empty();
-        let can_normal = lane.remaining > lane.reserved_for_recovery && !lane.normal.is_empty();
+        let can_recover = lane.remaining > 0 && has_eligible(&lane.recovery, &lane.classes);
+        let can_normal = lane.remaining > lane.reserved_for_recovery
+            && has_eligible(&lane.normal, &lane.classes);
         let class = match (can_normal, can_recover, lane.last_class) {
             (false, false, _) => return Ok(None),
             (true, false, _) => Priority::Normal,
@@ -233,42 +304,81 @@ impl Scheduler {
             (true, true, _) => Priority::Recovery,
         };
         let request = match class {
-            Priority::Normal => take_round_robin(&mut lane.normal, &mut lane.last_normal_tenant),
-            Priority::Recovery => {
-                take_round_robin(&mut lane.recovery, &mut lane.last_recovery_tenant)
-            }
+            Priority::Normal => take_round_robin(
+                &mut lane.normal,
+                &mut lane.last_normal_tenant,
+                &lane.classes,
+            ),
+            Priority::Recovery => take_round_robin(
+                &mut lane.recovery,
+                &mut lane.last_recovery_tenant,
+                &lane.classes,
+            ),
         }
         .expect("eligible queue has at least one request");
         lane.remaining -= 1;
+        let class_budget = lane
+            .classes
+            .get_mut(&request.operation_class)
+            .expect("selected class must be registered");
+        class_budget.remaining -= 1;
+        let estimated_class_remaining = class_budget.remaining;
         lane.pending_count -= 1;
         lane.last_class = Some(class);
         Ok(Some(Candidate {
             request,
             estimated_remaining: lane.remaining,
+            estimated_class_remaining,
         }))
     }
+}
+
+/// A depleted endpoint class must not block unrelated operation classes.
+/// This is a deterministic simulation of finite class quotas, not a quota
+/// measurement, provider-side reservation, or an authorization to dispatch.
+fn has_eligible(queues: &TenantQueues, classes: &BTreeMap<String, ClassBudget>) -> bool {
+    queues.values().any(|pending| {
+        pending.iter().any(|request| {
+            classes
+                .get(&request.operation_class)
+                .is_some_and(|budget| budget.remaining > 0)
+        })
+    })
 }
 
 fn take_round_robin(
     queues: &mut TenantQueues,
     previous_tenant: &mut Option<String>,
+    classes: &BTreeMap<String, ClassBudget>,
 ) -> Option<Request> {
     let tenants: Vec<String> = queues.keys().cloned().collect();
     if tenants.is_empty() {
         return None;
     }
-    let next_index = previous_tenant
+    let start = previous_tenant
         .as_ref()
         .and_then(|last| tenants.iter().position(|tenant| tenant > last))
         .unwrap_or(0);
-    let tenant = tenants[next_index].clone();
-    let queue = queues.get_mut(&tenant).expect("selected tenant exists");
-    let request = queue.pop_front();
-    if queue.is_empty() {
-        queues.remove(&tenant);
+    for offset in 0..tenants.len() {
+        let tenant = &tenants[(start + offset) % tenants.len()];
+        let queue = queues.get_mut(tenant).expect("selected tenant exists");
+        let eligible_position = queue.iter().position(|request| {
+            classes
+                .get(&request.operation_class)
+                .is_some_and(|budget| budget.remaining > 0)
+        });
+        if let Some(position) = eligible_position {
+            // Keep blocked requests intact; scheduling other classes cannot
+            // bypass the exhausted class limit or lose FIFO order within it.
+            let request = queue.remove(position);
+            if queue.is_empty() {
+                queues.remove(tenant);
+            }
+            *previous_tenant = Some(tenant.clone());
+            return request;
+        }
     }
-    *previous_tenant = Some(tenant);
-    request
+    None
 }
 
 #[cfg(test)]
@@ -287,6 +397,7 @@ mod tests {
             repository: repo.into(),
             tenant: tenant.into(),
             target: "issue:91/comments".into(),
+            operation_class: "comment-create".into(),
             priority,
         }
     }
@@ -294,6 +405,8 @@ mod tests {
     fn scheduler(limit: u32, reserve: u32, pending: usize) -> Scheduler {
         let mut s = Scheduler::new();
         s.register_group("effective-credential-1", limit, reserve, pending)
+            .unwrap();
+        s.register_operation_class("effective-credential-1", "comment-create", limit)
             .unwrap();
         s
     }
@@ -487,12 +600,13 @@ mod tests {
         );
         assert_eq!(s.enqueue(original.clone()), Ok(true));
         assert_eq!(s.enqueue(original.clone()), Ok(false));
-        for variant in 0..4 {
+        for variant in 0..5 {
             let mut changed = original.clone();
             match variant {
                 0 => changed.repository = "repo-b".into(),
                 1 => changed.credential_group = "credential-two".into(),
                 2 => changed.target = "issue:92".into(),
+                3 => changed.operation_class = "ref-update".into(),
                 _ => changed.priority = Priority::Recovery,
             }
             assert_eq!(s.enqueue(changed), Err(Error::OperationIdentityConflict));
@@ -557,6 +671,8 @@ mod tests {
     fn independently_proved_groups_are_separate_but_login_is_not_the_key() {
         let mut s = scheduler(1, 0, 2);
         s.register_group("effective-credential-2", 1, 0, 2).unwrap();
+        s.register_operation_class("effective-credential-2", "comment-create", 1)
+            .unwrap();
         for (id, group) in [
             ("one", "effective-credential-1"),
             ("two", "effective-credential-2"),
@@ -588,7 +704,7 @@ mod tests {
             "x".repeat(513),
         ] {
             assert_eq!(s.register_group(&bad, 4, 1, 10), Err(Error::InvalidConfig));
-            for field in 0..5 {
+            for field in 0..6 {
                 let mut invalid = request(
                     "safe-id",
                     "effective-credential-1",
@@ -601,7 +717,8 @@ mod tests {
                     1 => invalid.credential_group = bad.clone(),
                     2 => invalid.repository = bad.clone(),
                     3 => invalid.tenant = bad.clone(),
-                    _ => invalid.target = bad.clone(),
+                    4 => invalid.target = bad.clone(),
+                    _ => invalid.operation_class = bad.clone(),
                 }
                 assert_eq!(s.enqueue(invalid), Err(Error::InvalidRequest));
             }
@@ -619,5 +736,175 @@ mod tests {
         maximum.operation_id = "x".repeat(512);
         assert_eq!(s.enqueue(maximum), Ok(true));
         assert_eq!(s.pending("effective-credential-1"), Ok(1));
+    }
+    #[test]
+    fn endpoint_exhaustion_does_not_spend_aggregate_budget_or_block_other_classes() {
+        let mut s = scheduler(4, 0, 8);
+        s.register_operation_class("effective-credential-1", "ref-update", 1)
+            .unwrap();
+        let mut a = request(
+            "ref-a",
+            "effective-credential-1",
+            "repo-a",
+            "tenant-a",
+            Priority::Normal,
+        );
+        a.operation_class = "ref-update".into();
+        let mut b = a.clone();
+        b.operation_id = "ref-b".into();
+        s.enqueue(a).unwrap();
+        s.enqueue(b).unwrap();
+        s.enqueue(request(
+            "comment-a",
+            "effective-credential-1",
+            "repo-a",
+            "tenant-a",
+            Priority::Normal,
+        ))
+        .unwrap();
+
+        assert_eq!(next(&mut s).unwrap().request.operation_id, "ref-a");
+        assert_eq!(
+            s.remaining_class("effective-credential-1", "ref-update"),
+            Ok(0)
+        );
+        assert_eq!(s.remaining("effective-credential-1"), Ok(3));
+        // The second ref is still pending, but it must not head-of-line block
+        // an authorized separate class in the same tenant's FIFO.
+        let selected = next(&mut s).unwrap();
+        assert_eq!(selected.request.operation_id, "comment-a");
+        assert_eq!(selected.estimated_class_remaining, 3);
+        assert_eq!(s.pending("effective-credential-1"), Ok(1));
+        assert_eq!(s.remaining("effective-credential-1"), Ok(2));
+        assert!(next(&mut s).is_none());
+        s.replenish("effective-credential-1").unwrap();
+        assert_eq!(next(&mut s).unwrap().request.operation_id, "ref-b");
+    }
+
+    #[test]
+    fn endpoint_limit_is_shared_across_repositories_and_tenants() {
+        let mut s = scheduler(5, 1, 10);
+        s.register_operation_class("effective-credential-1", "ref-update", 1)
+            .unwrap();
+        for (id, repo, tenant) in [("r1", "repo-a", "tenant-a"), ("r2", "repo-b", "tenant-b")] {
+            let mut req = request(
+                id,
+                "effective-credential-1",
+                repo,
+                tenant,
+                Priority::Recovery,
+            );
+            req.operation_class = "ref-update".into();
+            s.enqueue(req).unwrap();
+        }
+        assert_eq!(next(&mut s).unwrap().request.operation_id, "r1");
+        assert_eq!(
+            s.remaining_class("effective-credential-1", "ref-update"),
+            Ok(0)
+        );
+        assert_eq!(s.pending("effective-credential-1"), Ok(1));
+        assert_eq!(s.remaining("effective-credential-1"), Ok(4));
+        assert!(next(&mut s).is_none());
+    }
+
+    #[test]
+    fn unknown_or_invalid_class_fails_closed_without_enqueuing() {
+        let mut s = scheduler(3, 0, 3);
+        let mut req = request(
+            "unknown",
+            "effective-credential-1",
+            "repo-a",
+            "tenant-a",
+            Priority::Normal,
+        );
+        req.operation_class = "not-configured".into();
+        assert_eq!(s.enqueue(req), Err(Error::UnknownClass));
+        assert_eq!(s.pending("effective-credential-1"), Ok(0));
+        assert_eq!(
+            s.remaining_class("effective-credential-1", "unknown"),
+            Err(Error::UnknownClass)
+        );
+        assert_eq!(
+            s.register_operation_class("effective-credential-1", "bad class", 1),
+            Err(Error::InvalidConfig)
+        );
+        assert_eq!(
+            s.register_operation_class("effective-credential-1", "ref-update", 0),
+            Err(Error::InvalidConfig)
+        );
+        assert_eq!(
+            s.register_operation_class("effective-credential-1", "ref-update", 2),
+            Ok(())
+        );
+        assert_eq!(
+            s.register_operation_class("effective-credential-1", "ref-update", 2),
+            Err(Error::DuplicateClass)
+        );
+        assert_eq!(
+            s.remaining_class("effective-credential-1", "ref-update"),
+            Ok(2)
+        );
+        assert_eq!(
+            s.remaining_class("missing-group", "ref-update"),
+            Err(Error::UnknownGroup)
+        );
+    }
+
+    #[test]
+    fn completed_history_cannot_bypass_queue_bounds_or_reuse_operation_ids() {
+        let mut s = Scheduler::new();
+        let limit = (MAX_TRACKED_OPERATIONS + 1) as u32;
+        // A queue of one can still admit arbitrarily many distinct IDs over
+        // time unless completed-operation history is independently bounded.
+        s.register_group("group-history", limit, 0, 1).unwrap();
+        s.register_operation_class("group-history", "comment-create", limit)
+            .unwrap();
+        for index in 0..MAX_TRACKED_OPERATIONS {
+            let original = request(
+                &format!("history-{index:04}"),
+                "group-history",
+                "repo-a",
+                "tenant-a",
+                Priority::Normal,
+            );
+            assert_eq!(s.enqueue(original.clone()), Ok(true));
+            let selected = s
+                .simulate_candidate("group-history", CURRENT)
+                .unwrap()
+                .unwrap();
+            assert_eq!(selected.request, original);
+        }
+        assert_eq!(s.pending("group-history"), Ok(0));
+
+        // A historical identical operation is still a no-op at capacity.
+        let old = request(
+            "history-0000",
+            "group-history",
+            "repo-a",
+            "tenant-a",
+            Priority::Normal,
+        );
+        assert_eq!(s.enqueue(old.clone()), Ok(false));
+        let mut conflicting = old;
+        conflicting.target = "issue:changed".into();
+        assert_eq!(
+            s.enqueue(conflicting),
+            Err(Error::OperationIdentityConflict)
+        );
+
+        // Fresh IDs fail closed: no eviction, queue insertion, or budget use.
+        let fresh = request(
+            "history-over-capacity",
+            "group-history",
+            "repo-a",
+            "tenant-a",
+            Priority::Normal,
+        );
+        assert_eq!(s.enqueue(fresh.clone()), Err(Error::OperationHistoryFull));
+        assert_eq!(s.pending("group-history"), Ok(0));
+        assert_eq!(s.remaining("group-history"), Ok(1));
+        s.replenish("group-history").unwrap();
+        assert_eq!(s.enqueue(fresh), Err(Error::OperationHistoryFull));
+        assert_eq!(s.pending("group-history"), Ok(0));
     }
 }
