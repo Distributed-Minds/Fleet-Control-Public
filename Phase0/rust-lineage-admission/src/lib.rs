@@ -7,9 +7,13 @@ use std::collections::{BTreeMap, BTreeSet};
 const MAX_SYNTHETIC_ID_BYTES: usize = 256;
 
 fn valid_identity(value: &str) -> bool {
-    !value.trim().is_empty()
+    // Offline machine-token identities, not human-facing names. Bounded ASCII
+    // syntax rejects invisible/bidi Unicode and whitespace-padded aliases.
+    !value.is_empty()
         && value.len() <= MAX_SYNTHETIC_ID_BYTES
-        && !value.chars().any(char::is_control)
+        && value.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':' | b'/')
+        })
 }
 
 impl Scope {
