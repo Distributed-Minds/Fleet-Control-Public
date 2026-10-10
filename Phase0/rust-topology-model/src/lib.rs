@@ -212,7 +212,18 @@ fn valid_historical_state(p: &Prior) -> bool {
         }
     }
     match p.state.phase {
-        Phase::Solo => p.size == 1 && p.index == 1,
+        // The single-agent model only bootstraps PLAN and permits an
+        // observational no-op. Non-observational results require a separate
+        // mission-specific decision (not modelled by this transition graph).
+        // A historical SOLO build/audit mode or accumulated NOOP is therefore
+        // unreachable, not a compatible state to carry into a new topology.
+        Phase::Solo => {
+            p.size == 1
+                && p.index == 1
+                && p.state.mode == Mode::Plan
+                && p.state.noop_streak == 0
+                && p.state.last_build == BuildResult::None
+        },
         Phase::Analytic => {
             if p.size >= 3 && p.index == 1 {
                 p.state.mode == Mode::Plan
@@ -523,5 +534,50 @@ mod historical_state_validation_tests {
         assert!(valid_historical_state(&size_two_analyst));
         size_two_analyst.state.noop_streak = 2;
         assert!(!valid_historical_state(&size_two_analyst));
+    }
+    #[test]
+    fn solo_history_rejects_unreachable_modes_streaks_and_build_outcomes() {
+        let mut solo = prior(Phase::Solo, Mode::Plan, 1, 0);
+        solo.size = 1;
+        assert!(valid_historical_state(&solo));
+
+        for unreachable in [Mode::Predict, Mode::Audit, Mode::Build, Mode::Integrate] {
+            solo.state.mode = unreachable;
+            assert!(!valid_historical_state(&solo));
+        }
+        solo.state.mode = Mode::Plan;
+
+        for outcome in [BuildResult::Progress, BuildResult::NoProgress] {
+            solo.state.last_build = outcome;
+            assert!(!valid_historical_state(&solo));
+        }
+        solo.state.last_build = BuildResult::None;
+
+        solo.state.noop_streak = 1;
+        assert!(!valid_historical_state(&solo));
+        solo.state.noop_streak = 0;
+        assert!(valid_historical_state(&solo));
+
+        // Reaching a builder slot later must not carry an invented SOLO
+        // history through an otherwise plausible incompatible reset.
+        solo.state.mode = Mode::Build;
+        let input = Input {
+            topology: Topology {
+                id: "next".into(),
+                generation: 2,
+                state_machine: StateMachine::PermanentPredictorV2,
+                principals: vec!["A".into(), "B".into(), "P".into()],
+                declared_size: 3,
+                evidence: Evidence::SyntheticCoherent,
+            },
+            principal: "P".into(),
+            prior: Some(solo),
+            lineage: Lineage::SyntheticIncompatible {
+                from: "basis".into(),
+                to: "next".into(),
+            },
+            result: ResultClass::Observe,
+        };
+        assert_eq!(predict(&input), Err(Rejection::InvalidHistory));
     }
 }
