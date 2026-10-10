@@ -1,0 +1,63 @@
+# Draft-only verification for issue #60 / PR #76. No release or deployment.
+name: Verify FREE ENERGY catalog Rust draft
+on:
+  push:
+    branches: [phase0/public-v0, 'catalog/**', 'fix/catalog-*']
+    paths:
+      - 'Catalog/**'
+      - '.github/workflows/rust-catalog-draft-ci.yml'
+  pull_request:
+    branches: [phase0/public-v0, catalog/rust-v0-mvp]
+    paths:
+      - 'Catalog/**'
+      - '.github/workflows/rust-catalog-draft-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rustfmt:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust formatter
+        run: rustup toolchain install 1.85.1 --profile minimal --component rustfmt
+      - name: Check Rust formatting
+        run: rustup run 1.85.1 cargo fmt --manifest-path Catalog/Cargo.toml -- --check
+  rust-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust compiler
+        run: rustup toolchain install 1.85.1 --profile minimal --component clippy
+      - name: Verify locked/offline Rust tests and lint
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f Catalog/Cargo.lock
+          rustup run 1.85.1 cargo fetch --manifest-path Catalog/Cargo.toml --locked
+          rustup run 1.85.1 cargo test --manifest-path Catalog/Cargo.toml --locked --offline
+          rustup run 1.85.1 cargo clippy --manifest-path Catalog/Cargo.toml --all-targets --locked --offline -- -D warnings
+          rustup run 1.85.1 cargo run --manifest-path Catalog/Cargo.toml --locked --offline -- validate Catalog/projects/luanti.json Catalog/projects/openra.json Catalog/projects/veloren.json
+          rustup run 1.85.1 cargo run --manifest-path Catalog/Cargo.toml --locked --offline -- render --check
+      - name: Reject forged approval fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          if rustup run 1.85.1 cargo run --manifest-path Catalog/Cargo.toml --locked --offline -- validate Catalog/fixtures/forged-approval-v0.json; then
+            echo 'ERROR: forbidden rights approval was admitted' >&2
+            exit 1
+          fi
+      - name: Reject forged local-play verification fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          if rustup run 1.85.1 cargo run --manifest-path Catalog/Cargo.toml --locked --offline -- validate Catalog/fixtures/forged-local-play-verification-v0.json; then
+            echo 'ERROR: unverified local game test was admitted' >&2
+            exit 1
+          fi

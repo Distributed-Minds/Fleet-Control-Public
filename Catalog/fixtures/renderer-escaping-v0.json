@@ -1,0 +1,132 @@
+{
+  "fixture_schema": "free-energy.catalog-renderer-escaping/v0",
+  "target_spec": "https://github.com/Distributed-Minds/Fleet-Control-Public/issues/60 (Phase0 spec version 5)",
+  "intended_consumer": "Future deterministic Rust offline catalog HTML renderer and associated conformance tests",
+  "status": "AUTHORED_FIXTURE_ONLY_NOT_EXECUTED",
+  "description": "Safe HTML text and double-quoted attribute encoding examples for untrusted manifest strings. Renderers must treat these as data, not HTML/Markdown. Numeric character-reference variants are acceptable if DOM-equivalent and independently tested.",
+  "scope_limits": [
+    "Does not validate manifest schema, permission authority, layout, URL safety, HTTP fetches or actual play.",
+    "Rust renderer and test runner do not yet exist; fixture existence is not a test PASS.",
+    "Schema and semantic checks must validate string length and reject unsafe URL input before rendering."
+  ],
+  "test_contract": {
+    "text": "Rendered input occupies one text node. Parsed textContent equals input exactly, with no additional markup nodes.",
+    "double_quoted_attribute": "Rendered input stays in exactly one attribute. Parsed attribute value equals input, with no extra attributes, elements or event handlers.",
+    "reference_escape_order": "Escape & first; then <, >, double quote and apostrophe using &amp;, &lt;, &gt;, &quot;, &#39;.",
+    "reference_vs_acceptance": "reference_escaped is deterministic review data; equivalently encoded output may pass only with actual parsed DOM and security invariants verified."
+  },
+  "cases": [
+    {
+      "id": "plain-title",
+      "source_field": "display_name",
+      "context": "text",
+      "input": "Luanti",
+      "reference_escaped": "Luanti",
+      "expected_decoded_value": "Luanti"
+    },
+    {
+      "id": "ampersand-in-title",
+      "source_field": "display_name",
+      "context": "text",
+      "input": "Games & Tools",
+      "reference_escaped": "Games &amp; Tools",
+      "expected_decoded_value": "Games & Tools"
+    },
+    {
+      "id": "angle-bracket-script",
+      "source_field": "display_name",
+      "context": "text",
+      "input": "<script>alert('x')</script>",
+      "reference_escaped": "&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;",
+      "expected_decoded_value": "<script>alert('x')</script>"
+    },
+    {
+      "id": "tag-with-event-handler",
+      "source_field": "display_name",
+      "context": "text",
+      "input": "<img src=x onerror=\"alert(1)\">",
+      "reference_escaped": "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;",
+      "expected_decoded_value": "<img src=x onerror=\"alert(1)\">"
+    },
+    {
+      "id": "closing-markup",
+      "source_field": "display_name",
+      "context": "text",
+      "input": "</h1><svg onload=alert(1)>",
+      "reference_escaped": "&lt;/h1&gt;&lt;svg onload=alert(1)&gt;",
+      "expected_decoded_value": "</h1><svg onload=alert(1)>"
+    },
+    {
+      "id": "pre-encoded-entity",
+      "source_field": "display_name",
+      "context": "text",
+      "input": "&lt;script&gt; is a literal title",
+      "reference_escaped": "&amp;lt;script&amp;gt; is a literal title",
+      "expected_decoded_value": "&lt;script&gt; is a literal title"
+    },
+    {
+      "id": "quotes-and-apostrophes",
+      "source_field": "display_name",
+      "context": "text",
+      "input": "\"Double\" 'single' & <angle>",
+      "reference_escaped": "&quot;Double&quot; &#39;single&#39; &amp; &lt;angle&gt;",
+      "expected_decoded_value": "\"Double\" 'single' & <angle>"
+    },
+    {
+      "id": "non-ascii-literal",
+      "source_field": "display_name",
+      "context": "text",
+      "input": "München · 日本語 · 🎮",
+      "reference_escaped": "München · 日本語 · 🎮",
+      "expected_decoded_value": "München · 日本語 · 🎮"
+    },
+    {
+      "id": "rights-statement-markup",
+      "source_field": "rights_claims[].statement",
+      "context": "text",
+      "input": "Creative works: <b>not cleared</b> & rights UNKNOWN",
+      "reference_escaped": "Creative works: &lt;b&gt;not cleared&lt;/b&gt; &amp; rights UNKNOWN",
+      "expected_decoded_value": "Creative works: <b>not cleared</b> & rights UNKNOWN"
+    },
+    {
+      "id": "content-requirements-markup",
+      "source_field": "play.content_requirements[]",
+      "context": "text",
+      "input": "User-supplied <game-data> (not bundled)",
+      "reference_escaped": "User-supplied &lt;game-data&gt; (not bundled)",
+      "expected_decoded_value": "User-supplied <game-data> (not bundled)"
+    },
+    {
+      "id": "accessible-label-breakout",
+      "source_field": "display_name",
+      "context": "double_quoted_attribute",
+      "input": "\" autofocus onfocus=\"alert(1)",
+      "reference_escaped": "&quot; autofocus onfocus=&quot;alert(1)",
+      "expected_decoded_value": "\" autofocus onfocus=\"alert(1)"
+    },
+    {
+      "id": "accessible-label-entity",
+      "source_field": "display_name",
+      "context": "double_quoted_attribute",
+      "input": "&quot; role=dialog <unsafe>",
+      "reference_escaped": "&amp;quot; role=dialog &lt;unsafe&gt;",
+      "expected_decoded_value": "&quot; role=dialog <unsafe>"
+    },
+    {
+      "id": "accessible-label-tag",
+      "source_field": "display_name",
+      "context": "double_quoted_attribute",
+      "input": "<svg/onload=alert(1)>",
+      "reference_escaped": "&lt;svg/onload=alert(1)&gt;",
+      "expected_decoded_value": "<svg/onload=alert(1)>"
+    },
+    {
+      "id": "accessible-label-unicode",
+      "source_field": "display_name",
+      "context": "double_quoted_attribute",
+      "input": "Café × 🎲",
+      "reference_escaped": "Café × 🎲",
+      "expected_decoded_value": "Café × 🎲"
+    }
+  ]
+}

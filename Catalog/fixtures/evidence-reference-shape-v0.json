@@ -1,0 +1,106 @@
+{
+  "fixture_schema": "free-energy.catalog-evidence-reference-shape/v0",
+  "target_schema": "Catalog/schema/project-v0.schema.json",
+  "description": "Fragment-level Draft 2020-12 cases for conditional evidence ID shape only. A valid ID is not proof the referenced record exists or authenticates a test; the pending Rust semantic validator must enforce those properties.",
+  "groups": [
+    {
+      "target_pointer": "#/$defs/play",
+      "base": {
+        "status": "UNKNOWN",
+        "upstream_download_url": null,
+        "content_requirements": [],
+        "local_test_evidence_id": null
+      },
+      "cases": [
+        {
+          "id": "unverified-null-reference",
+          "overrides": {},
+          "expected_valid": true
+        },
+        {
+          "id": "verified-valid-reference",
+          "overrides": {
+            "status": "FREE_ENERGY_VERIFIED",
+            "local_test_evidence_id": "local-test-1"
+          },
+          "expected_valid": true
+        },
+        {
+          "id": "verified-empty-reference",
+          "overrides": {
+            "status": "FREE_ENERGY_VERIFIED",
+            "local_test_evidence_id": ""
+          },
+          "expected_valid": false
+        },
+        {
+          "id": "verified-whitespace-reference",
+          "overrides": {
+            "status": "FREE_ENERGY_VERIFIED",
+            "local_test_evidence_id": "   "
+          },
+          "expected_valid": false
+        },
+        {
+          "id": "verified-reference-with-spaces",
+          "overrides": {
+            "status": "FREE_ENERGY_VERIFIED",
+            "local_test_evidence_id": "local test"
+          },
+          "expected_valid": false
+        }
+      ]
+    },
+    {
+      "target_pointer": "#/$defs/adapter",
+      "base": {
+        "status": "NONE",
+        "target_id": null,
+        "test_evidence_id": null
+      },
+      "cases": [
+        {
+          "id": "adapter-none-null-reference",
+          "overrides": {},
+          "expected_valid": true
+        },
+        {
+          "id": "tested-valid-reference",
+          "overrides": {
+            "status": "TESTED",
+            "target_id": "engine/luanti",
+            "test_evidence_id": "adapter-test-1"
+          },
+          "expected_valid": true
+        },
+        {
+          "id": "tested-null-reference",
+          "overrides": {
+            "status": "TESTED",
+            "target_id": "engine/luanti",
+            "test_evidence_id": null
+          },
+          "expected_valid": false
+        },
+        {
+          "id": "tested-whitespace-reference",
+          "overrides": {
+            "status": "TESTED",
+            "target_id": "engine/luanti",
+            "test_evidence_id": "   "
+          },
+          "expected_valid": false
+        },
+        {
+          "id": "tested-reference-with-spaces",
+          "overrides": {
+            "status": "TESTED",
+            "target_id": "engine/luanti",
+            "test_evidence_id": "adapter test"
+          },
+          "expected_valid": false
+        }
+      ]
+    }
+  ]
+}

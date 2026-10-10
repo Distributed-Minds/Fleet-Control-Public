@@ -1,0 +1,204 @@
+{
+  "schema": "free-energy.project/v0",
+  "id": "engine/openra",
+  "display_name": "OpenRA",
+  "kind": "ENGINE",
+  "upstream": {
+    "discovery_url": "https://www.openra.net/",
+    "canonical_source_url": "https://github.com/OpenRA/OpenRA",
+    "source_revision": "b6fc03fcfaef1277592bbd4cbc7d44dd85219902",
+    "source_revision_reason": null,
+    "contribution_url": "https://github.com/OpenRA/OpenRA/pulls",
+    "issue_url": "https://github.com/OpenRA/OpenRA/issues",
+    "read_only_mirror_urls": []
+  },
+  "play": {
+    "status": "FREE_ENERGY_VERIFIED",
+    "upstream_download_url": "https://www.openra.net/download/",
+    "content_requirements": [
+      "Affected mods need separately acquired/copied original-game files; use upstream directions, not FREE ENERGY-hosted assets."
+    ],
+    "local_test_evidence_id": "readme-snapshot"
+  },
+  "rights_claims": [
+    {
+      "claim_id": "engine-code",
+      "claim_kind": "PUBLISHER_LICENSE",
+      "component": "CODE",
+      "scope_kind": "PROJECT_DEFAULT",
+      "scope": "OpenRA engine code",
+      "statement": "OpenRA's pinned README states GNU GPL version 3 or (at the user's option) any later version for OpenRA code; this does not extend to Electronic Arts original-game data.",
+      "license_id": "GPL-3.0-or-later",
+      "exceptions_or_restrictions": [
+        "Verify exact component/license-file applicability before redistributing"
+      ],
+      "evidence_ids": [
+        "readme-snapshot",
+        "copying-snapshot",
+        "legal-page"
+      ],
+      "status": "OBSERVED_AT"
+    },
+    {
+      "claim_id": "ea-game-data",
+      "claim_kind": "UPSTREAM_POLICY",
+      "component": "THIRD_PARTY_DATA",
+      "scope_kind": "CONTENT_PACK",
+      "scope": "Command & Conquer original game assets",
+      "statement": "Original-game assets are not GPL under the OpenRA software license and remain Electronic Arts rights subjects; upstream packaging policy is not a grant to FREE ENERGY.",
+      "license_id": null,
+      "exceptions_or_restrictions": [
+        "Asset acquisition/use depends on separate publisher terms and selected game files"
+      ],
+      "evidence_ids": [
+        "legal-page",
+        "download-page"
+      ],
+      "status": "OBSERVED_AT"
+    }
+  ],
+  "permission_decisions": [
+    {
+      "component": "CODE",
+      "scope": "OpenRA engine code",
+      "use": "BUNDLE",
+      "decision": "REVIEW_REQUIRED",
+      "review_evidence_ids": [],
+      "decision_reason": "No independently authenticated, use-and-scope-specific FREE ENERGY clearance; upstream license/policy evidence is not redistribution authorization.",
+      "decided_at": null,
+      "reviewer": null
+    },
+    {
+      "component": "CODE",
+      "scope": "OpenRA engine code",
+      "use": "HOST",
+      "decision": "REVIEW_REQUIRED",
+      "review_evidence_ids": [],
+      "decision_reason": "No independently authenticated, use-and-scope-specific FREE ENERGY clearance; upstream license/policy evidence is not redistribution authorization.",
+      "decided_at": null,
+      "reviewer": null
+    },
+    {
+      "component": "CODE",
+      "scope": "OpenRA engine code",
+      "use": "TRANSFORM",
+      "decision": "REVIEW_REQUIRED",
+      "review_evidence_ids": [],
+      "decision_reason": "No independently authenticated, use-and-scope-specific FREE ENERGY clearance; upstream license/policy evidence is not redistribution authorization.",
+      "decided_at": null,
+      "reviewer": null
+    },
+    {
+      "component": "CODE",
+      "scope": "OpenRA engine code",
+      "use": "CROSS_GAME_REUSE",
+      "decision": "REVIEW_REQUIRED",
+      "review_evidence_ids": [],
+      "decision_reason": "No independently authenticated, use-and-scope-specific FREE ENERGY clearance; upstream license/policy evidence is not redistribution authorization.",
+      "decided_at": null,
+      "reviewer": null
+    },
+    {
+      "component": "THIRD_PARTY_DATA",
+      "scope": "Command & Conquer original game assets",
+      "use": "BUNDLE",
+      "decision": "REVIEW_REQUIRED",
+      "review_evidence_ids": [],
+      "decision_reason": "No independently authenticated, use-and-scope-specific FREE ENERGY clearance; upstream license/policy evidence is not redistribution authorization.",
+      "decided_at": null,
+      "reviewer": null
+    },
+    {
+      "component": "THIRD_PARTY_DATA",
+      "scope": "Command & Conquer original game assets",
+      "use": "HOST",
+      "decision": "REVIEW_REQUIRED",
+      "review_evidence_ids": [],
+      "decision_reason": "No independently authenticated, use-and-scope-specific FREE ENERGY clearance; upstream license/policy evidence is not redistribution authorization.",
+      "decided_at": null,
+      "reviewer": null
+    },
+    {
+      "component": "THIRD_PARTY_DATA",
+      "scope": "Command & Conquer original game assets",
+      "use": "TRANSFORM",
+      "decision": "REVIEW_REQUIRED",
+      "review_evidence_ids": [],
+      "decision_reason": "No independently authenticated, use-and-scope-specific FREE ENERGY clearance; upstream license/policy evidence is not redistribution authorization.",
+      "decided_at": null,
+      "reviewer": null
+    },
+    {
+      "component": "THIRD_PARTY_DATA",
+      "scope": "Command & Conquer original game assets",
+      "use": "CROSS_GAME_REUSE",
+      "decision": "REVIEW_REQUIRED",
+      "review_evidence_ids": [],
+      "decision_reason": "No independently authenticated, use-and-scope-specific FREE ENERGY clearance; upstream license/policy evidence is not redistribution authorization.",
+      "decided_at": null,
+      "reviewer": null
+    }
+  ],
+  "adapter": {
+    "status": "NONE",
+    "target_id": null,
+    "test_evidence_id": null
+  },
+  "evidence": [
+    {
+      "evidence_id": "readme-snapshot",
+      "evidence_kind": "PINNED_REPOSITORY_FILE",
+      "subject_scope": "License applicability/version declaration for OpenRA code",
+      "url": "https://github.com/OpenRA/OpenRA/blob/b6fc03fcfaef1277592bbd4cbc7d44dd85219902/README.md",
+      "observed_at": "2026-10-08T13:41:33.015Z",
+      "reviewer": "FREE ENERGY source-file verification by manual operator; not legal clearance",
+      "currentness": "PINNED_SNAPSHOT",
+      "repository": "https://github.com/OpenRA/OpenRA",
+      "commit": "b6fc03fcfaef1277592bbd4cbc7d44dd85219902",
+      "path": "README.md"
+    },
+    {
+      "evidence_id": "copying-snapshot",
+      "evidence_kind": "PINNED_REPOSITORY_FILE",
+      "subject_scope": "OpenRA code-license document",
+      "url": "https://github.com/OpenRA/OpenRA/blob/b6fc03fcfaef1277592bbd4cbc7d44dd85219902/COPYING",
+      "observed_at": "2026-10-08T00:00:00Z",
+      "reviewer": "FREE ENERGY research record (not an authorized rights reviewer)",
+      "currentness": "PINNED_SNAPSHOT",
+      "repository": "https://github.com/OpenRA/OpenRA",
+      "commit": "b6fc03fcfaef1277592bbd4cbc7d44dd85219902",
+      "path": "COPYING"
+    },
+    {
+      "evidence_id": "legal-page",
+      "evidence_kind": "MUTABLE_UPSTREAM_PAGE",
+      "subject_scope": "Upstream software versus EA original-game-data distinction",
+      "url": "https://www.openra.net/legal/",
+      "observed_at": "2026-10-08T00:00:00Z",
+      "reviewer": "FREE ENERGY research record (not an authorized rights reviewer)",
+      "currentness": "OBSERVED_AT",
+      "repository": null,
+      "commit": null,
+      "path": null
+    },
+    {
+      "evidence_id": "download-page",
+      "evidence_kind": "MUTABLE_UPSTREAM_PAGE",
+      "subject_scope": "Upstream installer and first-run content requirements",
+      "url": "https://www.openra.net/download/",
+      "observed_at": "2026-10-08T00:00:00Z",
+      "reviewer": "FREE ENERGY research record (not an authorized rights reviewer)",
+      "currentness": "OBSERVED_AT",
+      "repository": null,
+      "commit": null,
+      "path": null
+    }
+  ],
+  "review": {
+    "reviewed_at": "2026-10-08T00:00:00Z",
+    "reviewer": "FREE ENERGY initial schema pilot; metadata review only, not rights authorization",
+    "record_status": "DRAFT",
+    "supersedes_record_revision": null,
+    "claim_history": []
+  }
+}
