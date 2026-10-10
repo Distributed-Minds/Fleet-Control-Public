@@ -225,11 +225,13 @@ impl Ledger {
         if !basis.valid() {
             return Err(Error::Denied);
         }
-        let e = self.entries.get_mut(id).ok_or(Error::Missing)?;
+        let e = self.entries.get(id).ok_or(Error::Missing)?;
         if !matches!(&e.state, State::Pending) {
             return Err(Error::Transition);
         }
-        e.state = State::OutcomeUnknown;
+        // A rejected overflow must not change state without advancing its CAS fence.
+        self.generation.checked_add(1).ok_or(Error::Overflow)?;
+        self.entries.get_mut(id).ok_or(Error::Missing)?.state = State::OutcomeUnknown;
         self.advance()
     }
     /// Acknowledgement is modeled, not authenticated; a lost acknowledgement
@@ -247,6 +249,7 @@ impl Ledger {
         if self.artifacts.values().any(|r| r == receipt) {
             return Err(Error::Conflict);
         }
+        self.generation.checked_add(1).ok_or(Error::Overflow)?;
         self.entries.get_mut(id).ok_or(Error::Missing)?.state = State::Committed {
             receipt: receipt.to_owned(),
         };
@@ -259,11 +262,13 @@ impl Ledger {
         if !p.no_effect || !p.late_worker_fenced || p.fence.is_empty() {
             return Err(Error::UnsafeReclaim);
         }
-        let e = self.entries.get_mut(&p.id).ok_or(Error::Missing)?;
+        let e = self.entries.get(&p.id).ok_or(Error::Missing)?;
         if matches!(&e.state, State::Committed { .. } | State::Reclaimed { .. }) {
             return Err(Error::Transition);
         }
-        e.state = State::Reclaimed { fence: p.fence };
+        self.generation.checked_add(1).ok_or(Error::Overflow)?;
+        self.entries.get_mut(&p.id).ok_or(Error::Missing)?.state =
+            State::Reclaimed { fence: p.fence };
         self.advance()
     }
     /// Synthetic separate issuer predicate; not a real trusted grant source.
@@ -541,6 +546,46 @@ mod tests {
         assert_eq!(l.reserve(&old, a("a")), Err(Error::Stale));
         invariant(&l);
     }
+    #[test]
+    fn generation_overflow_leaves_all_rejected_transitions_unchanged() {
+        let mut pending = ledger(1);
+        reserve(&mut pending, "a").unwrap();
+        pending.generation = u64::MAX;
+        let before = pending.basis();
+        assert_eq!(
+            pending.begin_emission("a", EffectBasis::current()),
+            Err(Error::Overflow)
+        );
+        assert_eq!(pending.basis(), before);
+        assert_eq!(pending.state("a"), Some(&State::Pending));
+        assert_eq!(pending.charged(), 1);
+        assert!(pending.artifacts().is_empty());
+        invariant(&pending);
+
+        let mut unknown = ledger(1);
+        reserve(&mut unknown, "a").unwrap();
+        unknown.begin_emission("a", EffectBasis::current()).unwrap();
+        unknown.generation = u64::MAX;
+        let before = unknown.basis();
+        assert_eq!(unknown.acknowledge("a", "receipt-a"), Err(Error::Overflow));
+        assert_eq!(unknown.basis(), before);
+        assert_eq!(unknown.state("a"), Some(&State::OutcomeUnknown));
+        assert_eq!(unknown.charged(), 1);
+        assert!(unknown.artifacts().is_empty());
+        invariant(&unknown);
+
+        let mut reclaimable = ledger(1);
+        reserve(&mut reclaimable, "a").unwrap();
+        reclaimable.generation = u64::MAX;
+        let before = reclaimable.basis();
+        assert_eq!(reclaimable.reclaim(proof("a")), Err(Error::Overflow));
+        assert_eq!(reclaimable.basis(), before);
+        assert_eq!(reclaimable.state("a"), Some(&State::Pending));
+        assert_eq!(reclaimable.charged(), 1);
+        assert!(reclaimable.artifacts().is_empty());
+        invariant(&reclaimable);
+    }
+
     #[test]
     fn enumerate_729_three_step_interleavings() {
         // 9^3 deterministic operation traces, every transition checked.
