@@ -135,7 +135,10 @@ fn process_accepts_valid_inactive_capacity_traces_without_changing_verdicts() {
             output.status.success(),
             "{field} rejected despite valid inactive evidence: {output:?}"
         );
-        assert!(output.stderr.is_empty(), "{field}: unexpected stderr: {output:?}");
+        assert!(
+            output.stderr.is_empty(),
+            "{field}: unexpected stderr: {output:?}"
+        );
         assert_eq!(
             String::from_utf8_lossy(&output.stdout).trim(),
             "containment-capacity fixtures (Rust): 17 passed",
