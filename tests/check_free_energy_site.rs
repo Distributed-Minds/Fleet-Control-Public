@@ -164,11 +164,11 @@ fn attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
 
 /// Count actual participation-card articles rather than matching text that
 /// might appear in comments, quoted attributes, or unrelated elements.
-/// Reject inert template containers: their descendants are parsed as source
-/// tags by this limited checker but are not rendered as ordinary page content.
-/// A hidden template must not satisfy visible Contact/navigation/card checks.
+/// Reject inert template and scripting-dependent noscript containers: their
+/// descendants appear in this lexical source scanner but are not reliable
+/// rendered page content. They cannot satisfy Contact/navigation/card checks.
 fn disallowed_site_elements(elements: &[&str]) -> Vec<&'static str> {
-    ["script", "iframe", "form", "object", "embed", "template"]
+    ["script", "iframe", "form", "object", "embed", "template", "noscript"]
         .into_iter()
         .filter(|name| elements.iter().any(|tag| is_open_element(tag, name)))
         .collect()
