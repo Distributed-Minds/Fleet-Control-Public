@@ -453,6 +453,66 @@ fn source_text_outside_markup(html: &str) -> String {
     text
 }
 
+/// Bound required user-facing disclosure checks to source text between exactly
+/// one real body open/close pair. An ordinary valid head title is metadata, not
+/// body copy. Preserve existing comment/quoted-attribute masking and source
+/// word-separation by delegating text extraction to the existing helper.
+fn body_source_text_outside_markup(html: &str) -> Option<String> {
+    let bytes = html.as_bytes();
+    let mut pos = 0;
+    let mut body_start = None;
+    let mut body_end = None;
+
+    while pos < bytes.len() {
+        let Some(offset) = html[pos..].find('<') else {
+            break;
+        };
+        let start = pos + offset;
+        if html[start..].starts_with("<!--") {
+            let closing = html[start + 4..].find("-->")?;
+            pos = start + 4 + closing + 3;
+            continue;
+        }
+
+        let mut cursor = start + 1;
+        let mut quote: Option<u8> = None;
+        while cursor < bytes.len() {
+            match (quote, bytes[cursor]) {
+                (Some(delimiter), current) if current == delimiter => quote = None,
+                (None, b'"' | b'\'') => quote = Some(bytes[cursor]),
+                (None, b'>') => break,
+                _ => {}
+            }
+            cursor += 1;
+        }
+        if cursor == bytes.len() {
+            return None;
+        }
+
+        let tag = &html[start + 1..cursor];
+        if is_open_element(tag, "body") {
+            if body_start.is_some() || body_end.is_some() {
+                return None;
+            }
+            body_start = Some(cursor + 1);
+        } else if tag.trim().eq_ignore_ascii_case("/body") {
+            if body_start.is_none() || body_end.is_some() {
+                return None;
+            }
+            body_end = Some(start);
+        }
+        pos = cursor + 1;
+    }
+
+    let start = body_start?;
+    let end = body_end?;
+    if end < start {
+        return None;
+    }
+    Some(source_text_outside_markup(&html[start..end]))
+}
+
+
 fn expect(errors: &mut Vec<String>, condition: bool, message: impl Into<String>) {
     if !condition {
         errors.push(message.into());
@@ -474,12 +534,13 @@ fn validate(root: &Path) -> Vec<String> {
     }
     let html = &content[0];
     let uncommented_html = without_html_comments(html);
-    let source_copy = source_text_outside_markup(html);
+    let source_copy = body_source_text_outside_markup(html);
     let css = &content[1];
     let readme = &content[2];
     let elements = tags(html);
     let mut errors = Vec::new();
 
+    expect(&mut errors, source_copy.is_some(), "Missing or ambiguous source body boundaries");
     expect(
         &mut errors,
         has_valid_head_title(&elements),
@@ -606,7 +667,7 @@ fn validate(root: &Path) -> Vec<String> {
         ("Not yet available", "Missing future-feature disclaimer"),
         ("Fleet-Control Phase0", "Current orchestration preview not identified"),
     ] {
-        expect(&mut errors, source_copy.contains(required), explanation);
+        expect(&mut errors, source_copy.as_deref().unwrap_or("").contains(required), explanation);
     }
     expect(
         &mut errors,
@@ -852,6 +913,41 @@ mod tests {
             );
         }
         fs::remove_dir_all(&root).expect("remove body-copy fixtures");
+    }
+
+    #[test]
+    fn body_copy_source_boundary_respects_comments_attributes_and_tag_case() {
+        for (name, source, wanted) in [
+            ("ordinary", "<head><title>fake disclosure</title></head><body><p>real body copy</p></body>", "real body copy"),
+            ("comment decoy", "<!-- <body>fake</body> --><body>real text</body>", "real text"),
+            ("attribute decoy", "<head><meta content='<body>fake</body>'></head><body>real text</body>", "real text"),
+            ("mixed-case", "<BODY data-probe='<body>fake</body>'>real text</BODY>", "real text"),
+            ("body comment", "<body>before<!-- hidden phrase -->after</body>", "beforeafter"),
+            ("tail after close", "<body>real text</body>fake disclosure", "real text"),
+            ("head/body split", "<head>in head</head><body>in body</body>", "in body"),
+        ] {
+            let copy = body_source_text_outside_markup(source)
+                .unwrap_or_else(|| panic!("{name} should have one valid source body"));
+            assert!(copy.contains(wanted), "{name}: missing real body text {copy:?}");
+            assert!(!copy.contains("fake disclosure"), "{name}: head/tail text leaked");
+            assert!(!copy.contains("hidden phrase"), "{name}: comment text leaked");
+            assert!(!copy.contains("in head"), "{name}: head text leaked");
+        }
+        for (name, source) in [
+            ("no body", "<head><title>head only</title></head>"),
+            ("unclosed body", "<body>no closing tag"),
+            ("stray closer", "</body><body>late body</body>"),
+            ("duplicate opener", "<body>first<body>second</body></body>"),
+            ("duplicate closer", "<body>first</body></body>"),
+            ("second body", "<body>first</body><body>second</body>"),
+            ("unterminated comment", "<body>good<!-- unclosed"),
+            ("unterminated attribute", "<body><p title='unfinished>text</body>"),
+        ] {
+            assert!(
+                body_source_text_outside_markup(source).is_none(),
+                "{name}: malformed source boundary must fail closed"
+            );
+        }
     }
 
     #[test]
