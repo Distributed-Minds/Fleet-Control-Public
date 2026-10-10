@@ -115,10 +115,7 @@ fn d06_disputed_employer_or_asset_rights_require_review() {
 fn d07_shared_github_credential_is_not_individual_assent() {
     let mut x = good();
     x.credential_identity_ambiguous = true;
-    assert_eq!(
-        evaluate(&x),
-        Decision::Unknown(Reason::AmbiguousCredential)
-    );
+    assert_eq!(evaluate(&x), Decision::Unknown(Reason::AmbiguousCredential));
 }
 
 #[test]

@@ -143,8 +143,7 @@ pub fn evaluate(input: &Admission) -> Decision {
     if input.observed_target_head != input.intended_target_head {
         return Blocked(Reason::MovedTarget);
     }
-    if input.terms_version != input.current_terms_version
-        || !simulated(input.evidence.terms_assent)
+    if input.terms_version != input.current_terms_version || !simulated(input.evidence.terms_assent)
     {
         return HumanReviewRequired(Reason::StaleTerms);
     }
@@ -275,7 +274,12 @@ pub struct SimulationJournal {
 }
 
 impl SimulationJournal {
-    pub fn record(&mut self, key: OperationKey, payload_digest: String, result: Decision) -> Replay {
+    pub fn record(
+        &mut self,
+        key: OperationKey,
+        payload_digest: String,
+        result: Decision,
+    ) -> Replay {
         if key.repository_id == 0 || key.operation_id.is_empty() || payload_digest.is_empty() {
             return Replay::Conflict;
         }
