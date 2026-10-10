@@ -372,6 +372,93 @@ fn admit_fixture_shell(root: &Value) -> Result<(), String> {
     Ok(())
 }
 
+
+/* A digest receipt is not a semantic verdict, but it must not launder a
+ * contradictory historical fixture as a valid identity witness. The structural
+ * integration_candidate oracle remains the authoritative independent check;
+ * this preflight fails closed on mismatched declared outcomes before any digest
+ * is returned or written to stdout. */
+fn validate_fixture_outcomes(root: &Value) -> Result<(), String> {
+    let cases = root["cases"]
+        .as_array()
+        .ok_or("missing candidate cases")?;
+    let normal = cases
+        .iter()
+        .find(|case| case["name"] == "normal-two-parent")
+        .ok_or("missing normal candidate baseline")?;
+    let baseline = &normal["candidate"];
+    let parents = baseline["parents"]
+        .as_array()
+        .ok_or("baseline parents must be an array")?;
+    if parents.len() != 2
+        || parents[0] != baseline["target_commit"]
+        || parents[1] != baseline["source_commit"]
+        || baseline["constructor_version"] != "constructor-v1"
+        || baseline["compatibility_basis"] != "constructor-v1-exact"
+    {
+        return Err("invalid normal candidate parent order or constructor basis".to_owned());
+    }
+
+    for case in cases {
+        let name = case["name"].as_str().ok_or("missing case name")?;
+        let candidate = &case["candidate"];
+        let count = candidate["parent_count"]
+            .as_u64()
+            .ok_or("missing candidate parent count")?;
+        let support = case["constructor_support"]
+            .as_array()
+            .ok_or("missing constructor support")?;
+        let supported = support.iter().any(|value| value.as_u64() == Some(count));
+        let actual = if !supported {
+            "UNSUPPORTED_PARENT_CARDINALITY"
+        } else if candidate == baseline {
+            "SUPPORTED"
+        } else {
+            let mut reverse = baseline.clone();
+            reverse["parents"]
+                .as_array_mut()
+                .ok_or("baseline parent array missing")?
+                .reverse();
+            if candidate == &reverse && reverse != *baseline {
+                "SUPPORTED_DISTINCT_FROM:normal-two-parent"
+            } else {
+                let mut restored = candidate.clone();
+                restored["constructor_version"] = baseline["constructor_version"].clone();
+                restored["compatibility_basis"] = baseline["compatibility_basis"].clone();
+                if restored == *baseline
+                    && candidate["constructor_version"] == "constructor-v2"
+                    && candidate["compatibility_basis"] == "v2-preserves-v1-two-parent-envelope"
+                {
+                    "SUPPORTED_COMPATIBLE_WITH:normal-two-parent"
+                } else {
+                    return Err(format!("{name}: unsupported semantic candidate change"));
+                }
+            }
+        };
+        if case["expect"].as_str() != Some(actual) {
+            return Err(format!("{name}: declared outcome does not match {actual}"));
+        }
+    }
+
+    for case in root["stale_head_cases"]
+        .as_array()
+        .ok_or("missing stale-head cases")?
+    {
+        let name = case["name"].as_str().ok_or("missing stale-head case name")?;
+        let current = case["predicted_target"] == case["live_target"]
+            && case["predicted_source"] == case["live_source"];
+        let actual = if current {
+            "CURRENT"
+        } else {
+            "STALE_OR_INCOMPATIBLE"
+        };
+        if case["expect"].as_str() != Some(actual) {
+            return Err(format!("{name}: declared outcome does not match {actual}"));
+        }
+    }
+    Ok(())
+}
+
 fn candidate_ids(fixture_text: &str) -> Result<Vec<(String, String)>, String> {
     let StrictJson(root) = serde_json::from_str(fixture_text).map_err(|e| e.to_string())?;
     admit_fixture_shell(&root)?;
@@ -448,6 +535,7 @@ fn candidate_ids(fixture_text: &str) -> Result<Vec<(String, String)>, String> {
             serde_json::to_vec(&Value::Object(candidate.clone())).map_err(|e| e.to_string())?;
         ids.push((name.to_owned(), sha256_hex(&bytes)));
     }
+    validate_fixture_outcomes(&root)?;
     Ok(ids)
 }
 
@@ -819,6 +907,53 @@ mod tests {
         assert_ne!(input, HISTORICAL);
         assert!(serde_json::from_str::<Value>(&input).is_ok());
         assert!(candidate_ids(&input).is_err());
+    }
+
+
+    #[test]
+    fn digest_receipts_reject_contradictory_semantic_witnesses() {
+        let original: Value = serde_json::from_str(HISTORICAL).unwrap();
+        let baseline = candidate_ids(HISTORICAL).expect("historical witnesses are consistent");
+
+        let mut scenarios = Vec::new();
+
+        let mut forged_expectation = original.clone();
+        forged_expectation["cases"][0]["expect"] =
+            Value::String("UNSUPPORTED_PARENT_CARDINALITY".to_owned());
+        scenarios.push(("forged normal verdict", forged_expectation));
+
+        let mut unsupported_now_supported = original.clone();
+        unsupported_now_supported["cases"][2]["constructor_support"] =
+            serde_json::json!([1, 2, 3]);
+        scenarios.push(("contradictory cardinality", unsupported_now_supported));
+
+        let mut forged_reversal = original.clone();
+        forged_reversal["cases"][1]["candidate"]["parents"] =
+            original["cases"][0]["candidate"]["parents"].clone();
+        scenarios.push(("reversed-parent witness absent", forged_reversal));
+
+        let mut unapproved_migration = original.clone();
+        unapproved_migration["cases"][3]["candidate"]["constructor_version"] =
+            Value::String("constructor-v3".to_owned());
+        scenarios.push(("unapproved constructor migration", unapproved_migration));
+
+        let mut target_no_longer_stale = original.clone();
+        target_no_longer_stale["stale_head_cases"][0]["live_target"] =
+            original["stale_head_cases"][0]["predicted_target"].clone();
+        scenarios.push(("stale target became current", target_no_longer_stale));
+
+        let mut source_no_longer_stale = original.clone();
+        source_no_longer_stale["stale_head_cases"][1]["live_source"] =
+            original["stale_head_cases"][1]["predicted_source"].clone();
+        scenarios.push(("stale source became current", source_no_longer_stale));
+
+        for (name, fixture) in scenarios {
+            assert!(
+                candidate_ids(&fixture.to_string()).is_err(),
+                "{name}: accepted a contradictory digest witness"
+            );
+        }
+        assert_eq!(candidate_ids(HISTORICAL).unwrap(), baseline);
     }
 
     #[test]
