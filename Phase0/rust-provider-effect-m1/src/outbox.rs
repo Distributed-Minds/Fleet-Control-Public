@@ -15,6 +15,11 @@ pub struct Envelope {
 
 impl Envelope {
     fn valid(&self) -> bool {
+        // Zero is not a meaningful authority generation, even in this
+        // untrusted, in-memory simulation. Do not admit it to the journal.
+        if self.authority_generation == 0 {
+            return false;
+        }
         [
             &self.operation_id,
             &self.repository_incarnation,
@@ -405,6 +410,29 @@ mod tests {
             outbox.apply("missing", 0, Action::Admit, CURRENT),
             Err(Error::UnknownOperation)
         ));
+    }
+
+    #[test]
+    fn zero_authority_generation_is_denied_before_journaling_or_dispatch() {
+        let mut outbox = Outbox::new();
+        let mut invalid = envelope();
+        invalid.authority_generation = 0;
+        assert_eq!(outbox.submit(invalid), Err(Error::InvalidEnvelope));
+        assert!(outbox.entry("op-123").is_none());
+        assert_eq!(
+            outbox.apply("op-123", 0, Action::Admit, CURRENT),
+            Err(Error::UnknownOperation)
+        );
+
+        // Preserve the positive synthetic path for a nonzero generation.
+        assert_eq!(outbox.submit(envelope()), Ok(true));
+        assert_eq!(step(&mut outbox, 0, Action::Admit), Status::Queued);
+        assert_eq!(step(&mut outbox, 1, Action::Reserve), Status::Reserved);
+        assert_eq!(
+            step(&mut outbox, 2, Action::BeginAttempt),
+            Status::Dispatching
+        );
+        assert_eq!(outbox.entry("op-123").unwrap().version(), 3);
     }
 
     #[test]
