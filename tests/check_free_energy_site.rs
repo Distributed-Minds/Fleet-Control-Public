@@ -243,7 +243,7 @@ fn has_valid_head_title(elements: &[&str]) -> bool {
 fn disallowed_site_elements(elements: &[&str]) -> Vec<&'static str> {
     [
         "script", "iframe", "form", "object", "embed", "template", "noscript",
-        "textarea", "xmp", "plaintext", "noembed", "noframes", "details", "dialog",
+        "textarea", "xmp", "plaintext", "noembed", "noframes", "details", "dialog", "select", "datalist",
     ]
         .into_iter()
         .filter(|name| elements.iter().any(|tag| is_open_element(tag, name)))
@@ -1439,6 +1439,74 @@ data="x"></OBject><EMBED/>"#;
             assert!(errors.is_empty(), "{case}: harmless lookalike rejected: {errors:?}");
         }
         fs::remove_dir_all(&root).expect("remove dialog fixture");
+    }
+
+    // #425: an option list or non-expanded selector must not supply the
+    // mandatory always-visible participation/privacy disclosure copy.
+    // RED on unchanged code: neither select nor datalist is yet denied.
+    #[test]
+    fn select_and_datalist_options_cannot_fake_visible_disclosure_copy() {
+        let root = env::temp_dir().join(format!(
+            "free-energy-option-site-{}", std::process::id()
+        ));
+        let docs = root.join("docs");
+        fs::create_dir_all(&docs).expect("create option fixture directory");
+        let original = include_str!("../docs/index.html");
+        fs::write(docs.join("index.html"), original).expect("write real page");
+        fs::write(docs.join("styles.css"), include_str!("../docs/styles.css"))
+            .expect("write real CSS");
+        fs::write(docs.join("README.md"), include_str!("../docs/README.md"))
+            .expect("write real docs readme");
+        assert!(validate(&root).is_empty(), "unmodified page must pass");
+
+        let note = r#"<p class="note">Discussions are public. Posting does not enroll a contributor, grant repository access, or authorize an agent task. Do not post secrets or confidential reports.</p>"#;
+        let text = "Discussions are public. Posting does not enroll a contributor, grant repository access, or authorize an agent task. Do not post secrets or confidential reports.";
+        assert_eq!(original.matches(note).count(), 1, "real note fixture drift");
+        let wrap = |open: &str, close: &str| {
+            original.replacen(note, &format!("{open}{text}{close}"), 1)
+        };
+        let cases = [
+            ("datalist option", "datalist", wrap("<datalist id='choices'><option>", "</option></datalist>")),
+            ("mixed-case datalist", "datalist", wrap("<DaTaLiSt><option>", "</option></DaTaLiSt>")),
+            ("datalist newline", "datalist", wrap("<datalist\n id='choices'><option>", "</option></datalist>")),
+            ("datalist group", "datalist", wrap("<datalist><option selected>", "</option></datalist>")),
+            ("select unselected", "select", wrap("<select aria-label='Participation'><option selected>Read more</option><option>", "</option></select>")),
+            ("select mixed case", "select", wrap("<SeLeCt><option selected>Read more</option><option>", "</option></SeLeCt>")),
+            ("select disabled option", "select", wrap("<select><option selected>Read more</option><option disabled>", "</option></select>")),
+            ("select optgroup", "select", wrap("<select><option selected>Read more</option><optgroup label='Safety'><option>", "</option></optgroup></select>")),
+            ("select selected disclosure still banned", "select", wrap("<select><option selected>", "</option></select>")),
+            ("select tab attribute", "select", wrap("<SELECT\taria-label='Safety'><option>", "</option></SELECT>")),
+        ];
+        for (case, expected_element, candidate) in cases {
+            assert_ne!(candidate, original, "{case}: mutation not applied");
+            fs::write(docs.join("index.html"), candidate)
+                .expect("write option-bearing page fixture");
+            let errors = validate(&root);
+            let target = format!(
+                "Unexpected active, embedded, or inert element: {expected_element}"
+            );
+            assert!(
+                errors.iter().any(|error| error == &target),
+                "{case}: missing exact {target:?}, got {errors:?}"
+            );
+        }
+        let controls = [
+            ("comment tokens", original.replacen("</head>", "<!-- <select><datalist> --></head>", 1)),
+            ("quoted attribute tokens", original.replacen("<body", "<body data-examples='<select><datalist>'", 1)),
+            ("selective near name", original.replacen("</head>", "<selective></selective></head>", 1)),
+            ("datalist2 near name", original.replacen("</head>", "<datalist2></datalist2></head>", 1)),
+            ("select suffix", original.replacen("</head>", "<select-extra></select-extra></head>", 1)),
+            ("datalist suffix", original.replacen("</head>", "<datalist-extra></datalist-extra></head>", 1)),
+            ("orphan closing tags", original.replacen("</head>", "</select></datalist></head>", 1)),
+        ];
+        for (case, candidate) in controls {
+            assert_ne!(candidate, original, "{case}: negative control missing");
+            fs::write(docs.join("index.html"), candidate)
+                .expect("write lookalike-only negative");
+            let errors = validate(&root);
+            assert!(errors.is_empty(), "{case}: false-positive errors: {errors:?}");
+        }
+        fs::remove_dir_all(&root).expect("remove option fixture");
     }
 
     #[test]
