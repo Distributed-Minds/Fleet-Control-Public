@@ -208,6 +208,32 @@ fn validate(suite: &Suite) -> Result<usize, Vec<String>> {
         if case.id.trim().is_empty() || !ids.insert(case.id.as_str()) {
             failures.push(format!("duplicate or blank scenario id: {}", case.id));
         }
+        // Historical sparse fixtures inherit their independently pinned
+        // all-current control for backwards comparison only. An additive case
+        // must bring its own complete prerequisite facts, or a missing fact
+        // silently becomes true and can fabricate a positive test outcome.
+        if !REQUIRED_HISTORICAL_CASE_IDS.contains(&case.id.as_str()) {
+            let facts = &case.facts;
+            let complete = [
+                facts.archive_exact,
+                facts.order_current,
+                facts.manifest_current,
+                facts.snapshot_coherent,
+                facts.source_current,
+                facts.authority_current,
+                facts.horizon_current,
+                facts.durability_current,
+            ]
+            .iter()
+            .all(Option::is_some)
+                && facts.protected.is_some();
+            if !complete {
+                failures.push(format!(
+                    "{}: additive scenario must explicitly supply all safety prerequisites and protected state",
+                    case.id
+                ));
+            }
+        }
         let actual = evaluate(&case.facts);
         if actual != case.expect {
             failures.push(format!(
@@ -374,6 +400,45 @@ mod tests {
             .unwrap_err()
             .join(" ")
             .contains("duplicate"));
+    }
+
+    #[test]
+    fn additive_cases_require_explicit_facts_instead_of_inherited_success() {
+        let mut suite = source();
+        let mut new_case = suite
+            .cases
+            .iter()
+            .find(|case| case.id == "positive-all-current")
+            .expect("historical positive control")
+            .clone();
+        new_case.id = "additive-unproved-positive".to_owned();
+        new_case.facts = Facts::default();
+        suite.cases.push(new_case);
+        let failures = validate(&suite).expect_err("unproved additive case must fail");
+        assert!(
+            failures
+                .iter()
+                .any(|error| error.contains("additive scenario must explicitly")),
+            "{failures:?}"
+        );
+
+        // An independently authored complete positive remains admissible.
+        suite.cases.last_mut().unwrap().facts = source()
+            .cases
+            .iter()
+            .find(|case| case.id == "positive-all-current")
+            .unwrap()
+            .facts
+            .clone();
+        assert_eq!(validate(&suite), Ok(19));
+
+        // A complete additive negative is also evaluated, not rejected
+        // simply because its necessary authority witness is false.
+        let new_case = suite.cases.last_mut().unwrap();
+        new_case.id = "additive-revoked-authority".to_owned();
+        new_case.facts.authority_current = Some(false);
+        new_case.expect = Verdict::Ineligible;
+        assert_eq!(validate(&suite), Ok(19));
     }
 
     #[test]
