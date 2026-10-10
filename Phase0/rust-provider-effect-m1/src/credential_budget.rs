@@ -302,8 +302,8 @@ impl Scheduler {
             return Err(Error::CircuitOpen);
         }
 
-        let can_recover = lane.remaining > 0
-            && has_eligible(&lane.recovery, &lane.classes, Priority::Recovery);
+        let can_recover =
+            lane.remaining > 0 && has_eligible(&lane.recovery, &lane.classes, Priority::Recovery);
         let can_normal = lane.remaining > lane.reserved_for_recovery
             && has_eligible(&lane.normal, &lane.classes, Priority::Normal);
         let class = match (can_normal, can_recover, lane.last_class) {
@@ -554,7 +554,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn late_recovery_cannot_be_starved_by_normal_class_quota() {
         let mut s = Scheduler::new();
@@ -612,13 +611,19 @@ mod tests {
             Priority::Recovery,
         ))
         .unwrap();
-        let recovery = s.simulate_candidate("credential", CURRENT).unwrap().unwrap();
+        let recovery = s
+            .simulate_candidate("credential", CURRENT)
+            .unwrap()
+            .unwrap();
         assert_eq!(recovery.request.operation_id, "late-recovery");
         assert_eq!(recovery.request.priority, Priority::Recovery);
         assert_eq!(recovery.estimated_class_remaining, 0);
         assert_eq!(s.remaining("credential"), Ok(3));
         assert_eq!(s.pending("credential"), Ok(3));
-        assert!(s.simulate_candidate("credential", CURRENT).unwrap().is_none());
+        assert!(s
+            .simulate_candidate("credential", CURRENT)
+            .unwrap()
+            .is_none());
     }
 
     #[test]
@@ -642,9 +647,7 @@ mod tests {
                     .unwrap();
                 }
                 let mut normals = 0;
-                while let Some(candidate) =
-                    s.simulate_candidate("credential", CURRENT).unwrap()
-                {
+                while let Some(candidate) = s.simulate_candidate("credential", CURRENT).unwrap() {
                     assert_eq!(candidate.request.priority, Priority::Normal);
                     normals += 1;
                 }
@@ -660,7 +663,10 @@ mod tests {
                     Priority::Recovery,
                 ))
                 .unwrap();
-                let recovered = s.simulate_candidate("credential", CURRENT).unwrap().unwrap();
+                let recovered = s
+                    .simulate_candidate("credential", CURRENT)
+                    .unwrap()
+                    .unwrap();
                 assert_eq!(recovered.request.priority, Priority::Recovery);
                 assert_eq!(recovered.estimated_class_remaining, kept - 1);
 
