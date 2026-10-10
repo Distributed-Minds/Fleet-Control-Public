@@ -489,7 +489,15 @@ fn parse_destination(raw: &str) -> Result<Option<String>, String> {
         {
             return Err("unsupported link title syntax".into());
         }
-        if tail[1..tail.len() - 1].contains(title[0] as char) {
+        // An odd backslash run escapes the terminal quote: it cannot
+        // terminate the optional title. Interior same-kind delimiters are
+        // permitted only when escaped by odd backslash parity.
+        if preceded_by_escape(title, title.len() - 1) {
+            return Err("unsupported link title syntax".into());
+        }
+        if (1..title.len() - 1)
+            .any(|index| title[index] == title[0] && !preceded_by_escape(title, index))
+        {
             return Err("ambiguous link title syntax".into());
         }
     }
@@ -603,7 +611,9 @@ fn collect_links(markdown: &str, document: &str, report: &mut Report) -> Vec<Str
             while p < bytes.len() {
                 let c = bytes[p];
                 if let Some(q) = quote {
-                    if c == q {
+                    // Escaped title delimiters are title content, not a
+                    // closing quote. Even backslash runs leave them active.
+                    if c == q && !preceded_by_escape(bytes, p) {
                         quote = None;
                     }
                 } else if in_angle_destination {
@@ -2229,6 +2239,69 @@ mod tests {
                     "{:?}",
                     result.errors
                 );
+            }
+        }
+    }
+
+
+    // #412: same-kind escaped title delimiters are real CommonMark links.
+    // A terminal quote escaped by an odd backslash run is not a closer.
+    #[test]
+    fn escaped_link_title_quote_parity_and_real_missing_targets() {
+        let cases = [
+            ("double", r#"[good](present.md "say \"hi\"") [bad](missing.md "say \"hi\"")"#, "present.md"),
+            ("single", r#"[good](present.md 'say \'hi\'') [bad](missing.md 'say \'hi\'')"#, "present.md"),
+            ("angle", r#"[good](<present.md> "say \"hi\"") [bad](<missing.md> "say \"hi\"")"#, "present.md"),
+            ("image", r#"![good](present.svg "say \"hi\"") [bad](missing.md "say \"hi\"")"#, "present.svg"),
+        ];
+        for (name, markdown, existing) in cases {
+            let mut diagnostics = Report::default();
+            let links = collect_links(markdown, "README.md", &mut diagnostics);
+            assert_eq!(links, vec![existing.to_string(), "missing.md".to_string()], "{name}");
+            assert!(diagnostics.errors.is_empty(), "{name}: {:?}", diagnostics.errors);
+
+            let sandbox = Sandbox::new();
+            sandbox.write(existing, "exists");
+            sandbox.write("README.md", markdown);
+            let result = sandbox.scan();
+            assert_eq!(result.local_links, 2, "{name}");
+            assert_eq!(result.errors.len(), 1, "{name}: {:?}", result.errors);
+            assert!(
+                result.errors[0].contains("target missing: missing.md"),
+                "{name}: {:?}", result.errors
+            );
+        }
+
+        for quote in ['"', '\''] {
+            for count in 0..=8 {
+                let slashes = "\\".repeat(count);
+                let interior = format!("[x](present.md {quote}before{slashes}{quote}after{quote})");
+                let terminal = format!("[x](present.md {quote}before{slashes}{quote})");
+                for (kind, markdown, valid) in [
+                    ("interior", &interior, count % 2 == 1),
+                    ("terminal", &terminal, count % 2 == 0),
+                ] {
+                    let mut diagnostics = Report::default();
+                    let links = collect_links(markdown, "README.md", &mut diagnostics);
+                    if valid {
+                        assert_eq!(
+                            links, vec!["present.md".to_string()],
+                            "{kind} quote={quote:?} count={count}: {:?}",
+                            diagnostics.errors
+                        );
+                        assert!(
+                            diagnostics.errors.is_empty(),
+                            "{kind} quote={quote:?} count={count}: {:?}",
+                            diagnostics.errors
+                        );
+                    } else {
+                        assert!(
+                            links.is_empty() && !diagnostics.errors.is_empty(),
+                            "{kind} quote={quote:?} count={count}: links={links:?} errors={:?}",
+                            diagnostics.errors
+                        );
+                    }
+                }
             }
         }
     }
