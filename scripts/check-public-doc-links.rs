@@ -194,7 +194,125 @@ fn is_indented_code_line(line: &str) -> bool {
     false
 }
 
+// #339: recognize fenced code inside nested blockquote/list containers.
+// Mask only while the exact container continuation is present; on exit,
+// resume normal link scanning instead of leaking a global fence to EOF.
+#[derive(Clone, Copy)]
+enum FenceContainer {
+    Quote,
+    List(usize),
+}
+
+fn container_fence_open(line: &str) -> Option<(Vec<FenceContainer>, u8, usize)> {
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    let mut frames = Vec::new();
+    loop {
+        let mut start = i;
+        while start < bytes.len() && bytes[start] == b' ' && start - i < 3 {
+            start += 1;
+        }
+        if bytes.get(start) == Some(&b'>') {
+            i = start + 1;
+            if matches!(bytes.get(i), Some(b' ' | b'\t')) { i += 1; }
+            frames.push(FenceContainer::Quote);
+            continue;
+        }
+        let width = if matches!(bytes.get(start), Some(b'-' | b'+' | b'*')) {
+            1
+        } else {
+            let digits = bytes[start..].iter()
+                .take_while(|&&c| c.is_ascii_digit()).take(9).count();
+            if (1..=9).contains(&digits)
+                && matches!(bytes.get(start + digits), Some(b'.' | b')')) {
+                digits + 1
+            } else { 0 }
+        };
+        if width == 0 { break; }
+        let after = start + width;
+        let padding = bytes[after..].iter()
+            .take_while(|&&c| c == b' ' || c == b'\t').count();
+        if !(1..=4).contains(&padding) { break; }
+        frames.push(FenceContainer::List(after + padding - i));
+        i = after + padding;
+    }
+    if frames.is_empty() { return None; }
+    let (marker, width, _) = fence_marker(&line[i..])?;
+    Some((frames, marker, width))
+}
+
+fn container_fence_line<'a>(line: &'a str, frames: &[FenceContainer]) -> Option<&'a str> {
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    for frame in frames {
+        match *frame {
+            FenceContainer::Quote => {
+                let start = i;
+                while i < bytes.len() && bytes[i] == b' ' && i - start < 3 {
+                    i += 1;
+                }
+                if bytes.get(i) != Some(&b'>') { return None; }
+                i += 1;
+                if matches!(bytes.get(i), Some(b' ' | b'\t')) { i += 1; }
+            }
+            FenceContainer::List(required) => {
+                let mut columns = 0;
+                while columns < required {
+                    match bytes.get(i) {
+                        Some(b' ') => columns += 1,
+                        Some(b'\t') => columns += 4 - columns % 4,
+                        _ => return None,
+                    }
+                    i += 1;
+                }
+            }
+        }
+    }
+    Some(&line[i..])
+}
+
+fn mask_container_fences(markdown: &str) -> String {
+    let mut out = String::with_capacity(markdown.len());
+    let mut active: Option<(Vec<FenceContainer>, u8, usize)> = None;
+    for raw in markdown.split_inclusive('\n') {
+        let line = raw.strip_suffix('\n').unwrap_or(raw);
+        let line = line.strip_suffix('\r').unwrap_or(line);
+        let mut mask = false;
+        if let Some((frames, marker, opener_width)) = active.as_ref() {
+            if line.bytes().all(|c| c == b' ' || c == b'\t') {
+                mask = true;
+            } else if let Some(content) = container_fence_line(line, frames) {
+                if let Some((closing, width, can_close)) = fence_marker(content) {
+                    if closing == *marker && width >= *opener_width && can_close {
+                        active = None;
+                    }
+                }
+                mask = true;
+            } else {
+                active = None;
+            }
+        }
+        if !mask {
+            if let Some(opener) = container_fence_open(line) {
+                active = Some(opener);
+                mask = true;
+            }
+        }
+        if mask {
+            // Replace one ASCII space per original byte to preserve UTF-8
+            // validity, line numbering, and source-offset diagnostics.
+            for b in raw.bytes() {
+                out.push(if b == b'\n' || b == b'\r' { b as char } else { ' ' });
+            }
+        } else {
+            out.push_str(raw);
+        }
+    }
+    out
+}
+
 fn mask_paragraph_code_spans(markdown: &str) -> String {
+    let markdown = mask_container_fences(markdown);
     let mut visible = String::with_capacity(markdown.len());
     let mut paragraph = String::new();
     let mut fenced: Option<(u8, usize)> = None;
@@ -1848,6 +1966,51 @@ mod tests {
         );
         assert_ne!(broken, guide, "fixture must lengthen the real prompt opener");
         assert_eq!(inspect_help_guide_contract(&broken), Err("unclosed code fence"));
+    }
+
+    // #339: ordered CommonMark reference destinations, plus real-link controls.
+    #[test]
+    fn nested_container_fences_and_exit_boundaries() {
+        let cases: &[(&str, &str, &[&str])] = &[
+            ("quote", "> ~~~md\n> [ghost](missing.md)\n> ~~~\n[real](present.md)\n", &["present.md"]),
+            ("wide quote", "> ~~~~\n> [ghost](missing.md)\n> ~~~~~\n[real](present.md)\n", &["present.md"]),
+            ("double quote", ">> ~~~\n>> [ghost](missing.md)\n>> ~~~\n[real](present.md)\n", &["present.md"]),
+            ("spaced double", "> > ~~~\n> > [ghost](missing.md)\n> > ~~~\n[real](present.md)\n", &["present.md"]),
+            ("quote image", "> ~~~\n> ![ghost](missing.png)\n> ~~~\n[real](present.md)\n", &["present.md"]),
+            ("bullet list", "- ~~~md\n  [ghost](missing.md)\n  ~~~\n[real](present.md)\n", &["present.md"]),
+            ("numbered list", "1. ~~~\n   [ghost](missing.md)\n   ~~~\n[real](present.md)\n", &["present.md"]),
+            ("nested list", "- - ~~~\n    [ghost](missing.md)\n    ~~~\n[real](present.md)\n", &["present.md"]),
+            ("quote list", "> - ~~~\n>   [ghost](missing.md)\n>   ~~~\n[real](present.md)\n", &["present.md"]),
+            ("list quote", "- > ~~~\n  > [ghost](missing.md)\n  > ~~~\n[real](present.md)\n", &["present.md"]),
+            ("quote exits", "> ~~~\n> [ghost](missing.md)\n[real](present.md)\n", &["present.md"]),
+            ("list sibling", "- ~~~\n  [ghost](missing.md)\n- [real](present.md)\n", &["present.md"]),
+            ("short closer", "> ~~~~\n> [ghost](missing.md)\n> ~~~\n> [still](missing2.md)\n> ~~~~\n[real](present.md)\n", &["present.md"]),
+            ("blank list line", "- ~~~\n\n  [ghost](missing.md)\n  ~~~\n[real](present.md)\n", &["present.md"]),
+            ("quote real link", "> [ghost](missing.md)\n[real](present.md)\n", &["missing.md", "present.md"]),
+            ("list real link", "- [ghost](missing.md)\n[real](present.md)\n", &["missing.md", "present.md"]),
+            ("after quote closer", "> ~~~\n> [ghost](missing.md)\n> ~~~\n> [real](present.md)\n", &["present.md"]),
+        ];
+        for &(label, original, expected) in cases {
+            for eol in ["\n", "\r\n"] {
+                for trailing in [true, false] {
+                    let source = original.replace('\n', eol);
+                    let source = if trailing { source }
+                        else { source.strip_suffix(eol).unwrap_or(&source).to_owned() };
+                    let mut report = Report::default();
+                    let links = collect_links(&source, "README.md", &mut report);
+                    let wanted: Vec<String> = expected.iter().map(|s| (*s).to_owned()).collect();
+                    assert_eq!(links, wanted, "{label}: {eol:?}, trailing={trailing}");
+                    assert!(report.errors.is_empty(), "{label}: {:?}", report.errors);
+                    let sandbox = Sandbox::new();
+                    sandbox.write("present.md", "exists");
+                    sandbox.write("README.md", &source);
+                    let result = sandbox.scan();
+                    assert_eq!(result.local_links, expected.len(), "{label}");
+                    let missing = expected.iter().filter(|&&s| s == "missing.md").count();
+                    assert_eq!(result.errors.len(), missing, "{label}: {:?}", result.errors);
+                }
+            }
+        }
     }
 
     // Issue #333: CommonMark blank lines contain ASCII spaces/tabs only.
