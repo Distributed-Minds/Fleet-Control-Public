@@ -150,16 +150,18 @@ fn disposition(case: &Case, normal: &Candidate) -> Result<String, String> {
         return Ok("SUPPORTED_DISTINCT_FROM:normal-two-parent".to_owned());
     }
 
-    // A changed constructor can preserve the observed two-parent envelope,
-    // but only when all other candidate fields (including parent order,
-    // metadata and tree) are identical. This is a fixture-level compatibility
-    // check, NOT external constructor approval.
+    // The sole historical v1 -> v2 fixture migration has a declared,
+    // bounded compatibility rule. Matching the envelope alone is insufficient:
+    // an arbitrary new version or self-asserted basis cannot grant support.
+    // This is fixture-level recognition, NOT external constructor approval.
     let mut original_envelope = c.clone();
     original_envelope.constructor_version = normal.constructor_version.clone();
     original_envelope.compatibility_basis = normal.compatibility_basis.clone();
     if original_envelope == *normal
-        && c.constructor_version != normal.constructor_version
-        && c.compatibility_basis != normal.compatibility_basis
+        && normal.constructor_version == "constructor-v1"
+        && normal.compatibility_basis == "constructor-v1-exact"
+        && c.constructor_version == "constructor-v2"
+        && c.compatibility_basis == "v2-preserves-v1-two-parent-envelope"
     {
         return Ok("SUPPORTED_COMPATIBLE_WITH:normal-two-parent".to_owned());
     }
@@ -352,6 +354,30 @@ mod tests {
     fn detects_broadened_constructor_cardinality() {
         let mut fixture = sample();
         fixture.cases[2].constructor_support.push(3);
+        assert!(validate(&fixture).is_err());
+    }
+
+    #[test]
+    fn unrecognized_constructor_compatibility_claims_fail_closed() {
+        for (version, basis) in [
+            ("constructor-v2", "self-asserted-compatible"),
+            ("constructor-v3", "v2-preserves-v1-two-parent-envelope"),
+            ("constructor-v3", "v3-preserves-v2-two-parent-envelope"),
+        ] {
+            let mut fixture = sample();
+            fixture.cases[3].candidate.constructor_version = version.to_owned();
+            fixture.cases[3].candidate.compatibility_basis = basis.to_owned();
+            assert!(
+                validate(&fixture).is_err(),
+                "unknown constructor compatibility must fail closed: {version} {basis}"
+            );
+        }
+    }
+
+    #[test]
+    fn migration_cannot_rewrite_its_pinned_baseline_compatibility_basis() {
+        let mut fixture = sample();
+        fixture.cases[0].candidate.compatibility_basis = "self-asserted-baseline".to_owned();
         assert!(validate(&fixture).is_err());
     }
 

@@ -99,7 +99,27 @@ fn outcome(disposition: &str, level: Option<Level>) -> DecisionOutcome {
     }
 }
 
+// Validate every supplied safety proof before any early denial can mask a
+// contradictory declaration. A fixture's expected disposition is not a
+// substitute for admitting its declared safety inputs.
+fn preflight_decision_proofs(c: &DecisionCase) -> Result<(), String> {
+    if c.required_independent_lineages
+        .is_some_and(|required| required < 2)
+    {
+        return Err(
+            "high-impact restriction requires at least two independent lineages".to_owned(),
+        );
+    }
+    if c.max_level_with_contradiction
+        .is_some_and(|maximum| maximum >= Level::Isolate)
+    {
+        return Err("contradictory evidence cannot preserve high-impact severity".to_owned());
+    }
+    Ok(())
+}
+
 fn decide(c: &DecisionCase) -> Result<DecisionOutcome, String> {
+    preflight_decision_proofs(c)?;
     if !c.subject_current {
         return Ok(outcome("IDENTITY_STALE", None));
     }
@@ -131,11 +151,6 @@ fn decide(c: &DecisionCase) -> Result<DecisionOutcome, String> {
         // A fixture cannot waive the independently governed evidence requirement
         // by declaring zero or one lineage sufficient for high-impact action.
         let required = c.required_independent_lineages.unwrap_or(2);
-        if required < 2 {
-            return Err(
-                "high-impact restriction requires at least two independent lineages".to_owned(),
-            );
-        }
         if c.independent_lineages < required {
             return Ok(outcome("INDEPENDENCE_INSUFFICIENT", None));
         }
@@ -460,9 +475,10 @@ fn run() -> Result<(), String> {
     if args.next().is_some() {
         return Err("usage: free-energy-phase0-fixtures [fixture.json]".to_owned());
     }
-    let content = fs::read_to_string(&input).map_err(|e| format!("cannot read {input:?}: {e}"))?;
-    let fixture: Fixture =
-        serde_json::from_str(&content).map_err(|e| format!("invalid fixture {input:?}: {e}"))?;
+    let content =
+        fs::read_to_string(&input).map_err(|e| format!("cannot read {input:?}: {e}"))?;
+    let fixture: Fixture = serde_json::from_str(&content)
+        .map_err(|e| format!("invalid fixture {input:?}: {e}"))?;
     match validate(&fixture) {
         Ok(count) => {
             println!("containment fixtures (Rust): {count} passed");
@@ -535,6 +551,52 @@ mod tests {
             .unwrap()
             .push(additional);
         assert_eq!(validate(&fixture(changed)), Ok(36));
+    }
+
+    #[test]
+    fn invalid_lineage_threshold_is_rejected_before_independent_early_denials() {
+        // Previously these cases returned IDENTITY_STALE, EVIDENCE_STALE and
+        // AUTHORITY_MISSING without inspecting an explicitly unsafe threshold.
+        for (index, threshold) in [(2, 0), (3, 1), (16, 1)] {
+            let mut changed = original();
+            changed["decision_cases"][index]["required_independent_lineages"] = json!(threshold);
+            let typed = fixture(changed);
+            assert!(
+                decide(&typed.decision_cases[index]).is_err(),
+                "case {index}: unsafe threshold {threshold} was masked by early denial"
+            );
+            assert!(validate(&typed).is_err());
+        }
+    }
+
+    #[test]
+    fn invalid_contradiction_cap_is_rejected_even_when_an_earlier_guard_denies() {
+        // A high-impact contradiction ceiling is malformed proof even when
+        // identity, evidence, or authority would independently deny the case.
+        for (index, cap) in [(2, "ISOLATE"), (3, "TERMINATE"), (8, "DESTRUCTIVE_CLEANUP")] {
+            let mut changed = original();
+            changed["decision_cases"][index]["max_level_with_contradiction"] = json!(cap);
+            let typed = fixture(changed);
+            assert!(
+                decide(&typed.decision_cases[index]).is_err(),
+                "case {index}: unsafe contradiction cap {cap} was masked"
+            );
+            assert!(validate(&typed).is_err());
+        }
+    }
+
+    #[test]
+    fn preflight_preserves_valid_historical_denials_and_low_impact_caps() {
+        let baseline = fixture(original());
+        assert_eq!(validate(&baseline), Ok(35));
+
+        let mut changed = original();
+        changed["decision_cases"][12]["max_level_with_contradiction"] = json!("SUSPEND_CAPABILITY");
+        let typed = fixture(changed);
+        assert_eq!(
+            decide(&typed.decision_cases[12]),
+            Ok(outcome("AUTHORIZED", Some(Level::SuspendCapability)))
+        );
     }
 
     #[test]

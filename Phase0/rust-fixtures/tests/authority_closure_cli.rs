@@ -5,6 +5,7 @@
 use serde_json::{json, Value};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
+use std::path::Path;
 use std::process::{self, Command, Output};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -32,6 +33,13 @@ fn run_source(source: &str) -> Output {
         .expect("execute compiled authority-closure oracle");
     fs::remove_file(&path).expect("remove temporary authority fixture");
     result
+}
+
+fn run_path(path: &Path) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_authority_closure"))
+        .arg(path)
+        .output()
+        .expect("execute compiled authority-closure oracle on supplied path")
 }
 
 fn run(fixture: &Value) -> Output {
@@ -77,6 +85,57 @@ fn compiled_binary_accepts_exact_historical_26_case_fixture() {
         String::from_utf8_lossy(&result.stdout)
             .contains("authority closure Rust semantic fixtures: 26 cases passed"),
         "missing actual CLI result: {result:?}"
+    );
+}
+
+#[test]
+fn rejects_oversized_sparse_symlink_and_nonregular_fixtures() {
+    let serial = NEXT_FILE.fetch_add(1, Ordering::Relaxed);
+    let scratch = std::env::temp_dir().join(format!(
+        "free-energy-authority-fixture-bound-{}-{serial}",
+        process::id()
+    ));
+    fs::create_dir_all(&scratch).expect("create isolated fixture directory");
+    let oversized = scratch.join("oversized.json");
+    let file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&oversized)
+        .expect("create sparse fixture");
+    file.set_len(8 * 1024 * 1024 + 1)
+        .expect("extend beyond input limit");
+    drop(file);
+    assert_denied(&run_path(&oversized));
+    assert_denied(&run_path(&scratch));
+
+    #[cfg(unix)]
+    {
+        let symlink = scratch.join("symlink.json");
+        let historical =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../fixtures/authority-closure-spec2.json");
+        std::os::unix::fs::symlink(&historical, &symlink).expect("create symlink fixture");
+        assert_denied(&run_path(&symlink));
+    }
+    fs::remove_dir_all(&scratch).expect("remove isolated fixture directory");
+}
+
+#[test]
+fn exactly_eight_mib_of_valid_json_with_trailing_whitespace_is_admitted() {
+    let bound = 8 * 1024 * 1024;
+    assert!(HISTORICAL.len() < bound);
+    let padded = format!("{HISTORICAL}{}", " ".repeat(bound - HISTORICAL.len()));
+    let result = run_source(&padded);
+    assert!(
+        result.status.success(),
+        "exact-limit fixture rejected: {result:?}"
+    );
+    assert!(
+        result.stderr.is_empty(),
+        "unexpected diagnostics: {result:?}"
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&result.stdout),
+        "authority closure Rust semantic fixtures: 26 cases passed\n"
     );
 }
 
