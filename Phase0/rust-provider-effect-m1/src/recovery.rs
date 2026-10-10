@@ -325,4 +325,29 @@ mod tests {
         assert!(!a.automatic_retry_allowed());
         assert_eq!(first.newly_ambiguous_attempts, 0);
     }
+
+    #[test]
+    fn replay_rejects_over_capacity_history_at_exact_record_index() {
+        let mut records: Vec<JournalRecord> = (0..crate::outbox::MAX_OUTBOX_OPERATIONS)
+            .map(|index| submitted(&format!("bounded-{index}")))
+            .collect();
+        records.push(submitted("overflow"));
+
+        assert_eq!(
+            reconstruct_after_cutoff(&records).err(),
+            Some(ReplayError::InvalidRecord(
+                crate::outbox::MAX_OUTBOX_OPERATIONS,
+                Error::OperationHistoryFull
+            ))
+        );
+        // An identical replay is deterministic. No artificial success or
+        // provider retry is introduced by rejecting incomplete capacity.
+        assert_eq!(
+            reconstruct_after_cutoff(&records).err(),
+            Some(ReplayError::InvalidRecord(
+                crate::outbox::MAX_OUTBOX_OPERATIONS,
+                Error::OperationHistoryFull
+            ))
+        );
+    }
 }
