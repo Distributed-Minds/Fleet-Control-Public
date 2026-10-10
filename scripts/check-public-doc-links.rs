@@ -641,6 +641,88 @@ fn check(root: &Path, docs: &[&str]) -> Report {
     report
 }
 
+
+ // Mask quoted Markdown link titles before checking reader-facing disclosures.
+ // A link tooltip is not rendered emphasized prose. Destination validation
+ // remains the responsibility of the existing collect_links function.
+ fn mask_help_link_titles(source: &str) -> String {
+     let raw = source.as_bytes();
+     let mut masked = raw.to_vec();
+     let mut i = 0;
+     while i + 1 < raw.len() {
+         if raw[i] != b']' || raw[i + 1] != b'(' || preceded_by_escape(raw, i) {
+             i += 1;
+             continue;
+         }
+         let mut cursor = i + 2;
+         if raw.get(cursor) == Some(&b'<') {
+             cursor += 1;
+             while cursor < raw.len() && raw[cursor] != b'>' && raw[cursor] != b'\n' {
+                 cursor += 1;
+             }
+             if raw.get(cursor) != Some(&b'>') {
+                 i += 1;
+                 continue;
+             }
+             cursor += 1;
+         } else {
+             while cursor < raw.len()
+                 && !raw[cursor].is_ascii_whitespace()
+                 && raw[cursor] != b')'
+             {
+                 if raw[cursor] == b'\\' && cursor + 1 < raw.len() {
+                     cursor += 2;
+                 } else {
+                     cursor += 1;
+                 }
+             }
+         }
+         let after_destination = cursor;
+         while matches!(raw.get(cursor), Some(b' ' | b'\t')) {
+             cursor += 1;
+         }
+         if cursor == after_destination {
+             i += 1;
+             continue;
+         }
+         let Some(&delimiter) = raw.get(cursor) else {
+             i += 1;
+             continue;
+         };
+         if delimiter != b'"' && delimiter != b'\'' {
+             i += 1;
+             continue;
+         }
+         let title_start = cursor;
+         cursor += 1;
+         while cursor < raw.len()
+             && raw[cursor] != delimiter
+             && raw[cursor] != b'\n'
+             && raw[cursor] != b'\r'
+         {
+             cursor += 1;
+         }
+         if raw.get(cursor) != Some(&delimiter) {
+             i += 1;
+             continue;
+         }
+         cursor += 1;
+         let title_end = cursor;
+         while matches!(raw.get(cursor), Some(b' ' | b'\t')) {
+             cursor += 1;
+         }
+         if raw.get(cursor) != Some(&b')') {
+             i += 1;
+             continue;
+         }
+         for byte in &mut masked[title_start..title_end] {
+             *byte = b' ';
+         }
+         i = cursor + 1;
+     }
+     String::from_utf8(masked).expect("ASCII-only masking preserves UTF-8")
+ }
+
 fn inspect_help_guide_contract(guide: &str) -> Result<(), &'static str> {
     // Reuse the existing Markdown comment/inline-code mask. A code fence
     // inside a CommonMark HTML block is not a rendered, copyable prompt.
@@ -664,7 +746,7 @@ fn inspect_help_guide_contract(guide: &str) -> Result<(), &'static str> {
             } else {
                 let trimmed = line.trim_start_matches(' ');
                 let language = trimmed[width..].trim();
-                opening = Some((marker, width, marker == b'\x60' && language == "text"));
+                opening = Some((marker, width, language == "text"));
                 contents.clear();
                 continue;
             }
@@ -704,7 +786,7 @@ fn inspect_help_guide_contract(guide: &str) -> Result<(), &'static str> {
     // Visible prose is outside code blocks, HTML comments, and inline code.
     // A raw substring in a hidden sample must not satisfy a reader-facing
     // disclosure or Phase0 link contract.
-    if !visible_prose.contains("**Not available yet:**") {
+    if !mask_help_link_titles(&visible_prose).contains("**Not available yet:**") {
         return Err("manual versus future capability disclosure missing");
     }
     let mut link_diagnostics = Report::default();
@@ -1925,6 +2007,79 @@ mod tests {
                 }
             }
         }
+    }
+
+
+    // The rendered text prompt may use either CommonMark fence marker.
+    #[test]
+    fn help_guide_tilde_prompt_count_matches_rendered_fences() {
+        let guide = include_str!("../HELP-A-PROJECT.md");
+        let start = guide.find("```text\nI want to help [").expect("real prompt opener");
+        let end = guide[start..].find("\n```\n")
+            .map(|offset| start + offset + 4).expect("real prompt closer");
+        let prompt = &guide[start..end];
+        let tilde = prompt.replacen("```text", "~~~text", 1)
+            .replacen("\n```", "\n~~~", 1);
+        assert_ne!(prompt, tilde);
+        let four_tilde = tilde.replacen("~~~text", "~~~~text", 1)
+            .replacen("\n~~~", "\n~~~~", 1);
+        let cases = [
+            ("tilde-only", guide.replacen(prompt, &tilde, 1), Ok(())),
+            ("four-tilde-only", guide.replacen(prompt, &four_tilde, 1), Ok(())),
+            ("backtick-and-tilde", format!("{guide}\n{tilde}\n"),
+                Err("expected one copyable HELP prompt")),
+            ("backtick-and-four-tilde", format!("{guide}\n{four_tilde}\n"),
+                Err("expected one copyable HELP prompt")),
+        ];
+        for (case, source, expected) in cases {
+            for newline in ["\n", "\r\n"] {
+                for trailing in [false, true] {
+                    let mut fixture = source.replace('\n', newline);
+                    if trailing && !fixture.ends_with(newline) {
+                        fixture.push_str(newline);
+                    } else if !trailing {
+                        while fixture.ends_with(newline) {
+                            fixture.truncate(fixture.len() - newline.len());
+                        }
+                    }
+                    assert_eq!(inspect_help_guide_contract(&fixture), expected,
+                        "case={case} newline={newline:?} trailing={trailing}");
+                }
+            }
+        }
+    }
+
+    // H11g: a link title is a tooltip, not an emphasized visible notice.
+    #[test]
+    fn help_guide_disclosure_in_link_title_is_not_visible_prose() {
+        let guide = include_str!("../HELP-A-PROJECT.md");
+        let removed = guide.replacen("**Not available yet:**", "", 1);
+        assert_ne!(removed, guide);
+        let link = "](GETTING-STARTED.md)";
+        assert!(removed.contains(link));
+        for (case, replacement) in [
+            ("double", "](GETTING-STARTED.md \"**Not available yet:**\")"),
+            ("single", "](GETTING-STARTED.md '**Not available yet:**')"),
+            ("prefix-suffix", "](GETTING-STARTED.md \"prefix **Not available yet:** suffix\")"),
+        ] {
+            let hidden = removed.replacen(link, replacement, 1);
+            for newline in ["\n", "\r\n"] {
+                for trailing in [false, true] {
+                    let mut fixture = hidden.replace('\n', newline);
+                    if trailing && !fixture.ends_with(newline) {
+                        fixture.push_str(newline);
+                    } else if !trailing {
+                        while fixture.ends_with(newline) {
+                            fixture.truncate(fixture.len() - newline.len());
+                        }
+                    }
+                    assert_eq!(inspect_help_guide_contract(&fixture),
+                        Err("manual versus future capability disclosure missing"),
+                        "case={case} newline={newline:?} trailing={trailing}");
+                }
+            }
+        }
+        assert_eq!(inspect_help_guide_contract(guide), Ok(()));
     }
 
     // Issue #333: CommonMark blank lines contain ASCII spaces/tabs only.
