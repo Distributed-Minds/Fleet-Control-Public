@@ -505,7 +505,13 @@ mod tests {
     #[test]
     fn queue_bound_rejects_excess_without_stealing_a_slot() {
         let mut s = scheduler(2, 0, 1);
-        let a = request("a", "effective-credential-1", "repo-a", "t", Priority::Normal);
+        let a = request(
+            "a",
+            "effective-credential-1",
+            "repo-a",
+            "t",
+            Priority::Normal,
+        );
         assert_eq!(s.enqueue(a.clone()), Ok(true));
         assert_eq!(s.enqueue(a), Ok(false));
         assert_eq!(
@@ -525,15 +531,27 @@ mod tests {
     fn malformed_names_and_unknown_groups_are_not_silently_accepted() {
         let mut s = scheduler(2, 0, 2);
         for bad in ["", "   ", "a\nb"] {
-            let candidate = request(bad, "effective-credential-1", "repo-a", "t", Priority::Normal);
+            let candidate = request(
+                bad,
+                "effective-credential-1",
+                "repo-a",
+                "t",
+                Priority::Normal,
+            );
             assert_eq!(s.enqueue(candidate), Err(Error::InvalidRequest));
         }
         assert_eq!(
             s.enqueue(request("unknown", "other", "repo-a", "t", Priority::Normal)),
             Err(Error::UnknownGroup)
         );
-        assert_eq!(s.register_group("other", 1, 2, 10), Err(Error::InvalidConfig));
-        assert_eq!(s.register_group("other", 1, 0, 0), Err(Error::InvalidConfig));
+        assert_eq!(
+            s.register_group("other", 1, 2, 10),
+            Err(Error::InvalidConfig)
+        );
+        assert_eq!(
+            s.register_group("other", 1, 0, 0),
+            Err(Error::InvalidConfig)
+        );
     }
 
     #[test]
@@ -544,8 +562,14 @@ mod tests {
             ("one", "effective-credential-1"),
             ("two", "effective-credential-2"),
         ] {
-            s.enqueue(request(id, group, "same-repo", "same-tenant", Priority::Normal))
-                .unwrap();
+            s.enqueue(request(
+                id,
+                group,
+                "same-repo",
+                "same-tenant",
+                Priority::Normal,
+            ))
+            .unwrap();
         }
         assert!(next(&mut s).is_some());
         assert!(next(&mut s).is_none());
