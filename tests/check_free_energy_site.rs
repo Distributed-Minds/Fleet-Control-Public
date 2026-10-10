@@ -1363,6 +1363,84 @@ data="x"></OBject><EMBED/>"#;
         fs::remove_dir_all(&root).expect("remove details fixture");
     }
 
+    // #419: initially closed native HTML dialogs are not initially visible.
+    // RED on the original parser: required copy remains in source text but is
+    // not displayed, and the dialog-specific forbidden-element error is absent.
+    #[test]
+    fn dialogs_cannot_hide_public_site_disclosures_or_routes() {
+        let root = env::temp_dir().join(format!(
+            "free-energy-dialog-site-{}", std::process::id()
+        ));
+        let docs = root.join("docs");
+        fs::create_dir_all(&docs).expect("create dialog fixture directory");
+        let original = include_str!("../docs/index.html");
+        fs::write(docs.join("index.html"), original).expect("write actual landing");
+        fs::write(docs.join("styles.css"), include_str!("../docs/styles.css"))
+            .expect("write actual stylesheet");
+        fs::write(docs.join("README.md"), include_str!("../docs/README.md"))
+            .expect("write actual readme");
+        assert!(validate(&root).is_empty(), "unmodified landing must pass");
+
+        let note = r#"<p class="note">Discussions are public. Posting does not enroll a contributor, grant repository access, or authorize an agent task. Do not post secrets or confidential reports.</p>"#;
+        assert_eq!(original.matches(note).count(), 1, "actual note fixture drift");
+        let wrap_note = |open: &str, close: &str| {
+            original.replacen(note, &format!("{open}{note}{close}"), 1)
+        };
+        let nav = r#"<nav aria-label="Main navigation">"#;
+        assert_eq!(original.matches(nav).count(), 1, "actual navigation fixture drift");
+        let nav_hidden = original
+            .replacen(nav, &format!("<dialog>{nav}"), 1)
+            .replacen("</nav>", "</nav></dialog>", 1);
+        let route_grid = r#"<div class="route-grid" aria-label="Choose how to participate">"#;
+        assert_eq!(original.matches(route_grid).count(), 1, "actual route fixture drift");
+        let grid_start = original.find(route_grid).expect("route grid opening");
+        let grid_close = grid_start
+            + original[grid_start..].find("</div>").expect("route grid closing")
+            + "</div>".len();
+        let grid_hidden = format!(
+            "{}<dialog>{}</dialog>{}",
+            &original[..grid_start],
+            &original[grid_start..grid_close],
+            &original[grid_close..]
+        );
+
+        for (case, candidate) in [
+            ("closed note", wrap_note("<dialog>", "</dialog>")),
+            ("mixed-case closed note", wrap_note("<DiAlOg>", "</DiAlOg>")),
+            ("nested closed dialogs", wrap_note("<dialog><dialog>", "</dialog></dialog>")),
+            ("open dialog banned by fixed-site policy", wrap_note("<dialog open>", "</dialog>")),
+            ("boolean open false is present", wrap_note(r#"<dialog open="false">"#, "</dialog>")),
+            ("multiline attribute dialog", wrap_note("<DiAlOg\n data-q='a > b'>", "</DiAlOg>")),
+            ("route grid inside dialog", grid_hidden),
+            ("header navigation inside dialog", nav_hidden),
+            ("self-closing-like dialog", original.replacen("</head>", "<dialog/></head>", 1)),
+        ] {
+            assert_ne!(candidate, original, "{case}: mutation did not apply");
+            fs::write(docs.join("index.html"), candidate)
+                .expect("write hidden-dialog fixture");
+            let errors = validate(&root);
+            assert!(
+                errors.iter().any(|error|
+                    error == "Unexpected active, embedded, or inert element: dialog"
+                ),
+                "{case}: exact forbidden-dialog error absent: {errors:?}"
+            );
+        }
+        for (case, candidate) in [
+            ("comment decoy", original.replacen("</head>", "<!-- <dialog> --></head>", 1)),
+            ("quoted-attribute decoy", original.replacen("<body", "<body data-example='<dialog>'", 1)),
+            ("dialogue near-name", original.replacen("</head>", "<dialogue></dialogue></head>", 1)),
+            ("dialog-extra near-name", original.replacen("</head>", "<dialog-extra></dialog-extra></head>", 1)),
+        ] {
+            assert_ne!(candidate, original, "{case}: mutation did not apply");
+            fs::write(docs.join("index.html"), candidate)
+                .expect("write harmless-dialog fixture");
+            let errors = validate(&root);
+            assert!(errors.is_empty(), "{case}: harmless lookalike rejected: {errors:?}");
+        }
+        fs::remove_dir_all(&root).expect("remove dialog fixture");
+    }
+
     #[test]
     fn raw_text_containers_cannot_forge_visible_site_routes() {
         // Full shipping-page fixtures, not synthetic isolated fragments.
