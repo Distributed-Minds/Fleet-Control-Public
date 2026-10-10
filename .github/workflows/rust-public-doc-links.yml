@@ -21,6 +21,7 @@ on:
   pull_request:
     branches:
       - phase0/public-v0
+      - fix/359-rust-reference-definition-red-20261010-x3k7
     paths:
       - .github/workflows/rust-public-doc-links.yml
       - scripts/check-public-doc-links.rs
