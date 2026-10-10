@@ -31,6 +31,7 @@ pub enum ReplayError {
     InvalidContext,
     InvalidCapabilities,
     ConflictingReplay,
+    CapacityExhausted,
     RecoveryRequired,
     Scope(AdmissionError),
 }
@@ -78,6 +79,11 @@ struct RecordedRequest {
     capabilities: BTreeSet<String>,
     receipt: SimulationReceipt,
 }
+
+/// Bound synthetic immutable request history. Never evict old receipts to
+/// admit another request: historical replay/ACK/result fences must survive.
+/// This is a fixture capacity limit, not a production quota or cleanup policy.
+pub const MAX_SIMULATED_REQUESTS: usize = 1024;
 
 /// A deliberately non-durable, single-threaded model. Unlike production
 /// authentication, the caller here is the trusted *test harness* itself.
@@ -237,6 +243,13 @@ impl SimulatedReplay {
             })
         {
             return Err(ReplayError::InvalidCapabilities);
+        }
+
+        // Check capacity only after looking up an existing immutable request:
+        // exact retries and conflicting replay checks remain available at cap.
+        // No reservation may be allocated for a rejected new request.
+        if self.requests.len() >= MAX_SIMULATED_REQUESTS {
+            return Err(ReplayError::CapacityExhausted);
         }
 
         let receipt = self
@@ -426,6 +439,64 @@ mod tests {
             context_generation: 1,
             capabilities: BTreeSet::from(["rust".to_owned()]),
         }
+    }
+
+    #[test]
+    fn full_request_ledger_refuses_new_scope_without_eviction_or_replay_loss() {
+        let mut state = SimulatedReplay::new(basis()).unwrap();
+        state.enroll_test_principal(1, 1).unwrap();
+        let original = poll("first", 1, &[1]);
+        let first = state.poll(1, 1, &original, &basis()).unwrap();
+        for index in 2..=MAX_SIMULATED_REQUESTS {
+            let n = index as u64;
+            let request = poll(&format!("request-{index}"), n, &[n]);
+            state.poll(1, 1, &request, &basis()).unwrap();
+        }
+        assert_eq!(state.request_count(), MAX_SIMULATED_REQUESTS);
+        assert_eq!(state.reservation_count(), MAX_SIMULATED_REQUESTS);
+
+        let overflow = poll("new-after-cap", 9001, &[9001]);
+        assert_eq!(
+            state.poll(1, 1, &overflow, &basis()),
+            Err(ReplayError::CapacityExhausted)
+        );
+        assert_eq!(state.request_count(), MAX_SIMULATED_REQUESTS);
+        assert_eq!(state.reservation_count(), MAX_SIMULATED_REQUESTS);
+
+        // The ledger stays useful for reconciliation even when full.
+        assert_eq!(state.poll(1, 1, &original, &basis()), Ok(first.clone()));
+        assert_eq!(
+            state.poll(1, 1, &poll("first", 1, &[9001]), &basis()),
+            Err(ReplayError::ConflictingReplay)
+        );
+        assert_eq!(
+            state.acknowledge(1, 1, "first", 1, first.assignment_generation, &basis()),
+            Ok(DeliveryOutcome::Recorded)
+        );
+        assert_eq!(
+            state.submit_result(
+                1,
+                1,
+                "first",
+                (1, first.assignment_generation),
+                "digest",
+                &basis()
+            ),
+            Ok(DeliveryOutcome::Recorded)
+        );
+        assert_eq!(
+            state.submit_result(
+                1,
+                1,
+                "first",
+                (1, first.assignment_generation),
+                "digest",
+                &basis()
+            ),
+            Ok(DeliveryOutcome::Reconciled)
+        );
+        assert_eq!(state.acknowledgement_count(), 1);
+        assert_eq!(state.result_count(), 1);
     }
 
     #[test]
