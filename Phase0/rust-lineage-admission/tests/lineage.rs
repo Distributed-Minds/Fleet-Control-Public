@@ -178,3 +178,92 @@ fn old_head_restore_or_issuer_denial_does_not_advance() {
     current.generation = 1;
     assert_eq!(db.admit(&current, second), Err(Denied::ReplayConflict));
 }
+
+
+#[test]
+fn invalid_registry_scopes_cannot_admit_a_successor() {
+    for field in 0..7 {
+        let (_, mut selected, mut transition) = fixture();
+        let mut scope = selected.scope.clone();
+        match field {
+            0 => scope.repository = 0,
+            1 => scope.repo_incarnation.clear(),
+            2 => scope.installation = " ".into(),
+            3 => scope.tenant = "\n".into(),
+            4 => scope.namespace.clear(),
+            5 => scope.installation = "valid\nspoof".into(),
+            6 => scope.repo_incarnation = "\u{0007}".into(),
+            _ => unreachable!(),
+        }
+        selected.scope = scope.clone();
+        transition.scope = scope.clone();
+        let mut db = Registry::new(scope, "h0".into(), 0, 2, selected.obligations.clone());
+        assert_eq!(
+            db.admit(&selected, transition),
+            Err(Denied::UnknownLineage),
+            "invalid scope field {field}"
+        );
+        assert_eq!(db.admitted_count(), 0);
+    }
+}
+
+#[test]
+fn blank_registry_head_or_obligation_denies_even_selected_issuer() {
+    for invalid in ["", " ", "\n"] {
+        let (_, mut selected, mut transition) = fixture();
+        selected.head = invalid.into();
+        transition.predecessor = invalid.into();
+        let mut db = Registry::new(
+            selected.scope.clone(),
+            invalid.into(),
+            0,
+            2,
+            selected.obligations.clone(),
+        );
+        assert_eq!(
+            db.admit(&selected, transition),
+            Err(Denied::UnknownLineage)
+        );
+    }
+
+    let (_, mut selected, transition) = fixture();
+    selected.obligations.insert(String::new());
+    let mut db = Registry::new(
+        selected.scope.clone(),
+        "h0".into(),
+        0,
+        2,
+        selected.obligations.clone(),
+    );
+    assert_eq!(
+        db.admit(&selected, transition),
+        Err(Denied::UnknownLineage)
+    );
+}
+
+#[test]
+fn blank_or_control_bearing_successor_identifiers_never_advance() {
+    for invalid in ["", " ", "\n", "valid\u{0007}spoof"] {
+        let (mut db, selected, mut transition) = fixture();
+        transition.id = invalid.into();
+        assert_eq!(
+            db.admit(&selected, transition),
+            Err(Denied::InvalidTransition)
+        );
+
+        let (mut db, selected, mut transition) = fixture();
+        transition.successor = invalid.into();
+        assert_eq!(
+            db.admit(&selected, transition),
+            Err(Denied::InvalidTransition)
+        );
+
+        let (mut db, selected, mut transition) = fixture();
+        transition.new_head = invalid.into();
+        assert_eq!(
+            db.admit(&selected, transition),
+            Err(Denied::InvalidTransition)
+        );
+        assert_eq!(db.admitted_count(), 0);
+    }
+}

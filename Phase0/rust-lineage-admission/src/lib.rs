@@ -2,6 +2,22 @@
 //! Fixture "trust" is caller data, never proof of real provider authority.
 use std::collections::{BTreeMap, BTreeSet};
 
+// Offline fixture identifiers must not silently collapse to an absent scope.
+// This is synthetic admission only, not verification of external identity.
+fn valid_identity(value: &str) -> bool {
+    !value.trim().is_empty() && !value.chars().any(char::is_control)
+}
+
+impl Scope {
+    fn is_valid(&self) -> bool {
+        self.repository != 0
+            && valid_identity(&self.repo_incarnation)
+            && valid_identity(&self.installation)
+            && valid_identity(&self.tenant)
+            && valid_identity(&self.namespace)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Scope {
     pub repository: u64,
@@ -106,6 +122,12 @@ impl Registry {
     }
 
     fn selection_ok(&self, s: &Selection) -> Result<(), Denied> {
+        if !self.scope.is_valid()
+            || !valid_identity(&self.head)
+            || self.obligations.iter().any(|id| !valid_identity(id))
+        {
+            return Err(Denied::UnknownLineage);
+        }
         if !s.selected_issuer || !s.unique_current || !s.frontier_complete || s.forked || s.revoked
         {
             return Err(Denied::UnknownLineage);
@@ -140,9 +162,9 @@ impl Registry {
             return Err(Denied::Scope);
         }
         if !transition.admitted_by_issuer
-            || transition.id.is_empty()
-            || transition.successor.is_empty()
-            || transition.new_head.is_empty()
+            || !valid_identity(&transition.id)
+            || !valid_identity(&transition.successor)
+            || !valid_identity(&transition.new_head)
             || transition.new_head == transition.predecessor
         {
             return Err(Denied::InvalidTransition);
