@@ -108,6 +108,20 @@ fn mask_inline_code(line: &str) -> String {
 // Mask code spans across contiguous Markdown paragraph lines, without allowing
 // an unmatched opener to swallow links beyond a blank line or a fenced block.
 // Existing single-line backtick escaping and fence rules remain authoritative.
+// ATX headings interrupt paragraphs even without a blank line. Their inline
+// code spans cannot pair with unmatched backticks in adjacent blocks.
+fn is_atx_heading(line: &str) -> bool {
+    let bytes = line.as_bytes();
+    let indentation = bytes.iter().take_while(|&&byte| byte == b' ').count();
+    if indentation > 3 {
+        return false;
+    }
+    let content = &bytes[indentation..];
+    let markers = content.iter().take_while(|&&byte| byte == b'#').count();
+    (1..=6).contains(&markers)
+        && content.get(markers).is_none_or(|&byte| byte == b' ' || byte == b'\t')
+}
+
 fn mask_paragraph_code_spans(markdown: &str) -> String {
     let mut visible = String::with_capacity(markdown.len());
     let mut paragraph = String::new();
@@ -131,12 +145,17 @@ fn mask_paragraph_code_spans(markdown: &str) -> String {
             },
             None => false,
         };
-        if fence_boundary || fenced.is_some() || line.trim().is_empty() {
+        let atx_heading = fenced.is_none() && is_atx_heading(line);
+        if fence_boundary || fenced.is_some() || line.trim().is_empty() || atx_heading {
             if !paragraph.is_empty() {
                 visible.push_str(&mask_inline_code(&paragraph));
                 paragraph.clear();
             }
-            visible.push_str(raw_line);
+            if atx_heading {
+                visible.push_str(&mask_inline_code(raw_line));
+            } else {
+                visible.push_str(raw_line);
+            }
         } else {
             paragraph.push_str(raw_line);
         }
@@ -629,6 +648,125 @@ mod tests {
         }
     }
 
+
+
+    #[test]
+    fn atx_headings_interrupt_unmatched_inline_code_with_missing_link_diagnostics() {
+        for heading in [
+            "# Heading",
+            "###### Heading",
+            "   ### Heading",
+            "#\tHeading",
+            "##\tHeading",
+            "#",
+            "## Heading ##",
+        ] {
+            let source = format!("`unmatched opener\n{heading}\n[broken](missing.md) and `close`\n");
+            let mut report = Report::default();
+            assert_eq!(
+                collect_links(&source, "README.md", &mut report),
+                vec!["missing.md"],
+                "heading: {heading:?}"
+            );
+            assert!(
+                report.errors.is_empty(),
+                "heading: {heading:?}: {:?}",
+                report.errors
+            );
+        }
+
+        let sandbox = Sandbox::new();
+        sandbox.write(
+            "README.md",
+            "`unmatched opener\n# Heading\n[broken](missing.md) and `close`\n",
+        );
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 1);
+        assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+        assert!(
+            report.errors[0].contains("target missing: missing.md"),
+            "{:?}",
+            report.errors
+        );
+    }
+
+    #[test]
+    fn heading_links_are_visible_and_heading_code_spans_do_not_escape_block() {
+        for heading in [
+            "# [bad](missing.md) and `ok`",
+            "   ###### [bad](missing.md)",
+        ] {
+            let mut report = Report::default();
+            let source = format!("`unmatched\n{heading}\n");
+            assert_eq!(
+                collect_links(&source, "README.md", &mut report),
+                vec!["missing.md"]
+            );
+            assert!(report.errors.is_empty(), "{:?}", report.errors);
+        }
+        let mut report = Report::default();
+        let paths = collect_links(
+            "# `code [hidden](missing.md)`\n[real](exists.md)\n",
+            "README.md",
+            &mut report,
+        );
+        assert_eq!(paths, vec!["exists.md"]);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn non_atx_markers_leave_real_multiline_code_spans_intact() {
+        for not_heading in [
+            "    ### Indented",
+            "#not-a-heading",
+            "###Heading",
+            "####### Heading",
+            "\\# Heading",
+        ] {
+            let source = format!("`open\n{not_heading}\n[hidden](missing.md) and `close`\n");
+            let mut report = Report::default();
+            assert!(
+                collect_links(&source, "README.md", &mut report).is_empty(),
+                "not heading: {not_heading:?}"
+            );
+            assert!(report.errors.is_empty(), "{:?}", report.errors);
+        }
+        let mut report = Report::default();
+        let paths = collect_links(
+            "`open\n[not-a-link](missing.md)\nclose` [real](exists.md)\n",
+            "README.md",
+            &mut report,
+        );
+        assert_eq!(paths, vec!["exists.md"]);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn atx_heading_detection_respects_crlf_and_fences() {
+        for line in ["# Heading", "   ###### Heading", "#", "##\tTabbed"] {
+            assert!(is_atx_heading(line), "{line:?}");
+        }
+        for line in [
+            "    # Code",
+            "####### Too many",
+            "#Not-a-heading",
+            "\\# Escaped",
+        ] {
+            assert!(!is_atx_heading(line), "{line:?}");
+        }
+        let mut report = Report::default();
+        let source = "`unmatched\r\n### Heading\r\n[broken](missing.md) and `close`\r\n";
+        assert_eq!(
+            collect_links(source, "README.md", &mut report),
+            vec!["missing.md"]
+        );
+        let fenced = "~~~\n# `code [ignored](missing.md)`\n~~~\n[real](exists.md)\n";
+        assert_eq!(
+            collect_links(fenced, "README.md", &mut report),
+            vec!["exists.md"]
+        );
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
 
     #[test]
     fn invalid_backtick_fence_info_does_not_hide_broken_link() {
