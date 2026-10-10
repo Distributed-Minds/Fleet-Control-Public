@@ -1,0 +1,30 @@
+name: Rust scheduler cut simulation
+
+on:
+  push:
+    paths:
+      - 'Phase0/rust-scheduler-cut/**'
+      - '.github/workflows/rust-scheduler-cut.yml'
+  pull_request:
+    paths:
+      - 'Phase0/rust-scheduler-cut/**'
+      - '.github/workflows/rust-scheduler-cut.yml'
+
+jobs:
+  offline-model:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Phase0/rust-scheduler-cut
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.85.1'
+          components: rustfmt, clippy
+      - name: Rustfmt
+        run: cargo fmt --all --check
+      - name: Locked offline tests
+        run: cargo test --locked --offline
+      - name: Strict Clippy
+        run: cargo clippy --all-targets --locked --offline -- -D warnings
