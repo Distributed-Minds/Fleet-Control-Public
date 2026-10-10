@@ -253,8 +253,14 @@ mod tests {
     fn malformed_or_uninterpretable_retry_after_never_shortens_wait() {
         let mut r = response(Some(429), ProviderSignal::Unknown);
         for bad in [
-            "", "-1", "+1", "1.5", " 60 ", "Sun, 11 Oct 2026 12:00:00 GMT",
-            "999999999999999999", "86401",
+            "",
+            "-1",
+            "+1",
+            "1.5",
+            " 60 ",
+            "Sun, 11 Oct 2026 12:00:00 GMT",
+            "999999999999999999",
+            "86401",
         ] {
             r.retry_after = Some(bad);
             assert_eq!(classify(r), Disposition::ManualHold, "{bad}");
@@ -271,8 +277,12 @@ mod tests {
     #[test]
     fn bounded_exponential_backoff_never_auto_recovers() {
         for (attempt, minimum) in [
-            (0, 60), (1, 120), (2, 240), (3, 480),
-            (6, 3_600), (u32::MAX, 3_600),
+            (0, 60),
+            (1, 120),
+            (2, 240),
+            (3, 480),
+            (6, 3_600),
+            (u32::MAX, 3_600),
         ] {
             let mut r = response(Some(429), ProviderSignal::Unknown);
             r.consecutive_throttles = attempt;
