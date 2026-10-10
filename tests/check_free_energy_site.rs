@@ -590,6 +590,111 @@ mod tests {
     use super::*;
 
     #[test]
+    fn title_placement_rejects_hidden_real_page_and_malformed_head() {
+        // All cases mutate the actual static landing, not a synthetic substitute.
+        let root = env::temp_dir().join(format!(
+            "free-energy-title-placement-{}", std::process::id()
+        ));
+        let docs = root.join("docs");
+        fs::create_dir_all(&docs).expect("title fixture docs");
+        let original = include_str!("../docs/index.html");
+        fs::write(docs.join("styles.css"), include_str!("../docs/styles.css"))
+            .expect("title fixture css");
+        fs::write(docs.join("README.md"), include_str!("../docs/README.md"))
+            .expect("title fixture readme");
+        fs::write(docs.join("index.html"), original).expect("title fixture original");
+        assert!(validate(&root).is_empty(), "unmodified landing must pass");
+
+        let mut negatives: Vec<(&str, String)> = Vec::new();
+        for (name, opening, closing) in [
+            ("ordinary", "<title>", "</title>"),
+            ("uppercase", "<TITLE>", "</TITLE>"),
+            ("mixed", "<TiTlE>", "</TiTlE>"),
+            ("unclosed", "<title>", ""),
+            ("solidus", "<title/>", "</title>"),
+            ("spaced-solidus", "<TiTlE />", ""),
+            ("attribute-solidus", "<title data-probe='x' />", "</title>"),
+        ] {
+            // Move the entire original body inside title RCDATA, retaining
+            // all real source navigation/cards to challenge lexical false PASS.
+            let html = original
+                .replacen("<body>", &format!("<body>{opening}"), 1)
+                .replacen("</body>", &format!("{closing}</body>"), 1);
+            negatives.push((name, html));
+        }
+        negatives.push((
+            "missing-head-title",
+            original.replace("<title>FREE ENERGY — Remasters Everything</title>", ""),
+        ));
+        negatives.push((
+            "duplicate-head-title",
+            original.replacen(
+                "<title>FREE ENERGY",
+                "<title>Duplicate</title><title>FREE ENERGY",
+                1,
+            ),
+        ));
+        negatives.push((
+            "unclosed-head-title",
+            original.replacen("</title>", "", 1),
+        ));
+        negatives.push((
+            "selfclosing-head-title",
+            original.replacen("<title>FREE ENERGY", "<title/>FREE ENERGY", 1),
+        ));
+        negatives.push((
+            "before-head",
+            original.replacen("<head>", "<title>Outside</title><head>", 1),
+        ));
+        negatives.push((
+            "between-head-and-body",
+            original.replacen("</head>", "</head><title>Outside</title>", 1),
+        ));
+        negatives.push((
+            "after-body",
+            original.replacen("</body>", "</body><title>Outside</title>", 1),
+        ));
+        negatives.push((
+            "unmatched-closing-title",
+            original.replacen("<body>", "<body></title>", 1),
+        ));
+        negatives.push((
+            "false-head-exit-inside-rcdata",
+            original.replacen(
+                "Remasters Everything</title>",
+                "Remasters </head> Everything</title>",
+                1,
+            ),
+        ));
+
+        for (name, html) in negatives {
+            fs::write(docs.join("index.html"), html).expect("write title negative");
+            let errors = validate(&root);
+            assert!(
+                errors.iter().any(|error| error.contains(
+                    "Unexpected title placement outside head or malformed head title"
+                )),
+                "title negative {name} must have placement diagnostic, got {errors:?}"
+            );
+        }
+
+        for (name, injection) in [
+            ("comment", "<!-- <title>fake</title> -->"),
+            ("quoted-attribute", "<div data-fake='<title>fake</title>'></div>"),
+            ("different-tag", "<title-other>ordinary text</title-other>"),
+        ] {
+            let html = original.replacen("<body>", &format!("<body>{injection}"), 1);
+            fs::write(docs.join("index.html"), html).expect("write title positive");
+            assert!(
+                validate(&root).is_empty(),
+                "title-like positive control {name} must remain valid"
+            );
+        }
+        let _ = fs::remove_dir_all(root);
+    }
+
+
+    #[test]
     fn required_copy_in_attributes_is_not_treated_as_page_copy() {
         let spoof = r#"<main>
 <meta content="Do not post secrets">
