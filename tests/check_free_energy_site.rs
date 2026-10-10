@@ -162,13 +162,86 @@ fn attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
     None
 }
 
+
+/// This intentionally accepts only the known single-page head/title/body
+/// structure, not arbitrary HTML. In particular, the source tag scanner sees
+/// markup-looking tokens in title RCDATA that browsers do not render.
+fn has_valid_head_title(elements: &[&str]) -> bool {
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Zone {
+        BeforeHead,
+        Head,
+        BetweenHeadAndBody,
+        Body,
+        AfterBody,
+    }
+    let mut zone = Zone::BeforeHead;
+    let mut seen_head = false;
+    let mut seen_body = false;
+    let mut seen_title = false;
+    let mut in_title = false;
+
+    for tag in elements {
+        let tag = tag.trim();
+        if in_title {
+            if tag.eq_ignore_ascii_case("/title") {
+                in_title = false;
+            } else {
+                // RCDATA does not expose parsed source tags. Rather than let a
+                // forged head/body exit or navigation count, reject ambiguity.
+                return false;
+            }
+            continue;
+        }
+        if tag.eq_ignore_ascii_case("/title") {
+            return false; // Orphan closing title.
+        }
+        if is_open_element(tag, "title") {
+            if zone != Zone::Head || seen_title || tag.ends_with('/') {
+                return false; // Outside head, duplicate, or self-closing-looking.
+            }
+            seen_title = true;
+            in_title = true;
+            continue;
+        }
+        if is_open_element(tag, "head") {
+            if zone != Zone::BeforeHead || seen_head || tag.ends_with('/') {
+                return false;
+            }
+            seen_head = true;
+            zone = Zone::Head;
+        } else if tag.eq_ignore_ascii_case("/head") {
+            if zone != Zone::Head || !seen_title {
+                return false;
+            }
+            zone = Zone::BetweenHeadAndBody;
+        } else if is_open_element(tag, "body") {
+            if zone != Zone::BetweenHeadAndBody || seen_body || tag.ends_with('/') {
+                return false;
+            }
+            seen_body = true;
+            zone = Zone::Body;
+        } else if tag.eq_ignore_ascii_case("/body") {
+            if zone != Zone::Body {
+                return false;
+            }
+            zone = Zone::AfterBody;
+        }
+    }
+
+    seen_head && seen_title && seen_body && !in_title && zone == Zone::AfterBody
+}
+
 /// Count actual participation-card articles rather than matching text that
 /// might appear in comments, quoted attributes, or unrelated elements.
-/// Reject inert template containers: their descendants are parsed as source
-/// tags by this limited checker but are not rendered as ordinary page content.
-/// A hidden template must not satisfy visible Contact/navigation/card checks.
+/// Reject inert template and scripting-dependent noscript containers: their
+/// descendants appear in this lexical source scanner but are not reliable
+/// rendered page content. They cannot satisfy Contact/navigation/card checks.
 fn disallowed_site_elements(elements: &[&str]) -> Vec<&'static str> {
-    ["script", "iframe", "form", "object", "embed", "template"]
+    [
+        "script", "iframe", "form", "object", "embed", "template", "noscript",
+        "textarea", "xmp", "plaintext", "noembed", "noframes",
+    ]
         .into_iter()
         .filter(|name| elements.iter().any(|tag| is_open_element(tag, name)))
         .collect()
@@ -407,6 +480,12 @@ fn validate(root: &Path) -> Vec<String> {
     let elements = tags(html);
     let mut errors = Vec::new();
 
+    expect(
+        &mut errors,
+        has_valid_head_title(&elements),
+        "Unexpected title placement outside head or malformed head title",
+    );
+
     let ids: Vec<&str> = elements
         .iter()
         .filter_map(|tag| attribute(tag, "id"))
@@ -585,6 +664,139 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn title_placement_rejects_hidden_real_page_and_malformed_head() {
+        // All cases mutate the actual static landing, not a synthetic substitute.
+        let root = env::temp_dir().join(format!(
+            "free-energy-title-placement-{}", std::process::id()
+        ));
+        let docs = root.join("docs");
+        fs::create_dir_all(&docs).expect("title fixture docs");
+        let original = include_str!("../docs/index.html");
+        fs::write(docs.join("styles.css"), include_str!("../docs/styles.css"))
+            .expect("title fixture css");
+        fs::write(docs.join("README.md"), include_str!("../docs/README.md"))
+            .expect("title fixture readme");
+        fs::write(docs.join("index.html"), original).expect("title fixture original");
+        assert!(validate(&root).is_empty(), "unmodified landing must pass");
+
+        let mut negatives: Vec<(&str, String)> = Vec::new();
+        for (name, opening, closing) in [
+            ("ordinary", "<title>", "</title>"),
+            ("uppercase", "<TITLE>", "</TITLE>"),
+            ("mixed", "<TiTlE>", "</TiTlE>"),
+            ("unclosed", "<title>", ""),
+            ("solidus", "<title/>", "</title>"),
+            ("spaced-solidus", "<TiTlE />", ""),
+            ("attribute-solidus", "<title data-probe='x' />", "</title>"),
+        ] {
+            // Move the entire original body inside title RCDATA, retaining
+            // all real source navigation/cards to challenge lexical false PASS.
+            let html = original
+                .replacen("<body>", &format!("<body>{opening}"), 1)
+                .replacen("</body>", &format!("{closing}</body>"), 1);
+            negatives.push((name, html));
+        }
+        // Relocate only the actual primary navigation: source link tokens
+        // remain present, but they are title RCDATA rather than visible nav.
+        let nav_start = original.find("<nav aria-label=\"Main navigation\">")
+            .expect("real primary nav");
+        let nav_end = nav_start
+            + original[nav_start..].find("</nav>").expect("real nav closer")
+            + "</nav>".len();
+        let mut only_nav = original.to_string();
+        only_nav.insert_str(nav_end, "</title>");
+        only_nav.insert_str(nav_start, "<title>");
+        negatives.push(("real-nav-in-title", only_nav));
+
+        // Independently hide the exact three route-card articles while
+        // retaining all source markup for the legacy token counter.
+        let grid_start = original.find("<div class=\"route-grid\"")
+            .expect("real route grid");
+        let card_start = grid_start
+            + original[grid_start..].find("<article class=\"route-card\">")
+                .expect("first real route card");
+        let mut card_end = card_start;
+        for _ in 0..3 {
+            card_end += original[card_end..].find("</article>")
+                .expect("real card closing tag") + "</article>".len();
+        }
+        let mut only_cards = original.to_string();
+        only_cards.insert_str(card_end, "</title>");
+        only_cards.insert_str(card_start, "<title>");
+        negatives.push(("real-three-cards-in-title", only_cards));
+        negatives.push((
+            "missing-head-title",
+            original.replace("<title>FREE ENERGY — Remasters Everything</title>", ""),
+        ));
+        negatives.push((
+            "duplicate-head-title",
+            original.replacen(
+                "<title>FREE ENERGY",
+                "<title>Duplicate</title><title>FREE ENERGY",
+                1,
+            ),
+        ));
+        negatives.push((
+            "unclosed-head-title",
+            original.replacen("</title>", "", 1),
+        ));
+        negatives.push((
+            "selfclosing-head-title",
+            original.replacen("<title>FREE ENERGY", "<title/>FREE ENERGY", 1),
+        ));
+        negatives.push((
+            "before-head",
+            original.replacen("<head>", "<title>Outside</title><head>", 1),
+        ));
+        negatives.push((
+            "between-head-and-body",
+            original.replacen("</head>", "</head><title>Outside</title>", 1),
+        ));
+        negatives.push((
+            "after-body",
+            original.replacen("</body>", "</body><title>Outside</title>", 1),
+        ));
+        negatives.push((
+            "unmatched-closing-title",
+            original.replacen("<body>", "<body></title>", 1),
+        ));
+        negatives.push((
+            "false-head-exit-inside-rcdata",
+            original.replacen(
+                "Remasters Everything</title>",
+                "Remasters </head> Everything</title>",
+                1,
+            ),
+        ));
+
+        for (name, html) in negatives {
+            fs::write(docs.join("index.html"), html).expect("write title negative");
+            let errors = validate(&root);
+            assert!(
+                errors.iter().any(|error| error.contains(
+                    "Unexpected title placement outside head or malformed head title"
+                )),
+                "title negative {name} must have placement diagnostic, got {errors:?}"
+            );
+        }
+
+        for (name, injection) in [
+            ("comment", "<!-- <title>fake</title> -->"),
+            ("quoted-attribute", "<div data-fake='<title>fake</title>'></div>"),
+            ("different-tag", "<title-other>ordinary text</title-other>"),
+        ] {
+            let html = original.replacen("<body>", &format!("<body>{injection}"), 1);
+            fs::write(docs.join("index.html"), html).expect("write title positive");
+            assert!(
+                validate(&root).is_empty(),
+                "title-like positive control {name} must remain valid"
+            );
+        }
+        let _ = fs::remove_dir_all(root);
+    }
+
 
     #[test]
     fn required_copy_in_attributes_is_not_treated_as_page_copy() {
@@ -833,6 +1045,195 @@ data="x"></OBject><EMBED/>"#;
 
         let mixed_case = tags("<TeMpLaTe data-purpose='hidden'>Text</TeMpLaTe>");
         assert_eq!(disallowed_site_elements(&mixed_case), ["template"]);
+    }
+
+
+    #[test]
+    fn noscript_cannot_forge_visible_site_cards_or_navigation() {
+        // Use the actual shipping landing and support files, not an isolated
+        // synthetic fragment that could fail unrelated structural assertions.
+        let root = env::temp_dir().join(format!(
+            "free-energy-noscript-site-{}",
+            std::process::id()
+        ));
+        let docs = root.join("docs");
+        fs::create_dir_all(&docs).expect("create noscript fixture directory");
+        let original = include_str!("../docs/index.html");
+        fs::write(docs.join("index.html"), original).expect("write index fixture");
+        fs::write(docs.join("styles.css"), include_str!("../docs/styles.css"))
+            .expect("write stylesheet fixture");
+        fs::write(docs.join("README.md"), include_str!("../docs/README.md"))
+            .expect("write readme fixture");
+        assert!(
+            validate(&root).is_empty(),
+            "unmodified landing fixture must pass"
+        );
+
+        let route_open = r#"<div class="route-grid" aria-label="Choose how to participate">"#;
+        assert_eq!(original.matches(route_open).count(), 1);
+        let start = original.find(route_open).expect("route grid") + route_open.len();
+        let end = start + original[start..].find("</div>").expect("route grid closing tag");
+        let wrap_routes = |open: &str, close: &str| {
+            format!(
+                "{}{open}{}{close}{}",
+                &original[..start],
+                &original[start..end],
+                &original[end..]
+            )
+        };
+        let nav_open = r#"<nav aria-label="Main navigation">"#;
+        let nav_hidden = original
+            .replacen(nav_open, &format!("<noscript>{nav_open}"), 1)
+            .replacen("</nav>", "</nav></noscript>", 1);
+
+        for (case, mutated) in [
+            ("three cards hidden", wrap_routes("<noscript>", "</noscript>")),
+            ("navigation hidden", nav_hidden),
+            ("mixed-case hidden cards", wrap_routes("<NoScRiPt>", "</NoScRiPt>")),
+            (
+                "nested hidden cards",
+                wrap_routes("<noscript><noscript>", "</noscript></noscript>"),
+            ),
+            (
+                "self-closing noscript",
+                original.replacen("</head>", "<NoScRiPt/></head>", 1),
+            ),
+        ] {
+            assert_ne!(mutated, original, "{case}: fixture must mutate source");
+            fs::write(docs.join("index.html"), mutated).expect("write mutated index fixture");
+            let errors = validate(&root);
+            assert!(
+                errors.iter().any(|error| {
+                    error == "Unexpected active, embedded, or inert element: noscript"
+                }),
+                "{case}: expected noscript denial, got {errors:?}"
+            );
+        }
+
+        for (case, mutated) in [
+            (
+                "HTML comment literal",
+                original.replacen("</head>", "<!-- <noscript> --></head>", 1),
+            ),
+            (
+                "multiline HTML comment literal",
+                original.replacen("</head>", "<!--\n<noscript>\n--></head>", 1),
+            ),
+            (
+                "quoted attribute literal",
+                original.replacen("<body", "<body data-example='<noscript>'", 1),
+            ),
+        ] {
+            fs::write(docs.join("index.html"), mutated).expect("write allowed index fixture");
+            let errors = validate(&root);
+            assert!(errors.is_empty(), "{case}: should remain valid: {errors:?}");
+        }
+        fs::remove_dir_all(&root).expect("remove noscript test fixture");
+    }
+
+    #[test]
+    fn raw_text_containers_cannot_forge_visible_site_routes() {
+        // Full shipping-page fixtures, not synthetic isolated fragments.
+        let root = env::temp_dir().join(format!(
+            "free-energy-raw-text-site-{}",
+            std::process::id()
+        ));
+        let docs = root.join("docs");
+        fs::create_dir_all(&docs).expect("create raw-text fixture directory");
+        let original = include_str!("../docs/index.html");
+        fs::write(docs.join("index.html"), original).expect("write original landing");
+        fs::write(docs.join("styles.css"), include_str!("../docs/styles.css"))
+            .expect("write fixture stylesheet");
+        fs::write(docs.join("README.md"), include_str!("../docs/README.md"))
+            .expect("write fixture readme");
+        assert!(
+            validate(&root).is_empty(),
+            "unmodified landing must remain valid"
+        );
+        assert!(original.contains("<title>FREE ENERGY"));
+
+        let route_open = r#"<div class="route-grid" aria-label="Choose how to participate">"#;
+        assert_eq!(original.matches(route_open).count(), 1);
+        let start = original.find(route_open).expect("unique route grid") + route_open.len();
+        let end = start + original[start..].find("</div>").expect("route grid closing");
+        assert_eq!(original[start..end].matches(r#"class="route-card""#).count(), 3);
+        let wrap_routes = |open: &str, close: &str| {
+            format!(
+                "{}{open}{}{close}{}",
+                &original[..start],
+                &original[start..end],
+                &original[end..]
+            )
+        };
+        let nav_open = r#"<nav aria-label="Main navigation">"#;
+        assert_eq!(original.matches(nav_open).count(), 1);
+
+        for element in ["textarea", "xmp", "plaintext", "noembed", "noframes"] {
+            let expected = format!(
+                "Unexpected active, embedded, or inert element: {element}"
+            );
+
+            for tag in [element.to_string(), element.to_ascii_uppercase()] {
+                let navigation_hidden = original
+                    .replacen(nav_open, &format!("<{tag}>{nav_open}"), 1)
+                    .replacen("</nav>", &format!("</nav></{tag}>"), 1);
+                for (case, candidate) in [
+                    ("three cards", wrap_routes(&format!("<{tag}>"), &format!("</{tag}>"))),
+                    ("primary navigation", navigation_hidden),
+                    ("unclosed cards", wrap_routes(&format!("<{tag}>"), "")),
+                    ("self-closing-like opener", original.replacen(
+                        "</head>",
+                        &format!("<{tag}/></head>"),
+                        1,
+                    )),
+                ] {
+                    assert_ne!(candidate, original, "{element}/{case}: fixture unchanged");
+                    assert_eq!(
+                        candidate.matches(&format!("<{tag}")).count(),
+                        1,
+                        "{element}/{case}: malformed fixture"
+                    );
+                    fs::write(docs.join("index.html"), candidate)
+                        .expect("write forbidden raw-text fixture");
+                    let errors = validate(&root);
+                    assert!(
+                        errors.iter().any(|error| error == &expected),
+                        "{element}/{case}: expected {expected:?}, got {errors:?}"
+                    );
+                }
+            }
+
+            for (case, candidate) in [
+                ("comment-only", original.replacen(
+                    "</head>",
+                    &format!("<!-- <{element}> --></head>"),
+                    1,
+                )),
+                ("attribute-only", original.replacen(
+                    "<body",
+                    &format!("<body data-example='<{element}>'"),
+                    1,
+                )),
+                ("extended tag name", original.replacen(
+                    "</head>",
+                    &format!("<{element}-extra></{element}-extra></head>"),
+                    1,
+                )),
+            ] {
+                assert_ne!(candidate, original, "{element}/{case}: fixture unchanged");
+                fs::write(docs.join("index.html"), candidate)
+                    .expect("write permitted lookalike fixture");
+                let errors = validate(&root);
+                assert!(
+                    errors.is_empty(),
+                    "{element}/{case}: false positive for harmless lookalike: {errors:?}"
+                );
+            }
+        }
+
+        fs::write(docs.join("index.html"), original).expect("restore original fixture");
+        assert!(validate(&root).is_empty(), "real head title and landing must pass");
+        fs::remove_dir_all(&root).expect("remove raw-text fixtures");
     }
 
     #[test]
