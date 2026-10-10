@@ -13,6 +13,8 @@ use std::env;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
+include!("html5-entities-data.rs");
+
 const DOCUMENTS: [&str; 10] = [
     "README.md",
     "CONTRIBUTING.md",
@@ -453,6 +455,56 @@ fn decode_markdown_path(path: &str) -> Result<String, String> {
     decode_once(&unescaped)
 }
 
+
+fn decode_character_references(input: &str) -> Result<String, String> {
+    // Exactly one CommonMark destination-level entity pass. Legacy
+    // no-semicolon HTML aliases do not decode; percent decoding occurs later.
+    let mut result = String::with_capacity(input.len());
+    let mut remaining = input;
+    while let Some(ampersand) = remaining.find('&') {
+        result.push_str(&remaining[..ampersand]);
+        let suffix = &remaining[ampersand + 1..];
+        if let Some(end) = suffix.find(';').filter(|&end| end <= 36) {
+            let name = &suffix[..end];
+            let replacement = if let Some(number) = name.strip_prefix('#') {
+                let (radix, digits) = match number.strip_prefix('x').or_else(|| number.strip_prefix('X')) {
+                    Some(hex) => (16, hex),
+                    None => (10, number),
+                };
+                if digits.is_empty() || !digits.bytes().all(|byte| {
+                    if radix == 16 { byte.is_ascii_hexdigit() } else { byte.is_ascii_digit() }
+                }) {
+                    return Err("malformed numeric character reference".into());
+                }
+                let value = u32::from_str_radix(digits, radix)
+                    .map_err(|_| "invalid numeric character reference")?;
+                let scalar = char::from_u32(value)
+                    .ok_or("invalid numeric character reference")?;
+                if scalar.is_control() {
+                    return Err("unsafe character reference control".into());
+                }
+                Some(scalar.to_string())
+            } else {
+                HTML5_ENTITIES
+                    .binary_search_by(|(candidate, _)| candidate.cmp(&name))
+                    .ok()
+                    .map(|index| HTML5_ENTITIES[index].1.to_owned())
+            };
+            if let Some(value) = replacement {
+                result.push_str(&value);
+                remaining = &suffix[end + 1..];
+                continue;
+            }
+        }
+        // Unknown named references stay literal; decoded ampersands are not
+        // recursively re-examined as new entity openers.
+        result.push('&');
+        remaining = suffix;
+    }
+    result.push_str(remaining);
+    Ok(result)
+}
+
 /// None means a deliberately ignored fragment or external URI.
 fn parse_destination(raw: &str) -> Result<Option<String>, String> {
     let value = raw.trim();
@@ -497,6 +549,11 @@ fn parse_destination(raw: &str) -> Result<Option<String>, String> {
     if destination.is_empty() {
         return Err("empty link destination".into());
     }
+    let normalized = decode_character_references(destination)?;
+    if normalized.chars().any(char::is_control) {
+        return Err("unsafe character reference control".into());
+    }
+    let destination = normalized.as_str();
     if destination.starts_with('#') || destination.starts_with("//") {
         return Ok(None);
     }
@@ -515,6 +572,16 @@ fn parse_destination(raw: &str) -> Result<Option<String>, String> {
         return Ok(None);
     }
     let decoded = decode_markdown_path(path)?;
+    // Reject decoded control bytes first so an attacker cannot smuggle
+    // synthetic diagnostic lines or path segments ahead of scheme handling.
+    if decoded.chars().any(char::is_control) {
+        return Err("unsafe percent-decoded control".into());
+    }
+    // Percent escapes must not smuggle a new scheme/colon into the first
+    // filesystem path component after the raw URI-scheme check.
+    if decoded.split('/').next().is_some_and(|segment| segment.contains(':')) {
+        return Err("unsupported or unsafe URI scheme".into());
+    }
     if decoded.is_empty() || decoded.contains('\0') {
         return Err("empty or NUL destination".into());
     }
@@ -963,15 +1030,27 @@ mod tests {
     #[test]
     fn diagnostic_rendering_preserves_missing_target_failure() {
         let sandbox = Sandbox::new();
+        // A percent-decoded control is now rejected at destination parsing:
+        // it must never become a filesystem lookup or a forged diagnostic line.
         sandbox.write("README.md", "[bad](missing%0AFAIL%3A%20fake.md)\n");
-        let result = sandbox.scan();
-        assert_eq!(result.local_links, 1);
-        assert_eq!(result.errors.len(), 1, "{:?}", result.errors);
-        assert!(result.errors[0].contains("missing\nFAIL: fake.md"),
-            "missing target was not preserved: {:?}", result.errors);
-        let rendered = render_failure(&result.errors[0]);
+        let denied = sandbox.scan();
+        assert_eq!(denied.local_links, 0);
+        assert_eq!(denied.errors.len(), 1, "{:?}", denied.errors);
+        assert!(denied.errors[0].contains("unsafe percent-decoded control"),
+            "control destination was not rejected: {:?}", denied.errors);
+        let rendered = render_failure(&denied.errors[0]);
+        assert_eq!(rendered.lines().count(), 1, "{rendered:?}");
+
+        // Printable missing targets still use the normal existence check and
+        // produce one unforgeable, stable failure diagnostic.
+        sandbox.write("README.md", "[bad](missing-printable.md)\n");
+        let missing = sandbox.scan();
+        assert_eq!(missing.local_links, 1);
+        assert_eq!(missing.errors.len(), 1, "{:?}", missing.errors);
+        assert!(missing.errors[0].contains("target missing: missing-printable.md"),
+            "{:?}", missing.errors);
+        let rendered = render_failure(&missing.errors[0]);
         assert!(rendered.starts_with("FAIL: README.md:"));
-        assert!(rendered.contains("missing\\nFAIL: fake.md"), "{rendered:?}");
         assert_eq!(rendered.lines().count(), 1, "{rendered:?}");
     }
 
@@ -2185,6 +2264,115 @@ mod tests {
                     result.errors
                 );
             }
+        }
+    }
+
+    #[test]
+    fn complete_html5_semicolon_table_decodes_once_without_legacy_aliases() {
+        assert_eq!(HTML5_ENTITIES.len(), 2125);
+        assert!(HTML5_ENTITIES.windows(2).all(|pair| pair[0].0 < pair[1].0));
+        for &(name, value) in HTML5_ENTITIES {
+            let input = format!("prefix&{name};suffix");
+            assert_eq!(
+                decode_character_references(&input).unwrap(),
+                format!("prefix{value}suffix"),
+                "named entity {name}"
+            );
+        }
+        assert_eq!(
+            decode_character_references("&amp;amp; &amp;sol;").unwrap(),
+            "&amp; &sol;"
+        );
+        assert_eq!(decode_character_references("a&copyb").unwrap(), "a&copyb");
+    }
+
+    #[test]
+    fn character_references_precede_scheme_and_fragment_classification() {
+        for (raw, target) in [
+            ("a&amp;b.md", "a&b.md"),
+            ("a&#38;b.md", "a&b.md"),
+            ("a&#x26;b.md", "a&b.md"),
+            ("a&sol;b.md", "a/b.md"),
+            ("a&#47;b.md", "a/b.md"),
+            ("a&num;fragment", "a"),
+            ("a&quest;query", "a"),
+            ("a%23b.md", "a#b.md"),
+            ("a%3Fb.md", "a?b.md"),
+            ("a&amp;amp;b.md", "a&amp;b.md"),
+            ("&amp;sol;secret.md", "&sol;secret.md"),
+            ("a%26sol%3Bsecret.md", "a&sol;secret.md"),
+            ("a&bogus;b.md", "a&bogus;b.md"),
+            ("a&fjlig;b.md", "afjb.md"),
+            ("a&NotEqualTilde;b.md", "a\u{2242}\u{338}b.md"),
+        ] {
+            assert_eq!(parse_destination(raw), Ok(Some(target.to_string())), "source {raw}");
+        }
+        assert_eq!(parse_destination("&num;local"), Ok(None));
+        assert_eq!(parse_destination("https&colon;//example.org/x"), Ok(None));
+        assert_eq!(parse_destination("mailto&colon;person@example.org"), Ok(None));
+    }
+
+    #[test]
+    fn unsafe_normalized_paths_are_rejected() {
+        for raw in [
+            "javascript&colon;alert", "javascript&#58;alert", "a&colon;b.md",
+            "a%3Ab.md", "&sol;absolute.md", "a&bsol;b.md", "a&#92;b.md",
+            "a&NewLine;b.md", "a&Tab;b.md", "a&#0;b.md", "a&#x80;b.md",
+            "a&#xD800;b.md", "a&#x110000;b.md", "a&#xZZ;b.md",
+            "a\\&amp;b.md",
+        ] {
+            assert!(parse_destination(raw).is_err(), "unsafe destination {raw}");
+        }
+    }
+
+    #[test]
+    fn entity_destinations_choose_actual_targets_not_misleading_decoys() {
+        let actual = Sandbox::new();
+        actual.write("a&b.md", "actual named reference target");
+        actual.write("a/b.md", "actual slash reference target");
+        actual.write("README.md",
+            "[named](a&amp;b.md) [num](a&#38;b.md) [hex](a&#x26;b.md) [slash](a&sol;b.md)");
+        let report = actual.scan();
+        assert_eq!(report.local_links, 4);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+
+        let decoy = Sandbox::new();
+        decoy.write("a&amp;b.md", "misleading literal only");
+        decoy.write("a&sol;b.md", "misleading literal slash only");
+        decoy.write("README.md", "[named](a&amp;b.md) [slash](a&sol;b.md)");
+        let report = decoy.scan();
+        assert_eq!(report.local_links, 2);
+        assert_eq!(report.errors.len(), 2, "{:?}", report.errors);
+        assert!(report.errors.iter().all(|error| error.contains("target missing")));
+    }
+
+    #[test]
+    fn normalizing_parent_components_does_not_escape_sandbox() {
+        let sandbox = Sandbox::new();
+        sandbox.write("README.md", "[escape](&period;&period;/secret.md)");
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 1);
+        assert_eq!(report.errors.len(), 1);
+        assert!(report.errors[0].contains("link escapes repository"));
+    }
+
+    #[test]
+    fn angle_destinations_titles_images_and_query_share_entity_decoding() {
+        let mut report = Report::default();
+        let links = collect_links(
+            r#"[one](<docs/a&amp;b.md> "title") ![badge](docs/a&#38;b.md) [frag](docs/a&num;section) [q](docs/a&quest;query)"#,
+            "README.md", &mut report);
+        assert_eq!(links, vec!["docs/a&b.md", "docs/a&b.md", "docs/a", "docs/a"]);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn percent_decoded_control_characters_are_not_accepted_as_paths() {
+        for raw in ["a%0Ab.md", "a%09b.md", "a%0Db.md", "a%7Fb.md"] {
+            assert!(
+                parse_destination(raw).is_err(),
+                "control byte must be rejected: {raw}"
+            );
         }
     }
 
