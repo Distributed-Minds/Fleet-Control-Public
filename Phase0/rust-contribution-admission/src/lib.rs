@@ -105,16 +105,37 @@ fn simulated(value: Claim) -> bool {
     value == Claim::SyntheticFixture
 }
 
+/// Synthetic opaque IDs are tokens, not untrusted display text or paths.
+/// This bounds storage and rejects control, whitespace and Unicode lookalikes.
+/// It is not a production Git-ref, SHA or provider-identity validator.
+fn bounded_identifier(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 256
+        && value.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':')
+        })
+}
+
 /// Fail-closed, nonpublishing reduction. Never returns production permission.
 pub fn evaluate(input: &Admission) -> Decision {
     use Decision::{Blocked, HumanReviewRequired, ReconcileOriginalAttempt, Unknown};
     if input.schema_version != 1
         || input.repository_id == 0
-        || input.repository_incarnation.is_empty()
-        || input.source_commit.is_empty()
-        || input.intended_target_head.is_empty()
-        || input.input_digest.is_empty()
-        || input.output_digest.is_empty()
+        || input.terms_version == 0
+        || input.current_terms_version == 0
+        || input.authority_generation == 0
+        || input.current_authority_generation == 0
+        || [
+            input.repository_incarnation.as_str(),
+            input.source_commit.as_str(),
+            input.intended_target_head.as_str(),
+            input.observed_target_head.as_str(),
+            input.input_digest.as_str(),
+            input.output_digest.as_str(),
+            input.reviewed_output_digest.as_str(),
+        ]
+        .into_iter()
+        .any(|value| !bounded_identifier(value))
     {
         return Unknown(Reason::MalformedIdentity);
     }
@@ -283,9 +304,9 @@ impl SimulationJournal {
     pub fn record(&mut self, key: OperationKey, admission: &Admission) -> Replay {
         if key.repository_id == 0
             || key.repository_id != admission.repository_id
-            || key.repository_incarnation.is_empty()
+            || !bounded_identifier(&key.repository_incarnation)
             || key.repository_incarnation != admission.repository_incarnation
-            || key.operation_id.is_empty()
+            || !bounded_identifier(&key.operation_id)
             || key.authority_generation == 0
             || key.authority_generation != admission.authority_generation
         {

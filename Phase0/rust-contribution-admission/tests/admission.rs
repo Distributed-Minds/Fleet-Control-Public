@@ -360,3 +360,79 @@ fn canonical_encoding_is_unicode_safe_field_separated_and_sensitive() {
     assert_ne!(canonical_bytes(&a), canonical_bytes(&b));
     assert_ne!(canonical_digest(&a), canonical_digest(&b));
 }
+
+#[test]
+fn malformed_synthetic_resource_tokens_and_zero_generations_fail_closed() {
+    let invalid = [
+        " ".to_owned(),
+        "has space".to_owned(),
+        "line\\nfeed".to_owned(),
+        "bidi\\u{202e}reversal".to_owned(),
+        "path/segment".to_owned(),
+        "x".repeat(257),
+    ];
+    for value in invalid {
+        for field in 0..7 {
+            let mut x = good();
+            match field {
+                0 => x.repository_incarnation = value.clone(),
+                1 => x.source_commit = value.clone(),
+                2 => x.intended_target_head = value.clone(),
+                3 => x.observed_target_head = value.clone(),
+                4 => x.input_digest = value.clone(),
+                5 => x.output_digest = value.clone(),
+                6 => x.reviewed_output_digest = value.clone(),
+                _ => unreachable!(),
+            }
+            assert_eq!(
+                evaluate(&x),
+                Decision::Unknown(Reason::MalformedIdentity),
+                "field {field}, value {value:?}"
+            );
+        }
+    }
+
+    for field in 0..4 {
+        let mut x = good();
+        match field {
+            0 => x.terms_version = 0,
+            1 => x.current_terms_version = 0,
+            2 => x.authority_generation = 0,
+            3 => x.current_authority_generation = 0,
+            _ => unreachable!(),
+        }
+        assert_eq!(evaluate(&x), Decision::Unknown(Reason::MalformedIdentity));
+    }
+
+    let mut boundary = good();
+    boundary.source_commit = "a".repeat(256);
+    assert_eq!(evaluate(&boundary), Decision::ReviewableInSimulation);
+    boundary.source_commit.push('a');
+    assert_eq!(evaluate(&boundary), Decision::Unknown(Reason::MalformedIdentity));
+}
+
+#[test]
+fn malformed_operation_id_cannot_create_or_replace_synthetic_receipt() {
+    let original = good();
+    let mut journal = SimulationJournal::default();
+    assert_eq!(
+        journal.record(key(), &original),
+        Replay::First(Decision::ReviewableInSimulation)
+    );
+    for invalid in [
+        " ".to_owned(),
+        "a\\nb".to_owned(),
+        "spoof\\u{202e}".to_owned(),
+        "a/b".to_owned(),
+        "o".repeat(257),
+    ] {
+        let mut wrong = key();
+        wrong.operation_id = invalid;
+        assert_eq!(journal.record(wrong, &original), Replay::Conflict);
+    }
+    assert_eq!(
+        journal.record(key(), &original),
+        Replay::Identical(Decision::ReviewableInSimulation)
+    );
+    assert_eq!(journal.provider_effects_emitted(), 0);
+}
