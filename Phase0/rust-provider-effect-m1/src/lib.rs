@@ -477,15 +477,18 @@ mod tests {
         assert_eq!(op.dispatch(true, true), Err(ModelError::InvalidState));
         assert_eq!(op.transmitted_calls(), 1);
     }
+
     #[test]
     fn m1_manifest_rejects_unregistered_transport_and_effect_pairs() {
-        let row = "1\tcreate_comment\tgithub-rest\tUNKNOWN\tUNSUPPORTED\tUNSUPPORTED\tUNKNOWN\tnone";
+        let row =
+            "1\tcreate_comment\tgithub-rest\tUNKNOWN\tUNSUPPORTED\tUNSUPPORTED\tUNKNOWN\tnone";
         let unknown_transport = row.replace("github-rest", "unknown-provider");
         assert_eq!(
             parse_manifest(&format!("{MANIFEST_HEADER}\n{unknown_transport}\n")),
             Err(ManifestError::InvalidRow(2))
         );
-        let unregistered_pair = row.replace("create_comment", "contents_update")
+        let unregistered_pair = row
+            .replace("create_comment", "contents_update")
             .replace("github-rest", "github-connected-chat");
         assert_eq!(
             parse_manifest(&format!("{MANIFEST_HEADER}\n{unregistered_pair}\n")),
@@ -509,10 +512,7 @@ mod tests {
 
     #[test]
     fn m1_manifest_requires_all_ten_registered_effect_transport_pairs() {
-        assert_eq!(
-            parse_manifest(EMBEDDED_MANIFEST).unwrap().len(),
-            10
-        );
+        assert_eq!(parse_manifest(EMBEDDED_MANIFEST).unwrap().len(), 10);
         let omitted = EMBEDDED_MANIFEST
             .lines()
             .filter(|line| !line.starts_with("1\tcreate_issue\t"))
@@ -526,15 +526,11 @@ mod tests {
 
     #[test]
     fn m1_manifest_rejects_blank_data_rows_instead_of_skipping_them() {
-        let malformed = EMBEDDED_MANIFEST.replacen(
-            "\n1\tcreate_issue\t",
-            "\n\n1\tcreate_issue\t",
-            1,
-        );
+        let malformed =
+            EMBEDDED_MANIFEST.replacen("\n1\tcreate_issue\t", "\n\n1\tcreate_issue\t", 1);
         assert_eq!(
             parse_manifest(&malformed),
             Err(ManifestError::InvalidRow(2))
         );
     }
-
 }
