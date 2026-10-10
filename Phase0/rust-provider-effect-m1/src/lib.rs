@@ -3,6 +3,7 @@
 //! authority to admit an actual provider mutation. It is not the #91 broker.
 pub mod credential_budget;
 pub mod outbox;
+pub mod provider_response;
 pub mod recovery;
 use std::collections::BTreeSet;
 
