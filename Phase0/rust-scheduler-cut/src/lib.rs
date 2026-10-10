@@ -147,7 +147,10 @@ impl Simulation {
                 return Err(Denial::UnprovedTransition);
             }
         }
-        if self.by_assignment.contains_key(&attempt.original.assignment) {
+        if self
+            .by_assignment
+            .contains_key(&attempt.original.assignment)
+        {
             return Err(Denial::AssignmentAlreadyStarted);
         }
 
@@ -225,10 +228,13 @@ mod tests {
         let first = simulation.start(&attempt()).unwrap();
         assert!(matches!(first, Outcome::Committed(_)));
         assert_eq!(simulation.emitted_starts(), 1);
-        assert_eq!(simulation.start(&attempt()).unwrap(), Outcome::Reconciled(match first {
-            Outcome::Committed(receipt) => receipt,
-            Outcome::Reconciled(_) => unreachable!(),
-        }));
+        assert_eq!(
+            simulation.start(&attempt()).unwrap(),
+            Outcome::Reconciled(match first {
+                Outcome::Committed(receipt) => receipt,
+                Outcome::Reconciled(_) => unreachable!(),
+            })
+        );
         assert_eq!(simulation.emitted_starts(), 1);
     }
 
