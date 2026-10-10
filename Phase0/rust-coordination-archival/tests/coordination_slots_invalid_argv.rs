@@ -16,10 +16,8 @@ const SLOT_B: &str =
 
 #[test]
 fn non_utf8_in_every_slot_argument_fails_closed_without_panic() {
-    let scratch = std::env::temp_dir().join(format!(
-        "free-energy-slot-argv-{}",
-        std::process::id()
-    ));
+    let scratch =
+        std::env::temp_dir().join(format!("free-energy-slot-argv-{}", std::process::id()));
     fs::create_dir_all(&scratch).expect("create isolated fixture directory");
     let first = scratch.join("slot-a-body");
     let second = scratch.join("slot-b-body");
