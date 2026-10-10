@@ -15,13 +15,17 @@ pub struct Source {
     pub generation: u64,
 }
 
+/// Strict offline-model identity shape; not provider-authenticated provenance.
+/// Prevent format controls, invisible aliases and unbounded opaque source keys.
+fn bounded_source_id(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 128 && value.bytes().all(|b| b.is_ascii_graphic())
+}
+
 impl Source {
     fn valid(&self) -> bool {
-        !self.identity.is_empty()
-            && !self.incarnation.is_empty()
-            && self.generation != 0
-            && self.identity.len() <= 128
-            && self.incarnation.len() <= 128
+        self.generation != 0
+            && bounded_source_id(&self.identity)
+            && bounded_source_id(&self.incarnation)
     }
 }
 
@@ -427,5 +431,52 @@ mod tests {
             Err(Denial::ExistingOperationDifferentIntent)
         );
         assert_eq!(book.emitted_starts(), 1);
+    }
+    #[test]
+    fn authority_source_identifiers_reject_format_controls_and_unbounded_aliases() {
+        for bad in [
+            String::new(),
+            " ".to_owned(),
+            "line\nbreak".to_owned(),
+            "spoof\u{202e}value".to_owned(),
+            "é".to_owned(),
+            "x".repeat(129),
+        ] {
+            for cut_index in 0..3 {
+                for source_index in 0..2 {
+                    for field_index in 0..2 {
+                        let mut candidate = attempt();
+                        let cut = match cut_index {
+                            0 => &mut candidate.original,
+                            1 => &mut candidate.observed_current,
+                            _ => &mut candidate.effect_current,
+                        };
+                        let source = if source_index == 0 {
+                            &mut cut.scheduler
+                        } else {
+                            &mut cut.policy
+                        };
+                        if field_index == 0 {
+                            source.identity = bad.clone();
+                        } else {
+                            source.incarnation = bad.clone();
+                        }
+                        let mut simulation = Simulation::default();
+                        assert_eq!(simulation.start(&candidate), Err(Denial::MalformedCut));
+                        assert_eq!(simulation.emitted_starts(), 0);
+                    }
+                }
+            }
+        }
+
+        let at_limit = Source {
+            identity: "s".repeat(128),
+            incarnation: "i".repeat(128),
+            generation: 1,
+        };
+        assert!(at_limit.valid());
+        let mut above_limit = at_limit.clone();
+        above_limit.incarnation.push('i');
+        assert!(!above_limit.valid());
     }
 }
