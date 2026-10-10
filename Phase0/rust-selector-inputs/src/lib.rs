@@ -237,8 +237,7 @@ pub fn evaluate(s: &Snapshot) -> Result<Selection, Denial> {
         let Some(&model_incarnation) = model_incarnations.get(r.model.as_str()) else {
             return Err(Denial::Malformed);
         };
-        if r.model_incarnation != model_incarnation
-            || r.score < 0
+        if r.score < 0
             || r.score > 10_000
             || r.unit != "basis-points"
         {
@@ -247,7 +246,8 @@ pub fn evaluate(s: &Snapshot) -> Result<Selection, Denial> {
         let Some(src) = sources.get(r.source.as_str()) else {
             return Err(Denial::UntrustedLineage);
         };
-        if r.source_incarnation != src.incarnation
+        if r.model_incarnation != model_incarnation
+            || r.source_incarnation != src.incarnation
             || r.source_generation != src.generation
             || r.cut != s.cut
         {
