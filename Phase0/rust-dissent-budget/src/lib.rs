@@ -267,7 +267,8 @@ impl Ledger {
             return Err(Error::Transition);
         }
         self.generation.checked_add(1).ok_or(Error::Overflow)?;
-        self.entries.get_mut(&p.id).ok_or(Error::Missing)?.state = State::Reclaimed { fence: p.fence };
+        self.entries.get_mut(&p.id).ok_or(Error::Missing)?.state =
+            State::Reclaimed { fence: p.fence };
         self.advance()
     }
     /// Synthetic separate issuer predicate; not a real trusted grant source.
