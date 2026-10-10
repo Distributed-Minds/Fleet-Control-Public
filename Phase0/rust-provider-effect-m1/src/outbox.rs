@@ -428,7 +428,10 @@ mod tests {
         assert_eq!(outbox.submit(envelope()), Ok(true));
         assert_eq!(step(&mut outbox, 0, Action::Admit), Status::Queued);
         assert_eq!(step(&mut outbox, 1, Action::Reserve), Status::Reserved);
-        assert_eq!(step(&mut outbox, 2, Action::BeginAttempt), Status::Dispatching);
+        assert_eq!(
+            step(&mut outbox, 2, Action::BeginAttempt),
+            Status::Dispatching
+        );
         assert_eq!(outbox.entry("op-123").unwrap().version(), 3);
     }
 
