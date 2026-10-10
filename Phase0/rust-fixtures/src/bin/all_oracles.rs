@@ -4,7 +4,6 @@
 //! or paths supplied by fixture data. This is a developer verification runner:
 //! passing fixtures is not Python semantic parity or runtime authorization.
 
-use std::collections::HashSet;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -69,6 +68,17 @@ const ORACLES: [Oracle; 10] = [
         fixture: None,
     },
 ];
+
+// The fixture corpus and its canonical Python SHA-256 reference are fixed.
+// Distinct, well-formed but fabricated hashes must not certify historical parity.
+// These IDs are for the four cases in integration-candidate-v1.json only:
+// this is not a general-purpose integrity or authority attestation.
+const HISTORICAL_DIGEST_RECEIPT: &str = concat!(
+    "normal-two-parent: 7e8986591c4293e4eeebf751a2c12e19512d4792e5cd8267e6308fe0a479d8da\n",
+    "reversed-parents-same-tree: b9bea4f05c5cf67a3ed24dafae1600bb5f58e30563b96981afac9a8322efdaf8\n",
+    "unsupported-three-parent: 75de8f8eefce4daf6e64ef71267cac4039fd4a1610e77700259ba1298c40c51a\n",
+    "compatible-constructor-migration: b0ce5db57c6ccc2ccff334ef9905f2488ca826e8d7cefe6f752cd7dd4f59483f",
+);
 
 #[derive(Debug, PartialEq, Eq)]
 enum Selection {
@@ -188,35 +198,7 @@ fn has_verification_output(oracle: &Oracle, stdout: &[u8]) -> bool {
             " passed; SHA-256 identity parity NOT checked",
             6,
         ),
-        "integration_candidate_digest" => {
-            // An arbitrary or truncated list of plausible SHA-256 strings is
-            // not evidence that all four historical candidate identities ran.
-            // Bind the aggregate receipt to the digest CLI's fixed case set
-            // and stable order, without asserting Git mutation authority.
-            const REQUIRED: [&str; 4] = [
-                "normal-two-parent",
-                "reversed-parents-same-tree",
-                "unsupported-three-parent",
-                "compatible-constructor-migration",
-            ];
-            let entries: Vec<&str> = line.split('\n').collect();
-            // The four fixed historical candidate envelopes differ in parent
-            // order, parent cardinality or constructor identity. Four copies
-            // of one plausible SHA-256 string cannot be a complete receipt.
-            let mut seen_digests = HashSet::new();
-            entries.len() == REQUIRED.len()
-                && entries.iter().zip(REQUIRED).all(|(entry, expected_name)| {
-                    let Some((name, digest)) = entry.split_once(": ") else {
-                        return false;
-                    };
-                    name == expected_name
-                        && digest.len() == 64
-                        && digest
-                            .bytes()
-                            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-                        && seen_digests.insert(digest)
-                })
-        }
+        "integration_candidate_digest" => line == HISTORICAL_DIGEST_RECEIPT,
         "merge_base_topology" => exact_count(
             line,
             "merge-base-topology: ",
@@ -378,13 +360,7 @@ mod tests {
             .iter()
             .find(|oracle| oracle.name == "integration_candidate_digest")
             .unwrap();
-        let digest_output = format!(
-            "normal-two-parent: {}\nreversed-parents-same-tree: {}\nunsupported-three-parent: {}\ncompatible-constructor-migration: {}\n",
-            "a".repeat(64),
-            "b".repeat(64),
-            "c".repeat(64),
-            "d".repeat(64)
-        );
+        let digest_output = format!("{HISTORICAL_DIGEST_RECEIPT}\n");
         assert!(has_verification_output(
             digest_oracle,
             digest_output.as_bytes()
@@ -429,20 +405,35 @@ mod tests {
         ] {
             assert!(!has_verification_output(digest_oracle, output.as_bytes()));
         }
-        let good = format!(
+        let good = format!("{HISTORICAL_DIGEST_RECEIPT}\n");
+        let digests: Vec<&str> = HISTORICAL_DIGEST_RECEIPT
+            .lines()
+            .map(|entry| entry.split_once(": ").unwrap().1)
+            .collect();
+        assert_eq!(digests.len(), 4);
+        for digest in digests.iter().skip(1) {
+            let forged = good.replacen(*digest, digests[0], 1);
+            assert!(
+                !has_verification_output(digest_oracle, forged.as_bytes()),
+                "accepted repeated SHA-256 digest for distinct historical envelopes"
+            );
+        }
+        let fabricated = format!(
             "normal-two-parent: {}\nreversed-parents-same-tree: {}\nunsupported-three-parent: {}\ncompatible-constructor-migration: {}\n",
             "a".repeat(64),
             "b".repeat(64),
             "c".repeat(64),
             "d".repeat(64)
         );
-        for repeated in ["b", "c", "d"] {
-            let forged = good.replacen(&repeated.repeat(64), &"a".repeat(64), 1);
-            assert!(
-                !has_verification_output(digest_oracle, forged.as_bytes()),
-                "accepted repeated SHA-256 digest for distinct historical envelopes"
-            );
-        }
+        assert!(
+            !has_verification_output(digest_oracle, fabricated.as_bytes()),
+            "accepted four unique, well-formed but fabricated digest values"
+        );
+        let wrong_nibble = good.replacen(digests[0], &format!("0{}", &digests[0][1..]), 1);
+        assert!(
+            !has_verification_output(digest_oracle, wrong_nibble.as_bytes()),
+            "accepted a one-nibble corruption of a historical fixture digest"
+        );
         for invalid in [
             // Previously a single plausible digest, repeated names, swapped
             // order and undeclared names all qualified as aggregate success.
