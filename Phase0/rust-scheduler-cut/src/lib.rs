@@ -137,7 +137,10 @@ impl Simulation {
         if attempt.observed_current != attempt.effect_current {
             return Err(Denial::EffectTimeDrift);
         }
-        if attempt.original != attempt.effect_current {
+        // An explicitly supplied bridge is part of the asserted evidence,
+        // even when the observed cut is unchanged. Never accept a valid
+        // direct-cut start by silently ignoring a contradictory bridge.
+        if attempt.original != attempt.effect_current || attempt.bridge.is_some() {
             let valid_bridge = attempt.bridge.as_ref().is_some_and(|bridge| {
                 bridge.predecessor == attempt.original
                     && bridge.successor == attempt.effect_current
@@ -238,6 +241,36 @@ mod tests {
             })
         );
         assert_eq!(simulation.emitted_starts(), 1);
+    }
+
+    #[test]
+    fn cut01_supplied_inconsistent_bridge_does_not_get_ignored() {
+        // The cut itself is unchanged, so an absent bridge is admissible.
+        // A *supplied* contradictory bridge is not ignorable evidence.
+        for case in 0..5 {
+            let mut a = attempt();
+            let mut proof = bridge(&a.original, &a.effect_current);
+            match case {
+                0 => proof.predecessor.assignment += 1,
+                1 => proof.successor.operation += 1,
+                2 => proof.authority_issued = false,
+                3 => proof.causally_ordered = false,
+                _ => proof.assignment_preserved = false,
+            }
+            a.bridge = Some(proof);
+            let mut book = Simulation::default();
+            assert_eq!(book.start(&a), Err(Denial::UnprovedTransition));
+            assert_eq!(book.emitted_starts(), 0);
+        }
+    }
+
+    #[test]
+    fn cut01_matching_explicit_bridge_preserves_single_start() {
+        let mut a = attempt();
+        a.bridge = Some(bridge(&a.original, &a.effect_current));
+        let mut book = Simulation::default();
+        assert!(matches!(book.start(&a), Ok(Outcome::Committed(_))));
+        assert_eq!(book.emitted_starts(), 1);
     }
 
     #[test]
