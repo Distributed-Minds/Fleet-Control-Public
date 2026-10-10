@@ -15,6 +15,10 @@ pub struct TestPoll {
     pub request_id: String,
     pub task_id: u64,
     pub selectors: Vec<ScopeSelector>,
+    // Synthetic caller inputs, never a grant of external capability.
+    pub protocol_version: u32,
+    pub context_generation: u64,
+    pub capabilities: BTreeSet<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,6 +27,9 @@ pub enum ReplayError {
     StalePrincipal,
     RevokedPrincipal,
     InvalidRequestId,
+    UnsupportedProtocol,
+    InvalidContext,
+    InvalidCapabilities,
     ConflictingReplay,
     RecoveryRequired,
     Scope(AdmissionError),
@@ -66,6 +73,9 @@ struct TestPrincipal {
 struct RecordedRequest {
     task_id: u64,
     resources: BTreeSet<CanonicalResource>,
+    protocol_version: u32,
+    context_generation: u64,
+    capabilities: BTreeSet<String>,
     receipt: SimulationReceipt,
 }
 
@@ -188,7 +198,14 @@ impl SimulatedReplay {
             request.request_id.clone(),
         );
         if let Some(existing) = self.requests.get(&key) {
-            if request.task_id != existing.task_id || footprint != existing.resources {
+            // Reusing a request ID cannot borrow an old assignment under
+            // a different protocol, context or claimed capability set.
+            if request.task_id != existing.task_id
+                || footprint != existing.resources
+                || request.protocol_version != existing.protocol_version
+                || request.context_generation != existing.context_generation
+                || request.capabilities != existing.capabilities
+            {
                 return Err(ReplayError::ConflictingReplay);
             }
             if self.book.reservation(existing.task_id).map(|r| r.state)
@@ -197,6 +214,29 @@ impl SimulatedReplay {
                 return Err(ReplayError::RecoveryRequired);
             }
             return Ok(existing.receipt.clone());
+        }
+
+        // Admit only this fixture protocol. No synthetic capability or context
+        // identifier establishes real identity, authority or provider effects.
+        if request.protocol_version != crate::SCHEMA_VERSION {
+            return Err(ReplayError::UnsupportedProtocol);
+        }
+        if request.context_generation == 0 {
+            return Err(ReplayError::InvalidContext);
+        }
+        if request.capabilities.is_empty()
+            || request.capabilities.len() > 32
+            || request.capabilities.iter().any(|name| {
+                name.is_empty()
+                    || name.len() > 64
+                    || !name.bytes().all(|b| {
+                        b.is_ascii_lowercase()
+                            || b.is_ascii_digit()
+                            || matches!(b, b'-' | b'_' | b'.')
+                    })
+            })
+        {
+            return Err(ReplayError::InvalidCapabilities);
         }
 
         let receipt = self
@@ -208,6 +248,9 @@ impl SimulatedReplay {
             RecordedRequest {
                 task_id: request.task_id,
                 resources: footprint,
+                protocol_version: request.protocol_version,
+                context_generation: request.context_generation,
+                capabilities: request.capabilities.clone(),
                 receipt: receipt.clone(),
             },
         );
@@ -379,7 +422,83 @@ mod tests {
                 .iter()
                 .map(|number| ScopeSelector::Conversation(*number))
                 .collect(),
+            protocol_version: SCHEMA_VERSION,
+            context_generation: 1,
+            capabilities: BTreeSet::from(["rust".to_owned()]),
         }
+    }
+
+    #[test]
+    fn same_request_cannot_replay_changed_protocol_context_or_capabilities() {
+        let mut state = SimulatedReplay::new(basis()).unwrap();
+        state.enroll_test_principal(1, 1).unwrap();
+        let initial = poll("immutable", 40, &[10, 20]);
+        let original = state.poll(1, 1, &initial, &basis()).unwrap();
+
+        let mut changed = initial.clone();
+        changed.protocol_version += 1;
+        assert_eq!(
+            state.poll(1, 1, &changed, &basis()),
+            Err(ReplayError::ConflictingReplay)
+        );
+        changed = initial.clone();
+        changed.context_generation += 1;
+        assert_eq!(
+            state.poll(1, 1, &changed, &basis()),
+            Err(ReplayError::ConflictingReplay)
+        );
+        changed = initial.clone();
+        changed.capabilities.insert("write".to_owned());
+        assert_eq!(
+            state.poll(1, 1, &changed, &basis()),
+            Err(ReplayError::ConflictingReplay)
+        );
+
+        assert_eq!(state.request_count(), 1);
+        assert_eq!(state.reservation_count(), 1);
+        assert_eq!(state.poll(1, 1, &initial, &basis()), Ok(original));
+    }
+
+    #[test]
+    fn invalid_first_poll_protocol_context_and_capabilities_do_not_reserve() {
+        let mut state = SimulatedReplay::new(basis()).unwrap();
+        state.enroll_test_principal(1, 1).unwrap();
+        let original = poll("new", 50, &[10]);
+        for version in [0, SCHEMA_VERSION + 1] {
+            let mut changed = original.clone();
+            changed.protocol_version = version;
+            assert_eq!(
+                state.poll(1, 1, &changed, &basis()),
+                Err(ReplayError::UnsupportedProtocol)
+            );
+        }
+        let mut changed = original.clone();
+        changed.context_generation = 0;
+        assert_eq!(
+            state.poll(1, 1, &changed, &basis()),
+            Err(ReplayError::InvalidContext)
+        );
+
+        for invalid in ["", "CAP", "bad space", "bad\nline", "e\u{202e}vil"] {
+            let mut changed = original.clone();
+            changed.capabilities = BTreeSet::from([invalid.to_owned()]);
+            assert_eq!(
+                state.poll(1, 1, &changed, &basis()),
+                Err(ReplayError::InvalidCapabilities)
+            );
+        }
+        let mut changed = original.clone();
+        changed.capabilities = (0..33).map(|i| format!("cap-{i}")).collect();
+        assert_eq!(
+            state.poll(1, 1, &changed, &basis()),
+            Err(ReplayError::InvalidCapabilities)
+        );
+        assert_eq!(state.request_count(), 0);
+        assert_eq!(state.reservation_count(), 0);
+        assert_eq!(
+            state.poll(1, 1, &original, &basis()).unwrap().task_id,
+            50
+        );
     }
 
     #[test]
