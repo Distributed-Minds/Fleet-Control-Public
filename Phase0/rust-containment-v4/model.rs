@@ -93,25 +93,50 @@ pub struct Control {
     pub denied: BTreeSet<Action>,
     pub harm: [u16; 3], // Comparable dimensions only under the SAME policy.
     pub comparison_policy: u64,
+    // Caller-supplied immutable snapshot identities. They are compared, NOT
+    // authenticated by this offline model. Real authority must prove currentness.
+    pub risk_scope_basis: String,
+    pub effectiveness_basis: String,
+    pub harm_basis: String,
+    pub capability_basis: String,
+    pub policy_basis: String,
     pub independently_verified: bool,
     pub effective: bool,
     pub available: bool,
 }
 
+/// Canonical complete candidate catalog: all options matter, not only the
+/// selected name. No duplicate names, unverified candidates or missing bases.
+fn canonical_controls(controls: &[Control]) -> Result<Vec<Control>, Error> {
+    let mut entries = controls.to_vec();
+    entries.sort_by(|a, b| a.name.cmp(&b.name));
+    if entries.is_empty()
+        || entries.iter().any(|c| {
+            c.name.is_empty()
+                || c.comparison_policy == 0
+                || c.risk_scope_basis.is_empty()
+                || c.effectiveness_basis.is_empty()
+                || c.harm_basis.is_empty()
+                || c.capability_basis.is_empty()
+                || c.policy_basis.is_empty()
+                || !c.independently_verified
+        })
+        || entries.windows(2).any(|pair| pair[0].name == pair[1].name)
+    {
+        return Err(Error::UnprovedControl);
+    }
+    Ok(entries)
+}
+
 /// Returns a *synthetic choice*, never an operational containment instruction.
 pub fn choose_control(controls: &[Control]) -> Result<String, Error> {
-    let Some(first) = controls.first() else {
-        return Err(Error::UnprovedControl);
-    };
-    if first.comparison_policy == 0
-        || controls.iter().any(|c| {
-            !c.independently_verified || c.comparison_policy != first.comparison_policy
-        })
-    {
+    let catalog = canonical_controls(controls)?;
+    let first = &catalog[0];
+    if catalog.iter().any(|c| c.comparison_policy != first.comparison_policy) {
         // An unverified narrower option cannot be discarded to justify a broad one.
         return Err(Error::UnprovedControl);
     }
-    let eligible: Vec<&Control> = controls
+    let eligible: Vec<&Control> = catalog
         .iter()
         .filter(|c| c.available && c.effective)
         .collect();
@@ -262,6 +287,9 @@ pub struct DecisionBasis {
     pub resource: Resource,
     pub frontier: Frontier,
     pub chosen_control: String,
+    // Full snapshot of all compared alternatives, canonically ordered by name.
+    // Binding only chosen_control would miss name-stable policy/harm movement.
+    pub control_catalog: Vec<Control>,
     pub active_generation: u64,
     pub dependency_bases: BTreeMap<String, String>,
 }
@@ -295,8 +323,11 @@ pub fn review(
     {
         return Err(Error::UnknownDependency);
     }
+    let bound_controls = canonical_controls(&bound.control_catalog)?;
+    let current_controls = canonical_controls(live_controls)?;
     if bound.frontier != live_frontier.normalize()?
-        || bound.chosen_control != choose_control(live_controls)?
+        || bound_controls != current_controls
+        || bound.chosen_control != choose_control(&current_controls)?
         || bound.dependency_bases != *live_dependencies
     {
         return Err(Error::StaleDecision);
@@ -343,8 +374,13 @@ mod tests {
     fn control(name: &str, denied: &[Action], harm: [u16; 3]) -> Control {
         Control {
             name: name.into(), denied: set(denied), harm,
-            comparison_policy: 1, independently_verified: true,
-            effective: true, available: true,
+            comparison_policy: 1,
+            risk_scope_basis: "risk/subject/scope@1".into(),
+            effectiveness_basis: "independent-effectiveness@1".into(),
+            harm_basis: "independent-harm@1".into(),
+            capability_basis: "complete-inventory@1".into(),
+            policy_basis: "comparison-policy-content@1".into(),
+            independently_verified: true, effective: true, available: true,
         }
     }
     fn deps() -> BTreeMap<String, String> {
@@ -357,6 +393,7 @@ mod tests {
     fn basis(s: &ActiveSet) -> DecisionBasis {
         DecisionBasis {
             resource: resource(), frontier: frontier(), chosen_control: "narrow".into(),
+            control_catalog: vec![control("narrow", &[Action::Write], [1, 1, 1])],
             active_generation: s.generation, dependency_bases: deps(),
         }
     }
@@ -580,6 +617,100 @@ mod tests {
             }
         }
         assert_eq!(compared, 1944);
+    }
+
+    #[test]
+    fn same_control_name_cannot_hide_changed_harm_scope_or_proof_basis() {
+        let s = state();
+        let bound = basis(&s);
+        let original = bound.control_catalog[0].clone();
+        assert_eq!(
+            review(&s, &bound, frontier(), &[original.clone()], &deps()),
+            Ok(Review::SyntheticOnly)
+        );
+        let mut changed = Vec::new();
+        let mut x = original.clone();
+        x.harm = [9, 9, 9];
+        changed.push(x);
+        let mut x = original.clone();
+        x.denied.insert(Action::Delete);
+        changed.push(x);
+        let mut x = original.clone();
+        x.risk_scope_basis = "another-subject-or-risk".into();
+        changed.push(x);
+        let mut x = original.clone();
+        x.effectiveness_basis = "new-effectiveness-proof".into();
+        changed.push(x);
+        let mut x = original.clone();
+        x.harm_basis = "new-harm-proof".into();
+        changed.push(x);
+        let mut x = original.clone();
+        x.capability_basis = "new-capability-inventory".into();
+        changed.push(x);
+        let mut x = original.clone();
+        x.policy_basis = "same-generation-but-different-policy-content".into();
+        changed.push(x);
+        let mut x = original.clone();
+        x.comparison_policy = 2;
+        changed.push(x);
+        assert_eq!(changed.len(), 8);
+        for candidate in changed {
+            assert_eq!(candidate.name, "narrow");
+            assert_eq!(choose_control(&[candidate.clone()]), Ok("narrow".into()));
+            assert_eq!(
+                review(&s, &bound, frontier(), &[candidate], &deps()),
+                Err(Error::StaleDecision)
+            );
+        }
+    }
+
+    #[test]
+    fn all_candidates_are_bound_but_permutation_does_not_move_basis() {
+        let s = state();
+        let narrow = control("narrow", &[Action::Write], [1, 1, 1]);
+        let broad = control("broad", &[Action::Write, Action::Delete], [2, 3, 2]);
+        let mut bound = basis(&s);
+        bound.control_catalog = vec![narrow.clone(), broad.clone()];
+        assert_eq!(
+            review(&s, &bound, frontier(), &[broad.clone(), narrow.clone()], &deps()),
+            Ok(Review::SyntheticOnly)
+        );
+        assert_eq!(
+            review(&s, &bound, frontier(), &[narrow.clone()], &deps()),
+            Err(Error::StaleDecision)
+        );
+        assert_eq!(
+            review(&s, &bound, frontier(), &[narrow.clone(), broad.clone(), broad], &deps()),
+            Err(Error::UnprovedControl)
+        );
+    }
+
+    #[test]
+    fn incomplete_control_identity_never_becomes_synthetic_acceptance() {
+        let s = state();
+        let bound = basis(&s);
+        let original = bound.control_catalog[0].clone();
+        for missing in 0..5 {
+            let mut changed = original.clone();
+            match missing {
+                0 => changed.risk_scope_basis.clear(),
+                1 => changed.effectiveness_basis.clear(),
+                2 => changed.harm_basis.clear(),
+                3 => changed.capability_basis.clear(),
+                4 => changed.policy_basis.clear(),
+                _ => unreachable!(),
+            }
+            assert_eq!(
+                review(&s, &bound, frontier(), &[changed], &deps()),
+                Err(Error::UnprovedControl)
+            );
+        }
+        let mut changed = original;
+        changed.independently_verified = false;
+        assert_eq!(
+            review(&s, &bound, frontier(), &[changed], &deps()),
+            Err(Error::UnprovedControl)
+        );
     }
 
 }
