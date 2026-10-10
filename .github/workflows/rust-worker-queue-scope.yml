@@ -1,0 +1,40 @@
+name: Rust queue scope conflict simulation
+
+on:
+  pull_request:
+    paths:
+      - "Phase0/rust-worker-queue-scope/**"
+      - ".github/workflows/rust-worker-queue-scope.yml"
+  push:
+    branches:
+      - "phase0/public-v0"
+    paths:
+      - "Phase0/rust-worker-queue-scope/**"
+      - ".github/workflows/rust-worker-queue-scope.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  offline-rust-scope:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact event SHA without npm
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          git fetch --depth=1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.85.1 --profile minimal --component rustfmt --component clippy
+      - name: Format, tests, clippy, compiled offline demo
+        shell: bash
+        working-directory: Phase0/rust-worker-queue-scope
+        run: |
+          set -euo pipefail
+          cargo +1.85.1 fmt --all --check
+          cargo +1.85.1 test --locked --offline
+          cargo +1.85.1 clippy --all-targets --locked --offline -- -D warnings
+          cargo +1.85.1 run --locked --offline --bin scope_demo
