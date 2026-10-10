@@ -112,9 +112,36 @@ class TrustPreflightTests(unittest.TestCase):
         self.assertEqual(self.check()["status"], "BLOCKED")
 
     def test_duplicate_declared_author_field_is_blocked(self):
-        self.policy.write_text(CONFIG + "COORDINATION_TRUSTED_AUTHORS=alice\n")
+        self.policy.write_text(CONFIG.replace("MISSION_TITLE_PREFIX=", "COORDINATION_TRUSTED_AUTHORS=alice\nMISSION_TITLE_PREFIX="))
         self.assertEqual(self.check()["status"], "BLOCKED")
 
+    def test_later_prose_alias_is_not_an_authoritative_declaration(self):
+        self.policy.write_text(CONFIG + "\nCOORDINATION_TRUSTED_AUTHORS=alice\n")
+        self.assertEqual(self.check()["status"], "TRUST_CONFIG_CONSISTENT_ONLY")
+
+    def test_later_unversioned_example_fence_is_ignored(self):
+        self.policy.write_text(CONFIG + "\n```text\nCOORDINATION_TRUSTED_AUTHORS=alice\n```\n")
+        self.assertEqual(self.check()["status"], "TRUST_CONFIG_CONSISTENT_ONLY")
+
+    def test_earlier_unversioned_example_fence_is_ignored(self):
+        self.policy.write_text("```text\nCOORDINATION_TRUSTED_AUTHORS=alice\n```\n" + CONFIG)
+        self.assertEqual(self.check()["status"], "TRUST_CONFIG_CONSISTENT_ONLY")
+
+    def test_second_versioned_configuration_fence_is_blocked(self):
+        self.policy.write_text(CONFIG + "\n```text\nPHASE0_CONFIG_VERSION=1\nCOORDINATION_TRUSTED_AUTHORS=alice\n```\n")
+        self.assertEqual(self.check()["status"], "BLOCKED")
+
+    def test_unterminated_configuration_fence_is_blocked(self):
+        self.policy.write_text(CONFIG.replace("\n```\n", "\n"))
+        self.assertEqual(self.check()["status"], "BLOCKED")
+
+    def test_unsupported_configuration_version_is_blocked(self):
+        self.policy.write_text(CONFIG.replace("PHASE0_CONFIG_VERSION=1", "PHASE0_CONFIG_VERSION=999"))
+        self.assertEqual(self.check()["status"], "BLOCKED")
+
+    def test_duplicate_configuration_version_is_blocked(self):
+        self.policy.write_text(CONFIG.replace("TARGET_REPOSITORY=", "PHASE0_CONFIG_VERSION=1\nTARGET_REPOSITORY="))
+        self.assertEqual(self.check()["status"], "BLOCKED")
     def test_malformed_offline_slot_snapshot_is_blocked_not_traceback(self):
         # Offline JSON is caller-supplied, not an authenticated GitHub API result.
         # These nested shapes used to raise uncaught AttributeError in discovery.

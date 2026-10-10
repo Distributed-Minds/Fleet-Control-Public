@@ -41,13 +41,36 @@ def parse_authors(raw: str, label: str, errors: list[str]) -> set[str]:
 
 
 def declared_config(path: Path, errors: list[str]) -> set[str]:
+    """Read a single versioned Markdown config block, not prose or examples."""
     lines = path.read_text(encoding="utf-8").splitlines()
-    values = [line.split("=", 1)[1] for line in lines if line.startswith("COORDINATION_TRUSTED_AUTHORS=")]
+    blocks: list[list[str]] = []
+    active: list[str] | None = None
+    for line in lines:
+        if active is None and line == "```text":
+            active = []
+        elif active is not None and line == "```":
+            if any(item.startswith("PHASE0_CONFIG_VERSION=") for item in active):
+                blocks.append(active)
+            active = None
+        elif active is not None:
+            active.append(line)
+    if active is not None:
+        errors.append("declared: unterminated text configuration fence")
+        return set()
+    if len(blocks) != 1:
+        errors.append("declared: expected exactly one versioned text configuration fence")
+        return set()
+    config = blocks[0]
+    versions = [line for line in config if line.startswith("PHASE0_CONFIG_VERSION=")]
+    if versions != ["PHASE0_CONFIG_VERSION=1"]:
+        errors.append("declared: unsupported or duplicate configuration version")
+        return set()
+    values = [line.split("=", 1)[1] for line in config
+              if line.startswith("COORDINATION_TRUSTED_AUTHORS=")]
     if len(values) != 1:
-        errors.append("declared: expected exactly one COORDINATION_TRUSTED_AUTHORS= declaration")
+        errors.append("declared: expected one COORDINATION_TRUSTED_AUTHORS= in configuration fence")
         return set()
     return parse_authors(values[0], "declared", errors)
-
 
 def job_conditions(path: Path, errors: list[str]) -> dict[str, str]:
     jobs: dict[str, str] = {}
