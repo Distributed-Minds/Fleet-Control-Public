@@ -3,14 +3,19 @@ on:
   push:
     branches:
       - 'feat/17-offline-dissent-budget-*'
+    paths:
+      - 'Phase0/rust-dissent-budget/**'
+      - '.github/workflows/rust-dissent-budget.yml'
   pull_request:
     branches:
       - 'phase0/public-v0'
+    paths:
+      - 'Phase0/rust-dissent-budget/**'
+      - '.github/workflows/rust-dissent-budget.yml'
 permissions:
   contents: read
 jobs:
   model:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.ref == 'feat/17-offline-dissent-budget-20261010-r8c5'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
