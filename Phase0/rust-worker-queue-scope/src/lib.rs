@@ -5,6 +5,8 @@
 //! transaction and external #10/#43/#50 authority adapters. This module never
 //! issues a runnable or provider-effect-capable assignment.
 
+pub mod simulated_replay;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 pub const SCHEMA_VERSION: u32 = 1;
