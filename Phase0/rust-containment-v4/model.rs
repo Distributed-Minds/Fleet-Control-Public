@@ -136,6 +136,18 @@ pub fn choose_control(controls: &[Control]) -> Result<String, Error> {
         // An unverified narrower option cannot be discarded to justify a broad one.
         return Err(Error::UnprovedControl);
     }
+    // Equal numeric harm scores cannot be ordered across incompatible incident,
+    // harm, capability or policy bases. A separately certified conversion could
+    // admit other cases; this offline model has no such compatibility witness.
+    // Compare the full candidate catalog, including unavailable alternatives.
+    if catalog.iter().any(|c| {
+        c.risk_scope_basis.as_str() != first.risk_scope_basis.as_str()
+            || c.harm_basis.as_str() != first.harm_basis.as_str()
+            || c.capability_basis.as_str() != first.capability_basis.as_str()
+            || c.policy_basis.as_str() != first.policy_basis.as_str()
+    }) {
+        return Err(Error::IncomparableControl);
+    }
     let eligible: Vec<&Control> = catalog
         .iter()
         .filter(|c| c.available && c.effective)
@@ -709,6 +721,74 @@ mod tests {
         changed.independently_verified = false;
         assert_eq!(
             review(&s, &bound, frontier(), &[changed], &deps()),
+            Err(Error::UnprovedControl)
+        );
+    }
+
+    #[test]
+    fn cross_candidate_comparison_bases_must_be_coherent() {
+        let narrow = control("narrow", &[Action::Write], [1, 1, 1]);
+        let broad = control("broad", &[Action::Write, Action::Delete], [2, 3, 2]);
+        assert_eq!(
+            choose_control(&[narrow.clone(), broad.clone()]),
+            Ok("narrow".into())
+        );
+        let mut checked = 0;
+        for field in 0..4 {
+            let mut incompatible = broad.clone();
+            match field {
+                0 => incompatible.risk_scope_basis.push_str("/other-incident"),
+                1 => incompatible.harm_basis.push_str("/other-harm-law"),
+                2 => incompatible.capability_basis.push_str("/other-inventory"),
+                3 => incompatible.policy_basis.push_str("/other-policy"),
+                _ => unreachable!(),
+            }
+            for unavailable in [false, true] {
+                let mut changed = incompatible.clone();
+                changed.available = !unavailable;
+                for reverse in [false, true] {
+                    let candidates = if reverse {
+                        vec![changed.clone(), narrow.clone()]
+                    } else {
+                        vec![narrow.clone(), changed.clone()]
+                    };
+                    assert_eq!(
+                        choose_control(&candidates),
+                        Err(Error::IncomparableControl),
+                        "field={field} unavailable={unavailable} reverse={reverse}"
+                    );
+                    checked += 1;
+                }
+            }
+            let state = state();
+            let mut decision = basis(&state);
+            decision.control_catalog = vec![narrow.clone(), incompatible.clone()];
+            assert_eq!(
+                review(
+                    &state,
+                    &decision,
+                    frontier(),
+                    &decision.control_catalog,
+                    &deps()
+                ),
+                Err(Error::IncomparableControl),
+                "review must not accept incomparable field {field}"
+            );
+        }
+        assert_eq!(checked, 16);
+
+        // Candidate-specific effectiveness evidence may legitimately differ;
+        // unlike incident/harm/policy basis, it is not an implicit common unit.
+        let mut independently_attested = broad.clone();
+        independently_attested.effectiveness_basis = "different-control-proof".into();
+        assert_eq!(
+            choose_control(&[narrow.clone(), independently_attested]),
+            Ok("narrow".into())
+        );
+        let mut different_comparison_policy = broad;
+        different_comparison_policy.comparison_policy = 2;
+        assert_eq!(
+            choose_control(&[narrow, different_comparison_policy]),
             Err(Error::UnprovedControl)
         );
     }

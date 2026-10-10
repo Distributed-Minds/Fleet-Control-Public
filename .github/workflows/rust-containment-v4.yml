@@ -3,7 +3,7 @@ name: Offline containment spec-4 Rust model
 # Proposed on a non-default branch only. No provider credentials or mutation.
 on:
   pull_request:
-    branches: [phase0/public-v0]
+    branches: [phase0/public-v0, feat/23-containment-v4-offline-reducer-20261010-x7m4]
     paths:
       - Phase0/rust-containment-v4/**
       - .github/workflows/rust-containment-v4.yml
