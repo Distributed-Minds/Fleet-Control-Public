@@ -547,14 +547,7 @@ fn legacy_rotating_analyst_rejects_unreachable_second_noop_history() {
     // Every second NOOP rotated PLAN/PREDICT/AUDIT and reset the counter to 0.
     for mode in [Mode::Plan, Mode::Predict, Mode::Audit] {
         for streak in [2, u32::MAX] {
-            let mut old = previous(
-                "B",
-                "old",
-                1,
-                3,
-                2,
-                state(mode, Phase::Analytic, streak),
-            );
+            let mut old = previous("B", "old", 1, 3, 2, state(mode, Phase::Analytic, streak));
             old.source_machine = StateMachine::RotatingAnalystV1;
             let result = check(
                 &top,

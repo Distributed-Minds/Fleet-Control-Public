@@ -198,9 +198,7 @@ fn valid_historical_state(p: &Prior) -> bool {
         && p.size >= 3
         && p.index == 2
         && p.source_machine == StateMachine::RotatingAnalystV1;
-    if (p.state.phase == Phase::Bootstrap
-        || (p.size == 2 && p.index == 1)
-        || rotating_v1_analyst)
+    if (p.state.phase == Phase::Bootstrap || (p.size == 2 && p.index == 1) || rotating_v1_analyst)
         && p.state.noop_streak > 1
     {
         return false;
