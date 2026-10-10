@@ -27,7 +27,10 @@ fn invalid_utf8_os_arguments_fail_without_panic_or_output() {
             .output()
             .expect("run compiled candidate CLI with malformed OS argv");
         assert_eq!(output.status.code(), Some(2), "malformed OS argv exit");
-        assert!(output.stdout.is_empty(), "invalid argv emitted fixture/canonical bytes");
+        assert!(
+            output.stdout.is_empty(),
+            "invalid argv emitted fixture/canonical bytes"
+        );
         let stderr = String::from_utf8(output.stderr).expect("stable UTF-8 failure diagnostic");
         assert_eq!(stderr, "FAIL: non-UTF-8 CLI argument\n");
         assert!(!stderr.contains("panicked"), "{stderr:?}");
