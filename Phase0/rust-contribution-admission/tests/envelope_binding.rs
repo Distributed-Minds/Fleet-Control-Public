@@ -112,7 +112,11 @@ fn variants(original: &Admission) -> Vec<(&'static str, Admission)> {
     change!("code_rights", evidence.code_rights, Claim::Absent);
     change!("asset_rights", evidence.asset_rights, Claim::Absent);
     change!("employer_rights", evidence.employer_rights, Claim::Absent);
-    change!("reviewer_decision", evidence.reviewer_decision, Claim::Absent);
+    change!(
+        "reviewer_decision",
+        evidence.reviewer_decision,
+        Claim::Absent
+    );
     change!("task_authority", evidence.task_authority, Claim::Absent);
     change!(
         "transformation_map",
@@ -124,11 +128,7 @@ fn variants(original: &Admission) -> Vec<(&'static str, Admission)> {
         evidence.historical_lineage,
         Claim::Absent
     );
-    change!(
-        "github_signature_verified",
-        github_signature_verified,
-        true
-    );
+    change!("github_signature_verified", github_signature_verified, true);
     change!("dco_bot_exempt", dco_bot_exempt, true);
     cases
 }
