@@ -920,6 +920,111 @@ data="x"></OBject><EMBED/>"#;
     }
 
     #[test]
+    fn raw_text_containers_cannot_forge_visible_site_routes() {
+        // Full shipping-page fixtures, not synthetic isolated fragments.
+        let root = env::temp_dir().join(format!(
+            "free-energy-raw-text-site-{}",
+            std::process::id()
+        ));
+        let docs = root.join("docs");
+        fs::create_dir_all(&docs).expect("create raw-text fixture directory");
+        let original = include_str!("../docs/index.html");
+        fs::write(docs.join("index.html"), original).expect("write original landing");
+        fs::write(docs.join("styles.css"), include_str!("../docs/styles.css"))
+            .expect("write fixture stylesheet");
+        fs::write(docs.join("README.md"), include_str!("../docs/README.md"))
+            .expect("write fixture readme");
+        assert!(
+            validate(&root).is_empty(),
+            "unmodified landing must remain valid"
+        );
+        assert!(original.contains("<title>FREE ENERGY"));
+
+        let route_open = r#"<div class="route-grid" aria-label="Choose how to participate">"#;
+        assert_eq!(original.matches(route_open).count(), 1);
+        let start = original.find(route_open).expect("unique route grid") + route_open.len();
+        let end = start + original[start..].find("</div>").expect("route grid closing");
+        assert_eq!(original[start..end].matches(r#"class="route-card""#).count(), 3);
+        let wrap_routes = |open: &str, close: &str| {
+            format!(
+                "{}{open}{}{close}{}",
+                &original[..start],
+                &original[start..end],
+                &original[end..]
+            )
+        };
+        let nav_open = r#"<nav aria-label="Main navigation">"#;
+        assert_eq!(original.matches(nav_open).count(), 1);
+
+        for element in ["textarea", "xmp", "plaintext", "noembed", "noframes"] {
+            let expected = format!(
+                "Unexpected active, embedded, or inert element: {element}"
+            );
+
+            for tag in [element.to_string(), element.to_ascii_uppercase()] {
+                let navigation_hidden = original
+                    .replacen(nav_open, &format!("<{tag}>{nav_open}"), 1)
+                    .replacen("</nav>", &format!("</nav></{tag}>"), 1);
+                for (case, candidate) in [
+                    ("three cards", wrap_routes(&format!("<{tag}>"), &format!("</{tag}>"))),
+                    ("primary navigation", navigation_hidden),
+                    ("unclosed cards", wrap_routes(&format!("<{tag}>"), "")),
+                    ("self-closing-like opener", original.replacen(
+                        "</head>",
+                        &format!("<{tag}/></head>"),
+                        1,
+                    )),
+                ] {
+                    assert_ne!(candidate, original, "{element}/{case}: fixture unchanged");
+                    assert_eq!(
+                        candidate.matches(&format!("<{tag}")).count(),
+                        1,
+                        "{element}/{case}: malformed fixture"
+                    );
+                    fs::write(docs.join("index.html"), candidate)
+                        .expect("write forbidden raw-text fixture");
+                    let errors = validate(&root);
+                    assert!(
+                        errors.iter().any(|error| error == &expected),
+                        "{element}/{case}: expected {expected:?}, got {errors:?}"
+                    );
+                }
+            }
+
+            for (case, candidate) in [
+                ("comment-only", original.replacen(
+                    "</head>",
+                    &format!("<!-- <{element}> --></head>"),
+                    1,
+                )),
+                ("attribute-only", original.replacen(
+                    "<body",
+                    &format!("<body data-example='<{element}>'"),
+                    1,
+                )),
+                ("extended tag name", original.replacen(
+                    "</head>",
+                    &format!("<{element}-extra></{element}-extra></head>"),
+                    1,
+                )),
+            ] {
+                assert_ne!(candidate, original, "{element}/{case}: fixture unchanged");
+                fs::write(docs.join("index.html"), candidate)
+                    .expect("write permitted lookalike fixture");
+                let errors = validate(&root);
+                assert!(
+                    errors.is_empty(),
+                    "{element}/{case}: false positive for harmless lookalike: {errors:?}"
+                );
+            }
+        }
+
+        fs::write(docs.join("index.html"), original).expect("restore original fixture");
+        assert!(validate(&root).is_empty(), "real head title and landing must pass");
+        fs::remove_dir_all(&root).expect("remove raw-text fixtures");
+    }
+
+    #[test]
     fn base_url_and_meta_refresh_cannot_override_visitor_navigation() {
         let base = tags(r##"<head><BASE href="https://example.invalid/"></head>"##);
         assert!(has_browser_navigation_override(&base));
