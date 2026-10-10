@@ -89,6 +89,7 @@ pub enum Denial {
     UnprovedTransition,
     ExistingOperationDifferentIntent,
     AssignmentAlreadyStarted,
+    CapacityExhausted,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,6 +104,10 @@ pub enum Outcome {
     Committed(Receipt),
     Reconciled(Receipt),
 }
+
+/// Maximum receipts retained by this offline model. Existing receipts are never
+/// evicted to free capacity: exact retries must retain their original outcome.
+pub const MAX_SIMULATED_START_RECEIPTS: usize = 1024;
 
 /// Single-threaded, in-memory testing ledger. No database, crash durability,
 /// live authorization, network provider adapter or concurrency guarantee.
@@ -161,6 +166,10 @@ impl Simulation {
             .contains_key(&attempt.original.assignment)
         {
             return Err(Denial::AssignmentAlreadyStarted);
+        }
+
+        if self.committed.len() >= MAX_SIMULATED_START_RECEIPTS {
+            return Err(Denial::CapacityExhausted);
         }
 
         let receipt = Receipt {
@@ -479,4 +488,36 @@ mod tests {
         above_limit.incarnation.push('i');
         assert!(!above_limit.valid());
     }
+
+    #[test]
+    fn start_receipt_capacity_preserves_historical_reconciliation() {
+        let mut book = Simulation::default();
+        for index in 0..MAX_SIMULATED_START_RECEIPTS {
+            let mut a = attempt();
+            a.original.operation += index as u64;
+            a.original.assignment += index as u64;
+            a.observed_current = a.original.clone();
+            a.effect_current = a.original.clone();
+            assert!(matches!(book.start(&a), Ok(Outcome::Committed(_))));
+        }
+
+        let mut overflow = attempt();
+        overflow.original.operation += MAX_SIMULATED_START_RECEIPTS as u64;
+        overflow.original.assignment += MAX_SIMULATED_START_RECEIPTS as u64;
+        overflow.observed_current = overflow.original.clone();
+        overflow.effect_current = overflow.original.clone();
+        assert_eq!(book.start(&overflow), Err(Denial::CapacityExhausted));
+        assert_eq!(book.start(&overflow), Err(Denial::CapacityExhausted));
+
+        assert!(matches!(book.start(&attempt()), Ok(Outcome::Reconciled(_))));
+        let mut conflicting_replay = attempt();
+        conflicting_replay.original.output_generation += 1;
+        assert_eq!(
+            book.start(&conflicting_replay),
+            Err(Denial::ExistingOperationDifferentIntent)
+        );
+        assert_eq!(book.emitted_starts(), MAX_SIMULATED_START_RECEIPTS);
+        assert_eq!(book.reconcile(81).unwrap().historical_cut, original());
+    }
+
 }
