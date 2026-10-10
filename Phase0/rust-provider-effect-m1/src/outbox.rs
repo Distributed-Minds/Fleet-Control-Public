@@ -198,7 +198,13 @@ impl Outbox {
             }
             _ => return Err(Error::InvalidTransition),
         };
-        if matches!(action, Action::Reserve | Action::BeginAttempt) && !boundary.current() {
+        // Even synthetic queue admission requires current domain and provider
+        // boundaries. A queued candidate is not live mutation authority.
+        let requires_current_boundary = matches!(
+            action,
+            Action::Admit | Action::Reserve | Action::BeginAttempt
+        );
+        if requires_current_boundary && !boundary.current() {
             return Err(Error::StaleAuthority);
         }
         let next_version = entry
@@ -455,5 +461,60 @@ mod tests {
         let mut maximum = envelope();
         maximum.operation_id = "x".repeat(512);
         assert_eq!(outbox.submit(maximum), Ok(true));
+    }
+
+    #[test]
+    fn synthetic_admission_rejects_stale_authority_without_queueing() {
+        for boundary in [
+            Boundary {
+                authority_current: false,
+                provider_fence_current: true,
+            },
+            Boundary {
+                authority_current: true,
+                provider_fence_current: false,
+            },
+            Boundary {
+                authority_current: false,
+                provider_fence_current: false,
+            },
+        ] {
+            let mut outbox = Outbox::new();
+            assert_eq!(outbox.submit(envelope()), Ok(true));
+            assert_eq!(
+                outbox.apply("op-123", 0, Action::Admit, boundary),
+                Err(Error::StaleAuthority)
+            );
+            let unchanged = outbox.entry("op-123").unwrap();
+            assert_eq!(unchanged.status(), Status::Prepared);
+            assert_eq!(unchanged.version(), 0);
+            assert!(!unchanged.attempted());
+            assert_eq!(
+                unchanged.history(),
+                &[Step {
+                    version: 0,
+                    status: Status::Prepared,
+                }]
+            );
+            // Rejecting an invalid prepared operation must remain possible
+            // even when its admission authority has already been revoked.
+            assert_eq!(
+                outbox
+                    .apply("op-123", 0, Action::Reject, boundary)
+                    .unwrap()
+                    .status(),
+                Status::Rejected
+            );
+        }
+
+        let mut authorized = Outbox::new();
+        authorized.submit(envelope()).unwrap();
+        assert_eq!(
+            authorized
+                .apply("op-123", 0, Action::Admit, CURRENT)
+                .unwrap()
+                .status(),
+            Status::Queued
+        );
     }
 }
