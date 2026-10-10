@@ -234,7 +234,9 @@ mod tests {
     fn canonical_selector_order_does_not_manufacture_replay_conflicts() {
         let mut state = SimulatedReplay::new(basis()).unwrap();
         state.enroll_test_principal(1, 1).unwrap();
-        let first = state.poll(1, 1, &poll("a", 2, &[10, 20]), &basis()).unwrap();
+        let first = state
+            .poll(1, 1, &poll("a", 2, &[10, 20]), &basis())
+            .unwrap();
         assert_eq!(
             state.poll(1, 1, &poll("a", 2, &[20, 10]), &basis()),
             Ok(first)
@@ -264,8 +266,12 @@ mod tests {
         let mut state = SimulatedReplay::new(basis()).unwrap();
         state.enroll_test_principal(1, 3).unwrap();
         state.enroll_test_principal(2, 3).unwrap();
-        state.poll(1, 3, &poll("same", 11, &[100]), &basis()).unwrap();
-        state.poll(2, 3, &poll("same", 12, &[200]), &basis()).unwrap();
+        state
+            .poll(1, 3, &poll("same", 11, &[100]), &basis())
+            .unwrap();
+        state
+            .poll(2, 3, &poll("same", 12, &[200]), &basis())
+            .unwrap();
         assert_eq!(state.reservation_count(), 2);
         state.revoke_test_principal(1).unwrap();
         assert_eq!(
@@ -279,7 +285,8 @@ mod tests {
             }))
         );
         assert_eq!(
-            state.poll(2, 3, &poll("same", 12, &[200]), &basis())
+            state
+                .poll(2, 3, &poll("same", 12, &[200]), &basis())
                 .unwrap()
                 .task_id,
             12
@@ -333,7 +340,10 @@ mod tests {
     #[test]
     fn malformed_identity_or_request_is_denied_without_state_mutation() {
         let mut state = SimulatedReplay::new(basis()).unwrap();
-        assert_eq!(state.enroll_test_principal(0, 1), Err(ReplayError::InvalidPrincipal));
+        assert_eq!(
+            state.enroll_test_principal(0, 1),
+            Err(ReplayError::InvalidPrincipal)
+        );
         state.enroll_test_principal(1, 1).unwrap();
         assert_eq!(
             state.poll(2, 1, &poll("a", 4, &[1]), &basis()),
