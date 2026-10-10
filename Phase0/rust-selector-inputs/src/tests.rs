@@ -104,6 +104,25 @@ fn s6_03_source_generation_change_after_preflight_is_stale() {
 }
 
 #[test]
+fn oversized_source_dependency_vector_is_rejected_before_graph_walk() {
+    let mut s = fixture();
+    // With only two registered sources no valid declaration can contain
+    // thousands of dependency edges. Reject raw fanout before sorting.
+    s.sources[0].dependencies = vec!["registry-b".into(); 4096];
+    assert_eq!(evaluate(&s), Err(Denial::Incomplete));
+}
+
+#[test]
+fn one_registered_acyclic_dependency_still_selects() {
+    let mut s = fixture();
+    s.sources[0].dependencies.push("registry-b".into());
+    let selected = evaluate(&s).unwrap();
+    assert_eq!(selected.model, "conservative");
+    assert_eq!(selected.score, 100);
+    assert!(!selected.confidence_gain);
+}
+
+#[test]
 fn s6_04_conflicting_rank_sources_have_no_favorable_tiebreak() {
     let mut s = fixture();
     s.ranks[0].score = 999;

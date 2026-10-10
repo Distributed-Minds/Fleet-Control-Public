@@ -196,6 +196,11 @@ pub fn evaluate(s: &Snapshot) -> Result<Selection, Denial> {
             || source.valid_from > s.cut
             || source.valid_until < s.cut
             || source.high_water < s.cut
+            // All valid edges must reference the bounded source registry.
+            // Cap the raw vector before duplicate checks or graph traversal:
+            // an attacker-controlled million-edge list must not consume
+            // unbounded resources merely to be rejected later.
+            || source.dependencies.len() > s.sources.len()
         {
             return Err(Denial::Incomplete);
         }
