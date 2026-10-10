@@ -214,6 +214,12 @@ fn read_file(path: &Path) -> Result<String, String> {
         }
     }
     let metadata = fs::symlink_metadata(path).map_err(|error| format!("{path:?}: {error}"))?;
+    read_file_after_preflight(path, &metadata)
+}
+
+// Separate the preflight identity from the open so regressions can inject a
+// deterministic pathname replacement at exactly the TOCTOU boundary.
+fn read_file_after_preflight(path: &Path, metadata: &fs::Metadata) -> Result<String, String> {
     if !metadata.file_type().is_file() {
         return Err(format!(
             "{path:?}: expected a regular non-symlink JSON file"
@@ -222,7 +228,22 @@ fn read_file(path: &Path) -> Result<String, String> {
     if metadata.len() > MAX_EXPLAIN_MANIFEST_BYTES {
         return Err(format!("{path:?}: manifest exceeds 1 MiB input limit"));
     }
-    let file = fs::File::open(path).map_err(|error| format!("{path:?}: {error}"))?;
+    // A pathname can be replaced after lstat. On Linux, opening a swapped-in
+    // FIFO without O_NONBLOCK can hang before metadata checks; following a
+    // swapped-in symlink can access a different path before the inode check.
+    // The inode check remains necessary for a swapped-in *regular* file.
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let file = options
+        .open(path)
+        .map_err(|error| format!("{path:?}: {error}"))?;
     let opened = file
         .metadata()
         .map_err(|error| format!("{path:?}: {error}"))?;
@@ -432,6 +453,51 @@ mod tests {
             "valid prefix + aliased tail must never produce partial JSON success"
         );
         fs::remove_dir_all(&scratch).expect("clean isolated fixture");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn preflighted_manifest_rejects_swapped_regular_inode_and_symlink() {
+        use std::os::unix::fs::symlink;
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let scratch = env::temp_dir().join(format!(
+            "free-energy-catalog-explain-open-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&scratch).unwrap();
+        let input = scratch.join("manifest.json");
+        fs::write(&input, LUANTI).unwrap();
+        assert_eq!(read_file(&input).unwrap(), LUANTI);
+
+        let observed = fs::symlink_metadata(&input).unwrap();
+        let replacement = scratch.join("replacement.json");
+        fs::write(&replacement, OPENRA).unwrap();
+        fs::rename(&replacement, &input).unwrap();
+        let error = read_file_after_preflight(&input, &observed).unwrap_err();
+        assert!(
+            error.contains("changed between preflight and open"),
+            "{error}"
+        );
+
+        let observed = fs::symlink_metadata(&input).unwrap();
+        let linked_target = scratch.join("linked-target.json");
+        fs::write(&linked_target, LUANTI).unwrap();
+        fs::remove_file(&input).unwrap();
+        symlink(&linked_target, &input).unwrap();
+        assert!(
+            read_file_after_preflight(&input, &observed).is_err(),
+            "a swapped-in symlink must never be admitted"
+        );
+        assert!(
+            read_file(&input).is_err(),
+            "the ordinary CLI path must fail"
+        );
+        fs::remove_dir_all(&scratch).unwrap();
     }
 
     #[test]
