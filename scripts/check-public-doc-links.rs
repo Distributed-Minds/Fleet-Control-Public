@@ -970,6 +970,33 @@ mod tests {
         }
     }
 
+    // Integrate the boundary cases through percent decoding, filesystem miss,
+    // and final stderr rendering; do not alter the error classification.
+    #[test]
+    fn diagnostic_rendering_keeps_non_format_missing_targets_verbatim() {
+        let sandbox = Sandbox::new();
+        sandbox.write(
+            "README.md",
+            "[unassigned](absent%E2%81%A5.md)\n[combining](absent%F0%93%91%80.md)\n",
+        );
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 2);
+        assert_eq!(report.errors.len(), 2, "{:?}", report.errors);
+        let rendered: Vec<_> = report.errors.iter().map(|problem| render_failure(problem)).collect();
+        assert!(
+            rendered.iter().any(|line| line.contains("absent\u{2065}.md")),
+            "{rendered:?}"
+        );
+        assert!(
+            rendered.iter().any(|line| line.contains("absent\u{13440}.md")),
+            "{rendered:?}"
+        );
+        assert!(rendered.iter().all(|line|
+            line.starts_with("FAIL: README.md:") &&
+            line.contains("target missing") && line.lines().count() == 1
+        ), "{rendered:?}");
+    }
+
     #[test]
     fn diagnostic_rendering_preserves_ordinary_printable_text() {
         for value in ["README.md: target missing: a/b.md", "café.md", "emoji-🧪.md",
