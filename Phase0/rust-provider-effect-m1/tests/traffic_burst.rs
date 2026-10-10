@@ -16,7 +16,11 @@ const CURRENT: Boundary = Boundary {
 const OBSERVED_BURST_COUNT: usize = 226;
 
 fn event(index: usize) -> Request {
-    let repository = if index % 2 == 0 { "public-one" } else { "public-two" };
+    let repository = if index % 2 == 0 {
+        "public-one"
+    } else {
+        "public-two"
+    };
     Request {
         operation_id: format!("coord-transition-{index:03}"),
         credential_group: GROUP.into(),
@@ -32,7 +36,9 @@ fn burst_scheduler() -> Scheduler {
     let mut scheduler = Scheduler::new();
     // Fixture-only budgets: NOT assertions about an effective GitHub quota.
     scheduler.register_group(GROUP, 48, 8, 250).unwrap();
-    scheduler.register_operation_class(GROUP, "comment-create", 48).unwrap();
+    scheduler
+        .register_operation_class(GROUP, "comment-create", 48)
+        .unwrap();
     for index in 0..OBSERVED_BURST_COUNT {
         assert_eq!(scheduler.enqueue(event(index)), Ok(true));
     }
@@ -119,6 +125,9 @@ fn burst_throttle_and_revocation_leave_all_pending_ids_recoverable() {
     ));
     assert_eq!(scheduler.pending(GROUP), Ok(OBSERVED_BURST_COUNT));
     scheduler.set_circuit_open(GROUP, false).unwrap();
-    assert!(scheduler.simulate_candidate(GROUP, CURRENT).unwrap().is_some());
+    assert!(scheduler
+        .simulate_candidate(GROUP, CURRENT)
+        .unwrap()
+        .is_some());
     assert_eq!(scheduler.pending(GROUP), Ok(OBSERVED_BURST_COUNT - 1));
 }
