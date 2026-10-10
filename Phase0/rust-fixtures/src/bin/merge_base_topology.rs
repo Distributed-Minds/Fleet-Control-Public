@@ -8,6 +8,7 @@ use serde::de::{self, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
+use std::io::Read;
 
 const HISTORICAL_CASE_COUNT: usize = 12;
 // The historical Python migration must not silently replace one of the named
@@ -451,6 +452,83 @@ fn parse_cases(content: &str) -> Result<Vec<Case>, String> {
     serde_json::from_value(value).map_err(|error| error.to_string())
 }
 
+// Caller-provided fixture files are developer inputs, not trusted authority.
+// Refuse special files and symbolic links before opening, then check the opened
+// descriptor and cap the bytes actually read. Pre-open path checks alone do not
+// establish immutable inode identity against concurrent path replacement.
+const MAX_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
+
+fn read_bounded_fixture(path: &std::path::Path) -> Result<String, String> {
+    let pre = std::fs::symlink_metadata(path)
+        .map_err(|error| format!("cannot inspect merge-base fixture {path:?}: {error}"))?;
+    read_bounded_fixture_with_metadata(path, &pre)
+}
+
+fn read_bounded_fixture_with_metadata(
+    path: &std::path::Path,
+    pre: &std::fs::Metadata,
+) -> Result<String, String> {
+    if !pre.file_type().is_file() {
+        return Err(format!(
+            "merge-base fixture {path:?} must be a regular file (no symlinks)"
+        ));
+    }
+    if pre.len() > MAX_FIXTURE_BYTES {
+        return Err(format!(
+            "merge-base fixture {path:?} exceeds {MAX_FIXTURE_BYTES} bytes"
+        ));
+    }
+
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // A path swapped for a FIFO after the metadata check must not block
+        // the runner; a final-component symlink replacement must not follow.
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let opened = options
+        .open(path)
+        .map_err(|error| format!("cannot read merge-base fixture {path:?}: {error}"))?;
+    let actual = opened
+        .metadata()
+        .map_err(|error| format!("cannot inspect opened merge-base fixture {path:?}: {error}"))?;
+    if !actual.is_file() {
+        return Err(format!(
+            "opened merge-base fixture {path:?} is not a regular file"
+        ));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if pre.dev() != actual.dev() || pre.ino() != actual.ino() {
+            return Err(format!(
+                "merge-base fixture {path:?} changed between metadata check and open"
+            ));
+        }
+    }
+    if actual.len() > MAX_FIXTURE_BYTES {
+        return Err(format!(
+            "merge-base fixture {path:?} exceeds {MAX_FIXTURE_BYTES} bytes"
+        ));
+    }
+
+    let mut bytes = String::new();
+    opened
+        .take(MAX_FIXTURE_BYTES + 1)
+        .read_to_string(&mut bytes)
+        .map_err(|error| format!("cannot read merge-base fixture {path:?}: {error}"))?;
+    if (bytes.len() as u64) > MAX_FIXTURE_BYTES {
+        return Err(format!(
+            "merge-base fixture {path:?} exceeds {MAX_FIXTURE_BYTES} bytes"
+        ));
+    }
+    Ok(bytes)
+}
+
 // Preserve a zero-argument checked-in baseline, but also admit caller-owned
 // fixtures for actual process-level semantic regression and input-boundary
 // tests. This oracle remains read-only and grants no Git mutation authority.
@@ -461,8 +539,7 @@ fn run() -> Result<usize, String> {
         return Err("usage: merge_base_topology [fixture.json]".to_owned());
     }
     let content = match input {
-        Some(path) => std::fs::read_to_string(&path)
-            .map_err(|error| format!("cannot read merge-base fixture {path:?}: {error}"))?,
+        Some(path) => read_bounded_fixture(std::path::Path::new(&path))?,
         None => FIXTURES.to_owned(),
     };
     let cases = parse_cases(&content)
@@ -614,6 +691,82 @@ mod tests {
             Ok(HISTORICAL_CASE_COUNT),
             "the historical source fixture must remain accepted"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn fixture_open_rejects_identical_bytes_from_replaced_inode_and_symlink_swap() {
+        let scratch = std::env::temp_dir().join(format!(
+            "free-energy-merge-base-open-fence-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&scratch).unwrap();
+        let path = scratch.join("fixture.json");
+        let replacement = scratch.join("replacement.json");
+        std::fs::write(&path, FIXTURES).unwrap();
+        std::fs::write(&replacement, FIXTURES).unwrap();
+        let before = std::fs::symlink_metadata(&path).unwrap();
+        std::fs::rename(&replacement, &path).unwrap();
+        assert!(
+            read_bounded_fixture_with_metadata(&path, &before)
+                .unwrap_err()
+                .contains("changed between metadata check and open"),
+            "byte-identical replacement must not hide changed file identity"
+        );
+
+        let before_link = std::fs::symlink_metadata(&path).unwrap();
+        let target = scratch.join("target.json");
+        std::fs::write(&target, FIXTURES).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        std::os::unix::fs::symlink(&target, &path).unwrap();
+        assert!(
+            read_bounded_fixture_with_metadata(&path, &before_link).is_err(),
+            "symlink substitution after inspection must be rejected"
+        );
+        assert!(read_bounded_fixture(&path).is_err());
+        std::fs::remove_dir_all(&scratch).unwrap();
+    }
+
+    #[test]
+    fn exact_limit_is_valid_but_post_preflight_growth_is_rejected() {
+        let scratch = std::env::temp_dir().join(format!(
+            "free-energy-merge-base-growth-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&scratch).unwrap();
+        let path = scratch.join("fixture.json");
+
+        // A valid JSON fixture plus insignificant whitespace must remain valid
+        // at the inclusive 8 MiB cap, rather than being rejected off-by-one.
+        let mut padded = FIXTURES.as_bytes().to_vec();
+        padded.resize(MAX_FIXTURE_BYTES as usize, b' ');
+        std::fs::write(&path, &padded).unwrap();
+        let content = read_bounded_fixture(&path).expect("accept exactly 8 MiB");
+        assert_eq!(content.len(), MAX_FIXTURE_BYTES as usize);
+        let cases: Vec<Case> = serde_json::from_str(&content).unwrap();
+        assert_eq!(check(&cases), Ok(HISTORICAL_CASE_COUNT));
+
+        // The file can grow between the pathname preflight and descriptor
+        // inspection. Its previous small-enough metadata must not authorize
+        // the now-oversized descriptor, even without a pathname/inode swap.
+        let preflight = std::fs::symlink_metadata(&path).unwrap();
+        let writer = std::fs::OpenOptions::new().write(true).open(&path).unwrap();
+        writer.set_len(MAX_FIXTURE_BYTES + 1).unwrap();
+        drop(writer);
+        let error = read_bounded_fixture_with_metadata(&path, &preflight).unwrap_err();
+        assert!(
+            error.contains("exceeds"),
+            "post-preflight growth must reject oversized fixture: {error}"
+        );
+        std::fs::remove_dir_all(&scratch).unwrap();
     }
 
     #[test]

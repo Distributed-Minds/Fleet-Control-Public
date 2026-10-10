@@ -166,3 +166,67 @@ fn external_cli_rejects_missing_file_and_extra_arguments() {
         "extra argument should explain usage"
     );
 }
+
+#[test]
+fn external_cli_rejects_nonregular_and_oversized_input_but_keeps_valid_files() {
+    let scratch = std::env::temp_dir().join(format!(
+        "free-energy-merge-base-input-bound-{}-{}",
+        std::process::id(),
+        NEXT_FILE.fetch_add(1, Ordering::Relaxed)
+    ));
+    fs::create_dir(&scratch).expect("new isolated fixture directory");
+    let cli = env!("CARGO_BIN_EXE_merge_base_topology");
+
+    let directory_output = Command::new(cli)
+        .arg(&scratch)
+        .output()
+        .expect("run CLI against directory");
+    assert_rejected(&directory_output, "directory cannot be a fixture");
+    assert!(String::from_utf8_lossy(&directory_output.stderr).contains("regular file"));
+
+    let too_large = scratch.join("oversized.json");
+    let file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&too_large)
+        .expect("create oversized fixture");
+    file.set_len(8 * 1024 * 1024 + 1)
+        .expect("extend fixture beyond the bounded input limit");
+    drop(file);
+    let oversized_output = Command::new(cli)
+        .arg(&too_large)
+        .output()
+        .expect("run CLI against oversized fixture");
+    assert_rejected(&oversized_output, "oversized fixture must be rejected");
+    assert!(String::from_utf8_lossy(&oversized_output.stderr).contains("exceeds"));
+
+    let valid = scratch.join("historical.json");
+    fs::write(&valid, BASELINE).expect("write original bounded fixture");
+    let positive = Command::new(cli)
+        .arg(&valid)
+        .output()
+        .expect("run CLI against valid regular file");
+    assert!(
+        positive.status.success(),
+        "original fixture rejected: {}",
+        String::from_utf8_lossy(&positive.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&positive.stdout),
+        "merge-base-topology: 12 read-only model fixtures PASS\n"
+    );
+
+    #[cfg(unix)]
+    {
+        let link = scratch.join("linked.json");
+        std::os::unix::fs::symlink(&valid, &link).expect("create symlink to valid fixture");
+        let link_output = Command::new(cli)
+            .arg(&link)
+            .output()
+            .expect("run CLI against symlink");
+        assert_rejected(&link_output, "symbolic-link fixture must be rejected");
+        assert!(String::from_utf8_lossy(&link_output.stderr).contains("regular file"));
+    }
+
+    fs::remove_dir_all(scratch).expect("remove isolated fixture directory");
+}
