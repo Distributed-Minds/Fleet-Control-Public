@@ -479,7 +479,10 @@ mod tests {
         fs::write(&replacement, OPENRA).unwrap();
         fs::rename(&replacement, &input).unwrap();
         let error = read_file_after_preflight(&input, &observed).unwrap_err();
-        assert!(error.contains("changed between preflight and open"), "{error}");
+        assert!(
+            error.contains("changed between preflight and open"),
+            "{error}"
+        );
 
         let observed = fs::symlink_metadata(&input).unwrap();
         let linked_target = scratch.join("linked-target.json");
@@ -490,7 +493,10 @@ mod tests {
             read_file_after_preflight(&input, &observed).is_err(),
             "a swapped-in symlink must never be admitted"
         );
-        assert!(read_file(&input).is_err(), "the ordinary CLI path must fail");
+        assert!(
+            read_file(&input).is_err(),
+            "the ordinary CLI path must fail"
+        );
         fs::remove_dir_all(&scratch).unwrap();
     }
 
