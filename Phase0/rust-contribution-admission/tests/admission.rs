@@ -136,15 +136,8 @@ fn d09_lost_ack_reconciles_without_duplicate_effect() {
     assert_eq!(result, Decision::ReconcileOriginalAttempt);
     let mut journal = SimulationJournal::default();
     let key = key();
-    let fingerprint = canonical_digest(&x);
-    assert_eq!(
-        journal.record(key.clone(), fingerprint.clone(), result),
-        Replay::First(result)
-    );
-    assert_eq!(
-        journal.record(key, fingerprint, Decision::ReviewableInSimulation),
-        Replay::Identical(result)
-    );
+    assert_eq!(journal.record(key.clone(), &x), Replay::First(result));
+    assert_eq!(journal.record(key, &x), Replay::Identical(result));
     assert_eq!(journal.provider_effects_emitted(), 0);
 }
 
@@ -172,13 +165,17 @@ fn key() -> OperationKey {
 #[test]
 fn d11_two_simulated_claimants_cannot_replace_original_receipt() {
     let mut journal = SimulationJournal::default();
+    let admitted = good();
+    let mut changed = admitted.clone();
+    changed.evidence.human_act = Claim::CallerClaim;
     assert_eq!(
-        journal.record(key(), "digest-a".into(), Decision::ReviewableInSimulation),
+        journal.record(key(), &admitted),
         Replay::First(Decision::ReviewableInSimulation)
     );
+    assert_eq!(journal.record(key(), &changed), Replay::Conflict);
     assert_eq!(
-        journal.record(key(), "digest-b".into(), Decision::ReviewableInSimulation),
-        Replay::Conflict
+        journal.record(key(), &admitted),
+        Replay::Identical(Decision::ReviewableInSimulation)
     );
     assert_eq!(journal.provider_effects_emitted(), 0);
 }
@@ -237,6 +234,74 @@ fn unknown_schema_and_missing_resource_identity_fail_closed() {
     let mut x = good();
     x.repository_id = 0;
     assert_eq!(evaluate(&x), Decision::Unknown(Reason::MalformedIdentity));
+}
+
+#[test]
+fn journal_cannot_promote_original_blocked_payload_by_replay() {
+    let mut journal = SimulationJournal::default();
+    let mut denied = good();
+    denied.evidence.human_act = Claim::CallerClaim;
+    let disposition = Decision::Blocked(Reason::MissingHumanAct);
+    assert_eq!(journal.record(key(), &denied), Replay::First(disposition));
+    assert_eq!(
+        journal.record(key(), &good()),
+        Replay::Conflict,
+        "a different envelope cannot upgrade the original blocked decision"
+    );
+    assert_eq!(
+        journal.record(key(), &denied),
+        Replay::Identical(disposition)
+    );
+    assert_eq!(journal.provider_effects_emitted(), 0);
+}
+
+#[test]
+fn journal_rejects_key_substitution_before_creating_receipt() {
+    let admission = good();
+    let mut journal = SimulationJournal::default();
+    let mut wrong_repo = key();
+    wrong_repo.repository_id += 1;
+    assert_eq!(journal.record(wrong_repo, &admission), Replay::Conflict);
+    let mut wrong_incarnation = key();
+    wrong_incarnation.repository_incarnation = "other-repo".into();
+    assert_eq!(
+        journal.record(wrong_incarnation, &admission),
+        Replay::Conflict
+    );
+    let mut wrong_generation = key();
+    wrong_generation.authority_generation += 1;
+    assert_eq!(
+        journal.record(wrong_generation, &admission),
+        Replay::Conflict
+    );
+    let mut missing_operation = key();
+    missing_operation.operation_id.clear();
+    assert_eq!(
+        journal.record(missing_operation, &admission),
+        Replay::Conflict
+    );
+    assert_eq!(journal.record(key(), &admission), Replay::First(Decision::ReviewableInSimulation));
+}
+
+#[test]
+fn journal_rejects_reused_operation_id_after_authority_generation_change() {
+    let mut journal = SimulationJournal::default();
+    let original = good();
+    assert_eq!(
+        journal.record(key(), &original),
+        Replay::First(Decision::ReviewableInSimulation)
+    );
+    let mut next = original.clone();
+    next.authority_generation += 1;
+    next.current_authority_generation += 1;
+    let mut recycled_key = key();
+    recycled_key.authority_generation += 1;
+    assert_eq!(journal.record(recycled_key, &next), Replay::Conflict);
+    assert_eq!(
+        journal.record(key(), &original),
+        Replay::Identical(Decision::ReviewableInSimulation)
+    );
+    assert_eq!(journal.provider_effects_emitted(), 0);
 }
 
 #[test]

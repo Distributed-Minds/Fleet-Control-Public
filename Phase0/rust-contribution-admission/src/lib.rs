@@ -274,15 +274,36 @@ pub struct SimulationJournal {
 }
 
 impl SimulationJournal {
-    pub fn record(
-        &mut self,
-        key: OperationKey,
-        payload_digest: String,
-        result: Decision,
-    ) -> Replay {
-        if key.repository_id == 0 || key.operation_id.is_empty() || payload_digest.is_empty() {
+    /// Bind one operation to the *actual* synthetic admission payload.
+    ///
+    /// The previous API accepted a caller-selected digest and result; a caller
+    /// could replay different bytes under the same label or inject a positive
+    /// disposition. Both the fingerprint and result are now derived here.
+    /// This in-memory journal remains simulation-only, not a durable broker.
+    pub fn record(&mut self, key: OperationKey, admission: &Admission) -> Replay {
+        if key.repository_id == 0
+            || key.repository_id != admission.repository_id
+            || key.repository_incarnation.is_empty()
+            || key.repository_incarnation != admission.repository_incarnation
+            || key.operation_id.is_empty()
+            || key.authority_generation == 0
+            || key.authority_generation != admission.authority_generation
+        {
             return Replay::Conflict;
         }
+
+        // A superseding authority generation cannot turn the *same* operation
+        // ID into a fresh effect attempt. Reconcile the original instead.
+        if self.records.keys().any(|old| {
+            old.repository_id == key.repository_id
+                && old.repository_incarnation == key.repository_incarnation
+                && old.operation_id == key.operation_id
+                && old.authority_generation != key.authority_generation
+        }) {
+            return Replay::Conflict;
+        }
+
+        let payload_digest = canonical_digest(admission);
         if let Some((old_digest, original)) = self.records.get(&key) {
             if old_digest == &payload_digest {
                 Replay::Identical(*original)
@@ -290,6 +311,7 @@ impl SimulationJournal {
                 Replay::Conflict
             }
         } else {
+            let result = evaluate(admission);
             self.records.insert(key, (payload_digest, result));
             Replay::First(result)
         }
