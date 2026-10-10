@@ -109,7 +109,9 @@ mod tests {
             Err(Error::CircuitOpen)
         ));
         s.set_circuit_open("effective-credential-1", false).unwrap();
-        let selected = s.simulate_candidate("effective-credential-1", CURRENT).unwrap();
+        let selected = s
+            .simulate_candidate("effective-credential-1", CURRENT)
+            .unwrap();
         assert!(selected.is_some());
         assert_eq!(s.remaining("effective-credential-1"), Ok(3));
         assert_eq!(s.pending("effective-credential-1"), Ok(1));
@@ -128,7 +130,8 @@ mod tests {
                 Ok(Disposition::ManualHold)
             );
             assert_eq!(
-                s.simulate_candidate("effective-credential-1", CURRENT).err(),
+                s.simulate_candidate("effective-credential-1", CURRENT)
+                    .err(),
                 Some(Error::CircuitOpen)
             );
             assert_eq!(s.pending("effective-credential-1"), Ok(2));
@@ -148,7 +151,8 @@ mod tests {
             );
             s.replenish("effective-credential-1").unwrap();
             assert_eq!(
-                s.simulate_candidate("effective-credential-1", CURRENT).err(),
+                s.simulate_candidate("effective-credential-1", CURRENT)
+                    .err(),
                 Some(Error::CircuitOpen)
             );
             // Explicit circuit reopening is still not independent authority.
@@ -174,7 +178,8 @@ mod tests {
             Ok(Disposition::AcknowledgedUnverified)
         );
         assert_eq!(
-            s.simulate_candidate("effective-credential-1", CURRENT).err(),
+            s.simulate_candidate("effective-credential-1", CURRENT)
+                .err(),
             Some(Error::CircuitOpen)
         );
     }
