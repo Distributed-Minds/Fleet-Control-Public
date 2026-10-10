@@ -74,11 +74,8 @@ fn mask_inline_code(line: &str) -> String {
         let mut ending = None;
         while j < original.len() {
             if original[j] == b'\x60' {
-                // An escaped backtick cannot terminate an active code span.
-                if preceded_by_escape(original, j) {
-                    j += 1;
-                    continue;
-                }
+                // Inside a code span, backslashes are literal: the first
+                // exact-width run closes the span even after a backslash.
                 let m = original[j..].iter().take_while(|&&x| x == b'\x60').count();
                 if m == n {
                     ending = Some(j + m);
