@@ -434,10 +434,10 @@ class CoordinationArchiveTests(unittest.TestCase):
         args = archive.make_parser().parse_args([
             "status", "--repo", "o/r", "--trusted-authors", "tester",
             "--tail-min", "1", "--standby-max", "5"])
-        with mock.patch.dict(os.environ, {"ARCHIVE_DELETE_ENABLED": "true"}), \\
-             mock.patch.object(archive, "fetch_open_issues", return_value=issues), \\
+        with mock.patch.dict(os.environ, {"ARCHIVE_DELETE_ENABLED": "true"}), \
+             mock.patch.object(archive, "fetch_open_issues", return_value=issues), \
              mock.patch.object(archive, "fetch_comments",
-                               side_effect=lambda _r, n: records if n == 11 else []), \\
+                               side_effect=lambda _r, n: records if n == 11 else []), \
              mock.patch("builtins.print") as output:
             self.assertEqual(archive.status(args), 0)
         rendered = " ".join(str(call.args[0]) for call in output.call_args_list)
@@ -462,10 +462,10 @@ class CoordinationArchiveTests(unittest.TestCase):
         args = archive.make_parser().parse_args([
             "status", "--repo", "o/r", "--trusted-authors", "tester",
             "--tail-min", "1", "--standby-max", "5"])
-        with mock.patch.dict(os.environ, {"ARCHIVE_DELETE_ENABLED": "true"}), \\
-             mock.patch.object(archive, "fetch_open_issues", return_value=issues), \\
+        with mock.patch.dict(os.environ, {"ARCHIVE_DELETE_ENABLED": "true"}), \
+             mock.patch.object(archive, "fetch_open_issues", return_value=issues), \
              mock.patch.object(archive, "fetch_comments",
-                               side_effect=lambda _r, n: records if n == 11 else []), \\
+                               side_effect=lambda _r, n: records if n == 11 else []), \
              mock.patch("builtins.print") as output:
             self.assertEqual(archive.status(args), 0)
         rendered = " ".join(str(call.args[0]) for call in output.call_args_list)
