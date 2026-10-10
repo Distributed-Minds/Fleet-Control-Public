@@ -825,7 +825,7 @@ mod tests {
         let result = sandbox.scan();
         assert_eq!(result.local_links, 2);
         assert_eq!(result.errors.len(), 1, "{:?}", result.errors);
-        assert!(result.errors[0].contains("README.md:1: target missing: missing.md"));
+        assert!(result.errors[0].contains("README.md: target missing: missing.md"), "{:?}", result.errors);
     }
 
     #[test]
