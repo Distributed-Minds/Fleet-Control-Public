@@ -413,6 +413,197 @@ fn collect_links(markdown: &str, document: &str, report: &mut Report) -> Vec<Str
     paths
 }
 
+// Reject syntactically active reference definitions explicitly instead of
+// silently treating their destinations as unchecked prose. This is an admission
+// scanner; ordinary inline destinations retain the existing parsing path.
+fn reference_definition_syntax(line: &str, continuation: Option<&str>) -> bool {
+    let bytes = line.as_bytes();
+    if bytes.first() != Some(&b'[') {
+        return false;
+    }
+    let mut close = None;
+    let mut index = 1;
+    while index < bytes.len() {
+        if !preceded_by_escape(bytes, index) {
+            if bytes[index] == b'[' {
+                return false;
+            }
+            if bytes[index] == b']' {
+                close = Some(index);
+                break;
+            }
+        }
+        index += 1;
+    }
+    let Some(close) = close else { return false };
+    let label = &line[1..close];
+    // CommonMark limits the *raw source* label to 999 Unicode code points,
+    // not bytes, grapheme clusters or a normalized/matched label length.
+    let length = label.chars().count();
+    if length == 0 || length > 999 || label.chars().all(char::is_whitespace) {
+        return false;
+    }
+    let Some(after_colon) = line[close + 1..].strip_prefix(':') else {
+        return false;
+    };
+    let value = if after_colon.trim().is_empty() {
+        let Some(next) = continuation else { return false };
+        let indent = next.bytes().take_while(|ch| *ch == b' ' || *ch == b'\t').count();
+        if indent == 0 || indent > 3 || next.trim().is_empty() {
+            return false;
+        }
+        next.trim()
+    } else {
+        after_colon.trim()
+    };
+    let (destination, rest) = if let Some(after_angle) = value.strip_prefix('<') {
+        let Some(close) = after_angle.find('>') else { return false };
+        let inner = &after_angle[..close];
+        if inner.contains(['<', '\n', '\r']) {
+            return false;
+        }
+        (inner, &after_angle[close + 1..])
+    } else {
+        let end = value.find(char::is_whitespace).unwrap_or(value.len());
+        let first = &value[..end];
+        if first.is_empty() || first.contains(['<', '>']) {
+            return false;
+        }
+        (first, &value[end..])
+    };
+    if destination.contains('\0') {
+        return false;
+    }
+    let extra = rest.trim();
+    if extra.is_empty() {
+        return true;
+    }
+    // A title is optional only after a destination and separating whitespace.
+    // The standalone string in [id]: "title" is a bare destination, not a
+    // title with an absent destination.
+    if rest.len() == extra.len() || extra.len() < 2 {
+        return false;
+    }
+    let pair = (extra.as_bytes()[0], *extra.as_bytes().last().unwrap_or(&0));
+    matches!(pair, (b'"', b'"') | (b'\'', b'\'') | (b'(', b')'))
+}
+
+fn collect_reference_definitions(markdown: &str, document: &str, report: &mut Report) {
+    let visible = mask_paragraph_code_spans(markdown);
+    let mut lines = visible.lines().peekable();
+    let mut fenced: Option<(u8, usize)> = None;
+    let mut in_comment = false;
+    let mut paragraph = false;
+    let mut previous_quote_depth = 0usize;
+    let mut list_indent: Option<usize> = None;
+    let mut line_number = 0usize;
+
+    while let Some(raw) = lines.next() {
+        line_number += 1;
+        let mut content = raw.trim_end_matches('\r');
+        let mut quote_depth = 0usize;
+        loop {
+            let leading = content.trim_start_matches(' ');
+            if content.len() - leading.len() > 3 {
+                break;
+            }
+            let Some(after_quote) = leading.strip_prefix('>') else { break };
+            quote_depth += 1;
+            content = after_quote.strip_prefix(' ').unwrap_or(after_quote);
+        }
+        if quote_depth != previous_quote_depth {
+            paragraph = false;
+            list_indent = None;
+            previous_quote_depth = quote_depth;
+        }
+        if content.trim().is_empty() {
+            paragraph = false;
+            continue;
+        }
+        let indentation = content.len() - content.trim_start_matches(' ').len();
+        let trimmed = content.trim_start_matches(' ');
+        let list_marker_width = if trimmed.starts_with("- ")
+            || trimmed.starts_with("* ") || trimmed.starts_with("+ ") {
+            Some(2)
+        } else {
+            let numeric = trimmed.bytes().take_while(u8::is_ascii_digit).count();
+            if numeric > 0 && numeric <= 9
+                && matches!(trimmed.as_bytes().get(numeric), Some(b'.' | b')'))
+                && trimmed.as_bytes().get(numeric + 1) == Some(&b' ') {
+                Some(numeric + 2)
+            } else {
+                None
+            }
+        };
+        if let Some(marker_width) = list_marker_width {
+            list_indent = Some(indentation + marker_width);
+            content = &trimmed[marker_width..];
+            paragraph = false;
+        } else if let Some(width) = list_indent {
+            if indentation >= width {
+                content = &content[width..];
+            } else {
+                list_indent = None;
+                paragraph = false;
+            }
+        }
+
+        if content.len() - content.trim_start_matches(' ').len() > 3 {
+            continue; // indented code is not a reference-definition block
+        }
+        let content = content.trim_start_matches(' ');
+
+        if let Some((marker, width, can_close)) = fence_marker(content) {
+            match fenced {
+                None => {
+                    fenced = Some((marker, width));
+                    paragraph = false;
+                    continue;
+                }
+                Some((open_marker, open_width))
+                    if marker == open_marker && width >= open_width && can_close =>
+                {
+                    fenced = None;
+                    paragraph = false;
+                    continue;
+                }
+                _ => {}
+            }
+        }
+        if fenced.is_some() {
+            continue;
+        }
+        if in_comment {
+            if content.contains("-->") {
+                in_comment = false;
+                paragraph = false;
+            }
+            continue;
+        }
+        if content.contains("<!--") {
+            if !content.contains("-->") {
+                in_comment = true;
+            }
+            paragraph = false;
+            continue;
+        }
+        if content.starts_with('#') && content.trim_start_matches('#').starts_with(' ') {
+            paragraph = false;
+            continue; // ATX heading ends rather than extends a paragraph
+        }
+
+        let continuation = lines.peek().copied().map(str::trim_end);
+        if !paragraph && reference_definition_syntax(content, continuation) {
+            report.errors.push(format!(
+                "{document}:{line_number}: unsupported reference definition"
+            ));
+            // Multiple consecutive definitions can lead the same block.
+            continue;
+        }
+        paragraph = true;
+    }
+}
+
 fn check_target(root: &Path, document: &str, target: &str) -> Result<(), String> {
     let document_dir = root.join(document).parent().expect("rooted document").to_path_buf();
     // Lexical analysis is an early escape check, not the path to resolve:
@@ -491,6 +682,7 @@ fn check(root: &Path, docs: &[&str]) -> Report {
                 report.errors.push(format!("{document}: {problem}"));
             }
         }
+        collect_reference_definitions(&source, document, &mut report);
         for path in collect_links(&source, document, &mut report) {
             report.local_links += 1;
             if let Err(reason) = check_target(&root, document, &path) {
