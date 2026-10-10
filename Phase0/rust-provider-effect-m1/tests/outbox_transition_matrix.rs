@@ -120,7 +120,10 @@ fn is_semantically_allowed(state: Status, action: Action) -> bool {
                 Action::ReleaseReservation | Action::Reject | Action::BeginAttempt
             )
             | (Status::Dispatching, Action::MarkEffectUnknown)
-            | (Status::EffectUnknown, Action::StartReconciliation | Action::Hold)
+            | (
+                Status::EffectUnknown,
+                Action::StartReconciliation | Action::Hold
+            )
             | (Status::Reconciling, Action::Hold)
     )
 }
