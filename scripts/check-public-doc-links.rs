@@ -489,7 +489,15 @@ fn parse_destination(raw: &str) -> Result<Option<String>, String> {
         {
             return Err("unsupported link title syntax".into());
         }
-        if tail[1..tail.len() - 1].contains(title[0] as char) {
+        // An odd backslash run escapes the terminal quote: it cannot
+        // terminate the optional title. Interior same-kind delimiters are
+        // permitted only when escaped by odd backslash parity.
+        if preceded_by_escape(title, title.len() - 1) {
+            return Err("unsupported link title syntax".into());
+        }
+        if (1..title.len() - 1)
+            .any(|index| title[index] == title[0] && !preceded_by_escape(title, index))
+        {
             return Err("ambiguous link title syntax".into());
         }
     }
@@ -603,7 +611,9 @@ fn collect_links(markdown: &str, document: &str, report: &mut Report) -> Vec<Str
             while p < bytes.len() {
                 let c = bytes[p];
                 if let Some(q) = quote {
-                    if c == q {
+                    // Escaped title delimiters are title content, not a
+                    // closing quote. Even backslash runs leave them active.
+                    if c == q && !preceded_by_escape(bytes, p) {
                         quote = None;
                     }
                 } else if in_angle_destination {
