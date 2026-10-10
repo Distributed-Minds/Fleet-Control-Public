@@ -60,6 +60,21 @@ fn mask_inline_code(line: &str) -> String {
     let mut masked = original.to_vec();
     let mut i = 0;
     while i < original.len() {
+        // A complete inline HTML comment shields its literal backticks from
+        // pairing with code delimiters outside the comment. Unclosed inline
+        // openers remain ordinary text under the supported CommonMark subset.
+        if original[i..].starts_with(b"<!--") && !preceded_by_escape(original, i) {
+            if let Some(offset) = original[i + 4..].windows(3).position(|part| part == b"-->") {
+                let end = i + 4 + offset + 3;
+                for byte in &mut masked[i..end] {
+                    if *byte != b'\n' && *byte != b'\r' {
+                        *byte = b' ';
+                    }
+                }
+                i = end;
+                continue;
+            }
+        }
         if original[i] != b'\x60' {
             i += 1;
             continue;
@@ -183,9 +198,33 @@ fn mask_paragraph_code_spans(markdown: &str) -> String {
     let mut visible = String::with_capacity(markdown.len());
     let mut paragraph = String::new();
     let mut fenced: Option<(u8, usize)> = None;
+    let mut html_block_comment = false;
     for raw_line in markdown.split_inclusive('\n') {
         let line = raw_line.strip_suffix('\n').unwrap_or(raw_line);
         let line = line.strip_suffix('\r').unwrap_or(line);
+        // A CommonMark HTML block begun by <!-- at indentation 0-3 consumes
+        // its entire physical line, even after -->, unlike an inline comment
+        // inside paragraph text. An unclosed block continues through EOF.
+        // Check before fences so marker-shaped text inside HTML stays inert.
+        let without_indent = line.trim_start_matches(' ');
+        let starts_html_block = fenced.is_none()
+            && line.len() - without_indent.len() <= 3
+            && without_indent.starts_with("<!--");
+        if html_block_comment || starts_html_block {
+            if !paragraph.is_empty() {
+                visible.push_str(&mask_inline_code(&paragraph));
+                paragraph.clear();
+            }
+            html_block_comment = !line.contains("-->");
+            for byte in raw_line.bytes() {
+                visible.push(if byte == b'\n' || byte == b'\r' {
+                    byte as char
+                } else {
+                    ' '
+                });
+            }
+            continue;
+        }
         let fence_boundary = match fence_marker(line) {
             Some((marker, width, _)) if fenced.is_none() => {
                 fenced = Some((marker, width));
@@ -731,6 +770,63 @@ mod tests {
 
 
 
+
+
+    // Spec #334 v2: CommonMark HTML block/inline comments, code precedence,
+    // escaped openers, and unterminated-inline negative controls.
+    #[test]
+    fn html_comment_spec2_link_destinations() {
+        let cases: &[(&str, &str, &[&str])] = &[
+            ("P1", "Text <!-- ` [ghost](missing.md) --> [real](present.md) ` [after](present.md)", &["present.md", "present.md"]),
+            ("P2", "Text <!-- [ghost](missing.md) --> [real](present.md)\n", &["present.md"]),
+            ("H1", "<!-- [ghost](missing.md) -->\n[real](present.md)", &["present.md"]),
+            ("H2", "<!--\n[ghost](missing.md)\n[other](other.md)\n-->\n[real](present.md)", &["present.md"]),
+            ("H3", "<!--\n[ghost](missing.md)\n[other](other.md)", &[]),
+            ("H4", "prefix <!-- [ghost](missing.md) --> [real](present.md)", &["present.md"]),
+            ("H5", "\\<!-- [real](present.md) -->", &["present.md"]),
+            ("H6", "~~~md\n<!-- [ghost](missing.md) -->\n~~~\n[real](present.md)", &["present.md"]),
+            ("H7", "<!-- [ghost](missing.md) -->\r\n[real](present.md)", &["present.md"]),
+            ("H8", "<!-- [ghost](missing.md) --> [real](present.md)", &[]),
+            ("N1", "`<!--` [real](present.md)", &["present.md"]),
+            ("N2", "Text `<!--` [real](present.md)", &["present.md"]),
+            ("N3", "``<!--`` [real](present.md)", &["present.md"]),
+            ("N4", "`<!-- [ghost](missing.md) -->` [real](present.md)", &["present.md"]),
+            ("N5", "prefix <!-- [ghost](missing.md)", &["missing.md"]),
+            ("N6", "Text <!-- [ghost](missing.md)\n[real](present.md)", &["missing.md", "present.md"]),
+            ("N7", "<!-- [ghost](missing.md)\n[real](present.md)", &[]),
+            ("N8", "Text <!-- [ghost](missing.md) --> [real](present.md)", &["present.md"]),
+        ];
+        for &(id, source, expected) in cases {
+            let mut diagnostics = Report::default();
+            let actual_paths = collect_links(source, "README.md", &mut diagnostics);
+            let actual: Vec<&str> = actual_paths.iter().map(String::as_str).collect();
+            assert_eq!(actual, expected, "case={id}; source={source:?}");
+            assert!(diagnostics.errors.is_empty(), "case={id}: {:?}", diagnostics.errors);
+        }
+    }
+
+    #[test]
+    fn html_comment_spec2_sandbox_negative_controls() {
+        let sandbox = Sandbox::new();
+        sandbox.write("present.md", "present");
+        for source in [
+            "<!-- [ghost](missing.md) -->\\n[real](present.md)\\n",
+            "prefix <!-- [ghost](missing.md) --> [real](present.md)\\n",
+            "<!-- [ghost](missing.md) --> [real](present.md)\\n",
+        ] {
+            let source = source.replace("\\n", "\n");
+            sandbox.write("README.md", &source);
+            let result = sandbox.scan();
+            let expected_count = if source.starts_with("<!--") && !source.contains("\n[real]") { 0 } else { 1 };
+            assert_eq!(result.local_links, expected_count, "source={source:?}");
+            assert!(result.errors.is_empty(), "source={source:?}: {:?}", result.errors);
+        }
+        sandbox.write("README.md", "Text <!-- [ghost](missing.md)\n[real](present.md)\n");
+        let result = sandbox.scan();
+        assert_eq!(result.local_links, 2);
+        assert_eq!(result.errors.len(), 1, "{:?}", result.errors);
+        assert!(result.errors[0].contains("README.md: target missing: missing.md"), "{:?}", result.errors);
+    }
 
     #[test]
     fn indented_code_blocks_do_not_emit_markdown_destinations() {
