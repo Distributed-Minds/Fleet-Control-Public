@@ -595,10 +595,8 @@ mod tests {
     fn swapped_fifo_and_symlink_cannot_bypass_open_time_admission() {
         // Reproduce an adversarial replacement after the original lstat.
         // Without O_NONBLOCK, opening the FIFO for reading can hang forever.
-        let scratch = std::env::temp_dir().join(format!(
-            "free-energy-ghcap-open-swap-{}",
-            process::id()
-        ));
+        let scratch =
+            std::env::temp_dir().join(format!("free-energy-ghcap-open-swap-{}", process::id()));
         fs::create_dir(&scratch).expect("create isolated fixture directory");
         let input = scratch.join("fixture.json");
         fs::write(&input, BASELINE).expect("create regular fixture");
