@@ -193,8 +193,9 @@ impl Outbox {
             (Status::Reserved, Action::BeginAttempt) => Status::Dispatching,
             (Status::Dispatching, Action::MarkEffectUnknown) => Status::EffectUnknown,
             (Status::EffectUnknown, Action::StartReconciliation) => Status::Reconciling,
-            (Status::EffectUnknown, Action::Hold)
-            | (Status::Reconciling, Action::Hold) => Status::ManualHold,
+            (Status::EffectUnknown, Action::Hold) | (Status::Reconciling, Action::Hold) => {
+                Status::ManualHold
+            }
             _ => return Err(Error::InvalidTransition),
         };
         if matches!(action, Action::Reserve | Action::BeginAttempt) && !boundary.current() {
@@ -251,7 +252,10 @@ mod tests {
         assert_eq!(outbox.submit(envelope()), Ok(true));
         assert_eq!(step(&mut outbox, 0, Action::Admit), Status::Queued);
         assert_eq!(step(&mut outbox, 1, Action::Reserve), Status::Reserved);
-        assert_eq!(step(&mut outbox, 2, Action::BeginAttempt), Status::Dispatching);
+        assert_eq!(
+            step(&mut outbox, 2, Action::BeginAttempt),
+            Status::Dispatching
+        );
         assert_eq!(
             step(&mut outbox, 3, Action::MarkEffectUnknown),
             Status::EffectUnknown
@@ -266,7 +270,11 @@ mod tests {
         assert!(!entry.automatic_retry_allowed());
         assert_eq!(entry.version(), 6);
         assert_eq!(
-            entry.history().iter().map(|step| step.status).collect::<Vec<_>>(),
+            entry
+                .history()
+                .iter()
+                .map(|step| step.status)
+                .collect::<Vec<_>>(),
             vec![
                 Status::Prepared,
                 Status::Queued,
@@ -415,6 +423,9 @@ mod tests {
         let entry = outbox.entry("op-123").unwrap();
         assert_eq!(entry.status(), Status::ManualHold);
         assert!(!entry.automatic_retry_allowed());
-        assert!(!entry.history().iter().any(|event| event.status == Status::RemoteProven));
+        assert!(!entry
+            .history()
+            .iter()
+            .any(|event| event.status == Status::RemoteProven));
     }
 }
