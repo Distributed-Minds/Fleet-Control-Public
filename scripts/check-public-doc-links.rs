@@ -2044,6 +2044,17 @@ mod tests {
                     }
                     assert_eq!(inspect_help_guide_contract(&fixture), expected,
                         "case={case} newline={newline:?} trailing={trailing}");
+                    // Exercise the compiled ten-document acceptance path too:
+                    // the HELP contract must not behave differently in check().
+                    let sandbox = Sandbox::new();
+                    for document in DOCUMENTS {
+                        sandbox.write(document, "");
+                    }
+                    sandbox.write("HELP-A-PROJECT.md", &fixture);
+                    let site = check(&sandbox.0, &DOCUMENTS);
+                    assert_eq!(site.errors.is_empty(), expected.is_ok(),
+                        "full-site case={case} newline={newline:?} trailing={trailing}: {:?}",
+                        site.errors);
                 }
             }
         }
@@ -2076,10 +2087,27 @@ mod tests {
                     assert_eq!(inspect_help_guide_contract(&fixture),
                         Err("manual versus future capability disclosure missing"),
                         "case={case} newline={newline:?} trailing={trailing}");
+                    let sandbox = Sandbox::new();
+                    for document in DOCUMENTS {
+                        sandbox.write(document, "");
+                    }
+                    sandbox.write("HELP-A-PROJECT.md", &fixture);
+                    let site = check(&sandbox.0, &DOCUMENTS);
+                    assert!(site.errors.iter().any(|error|
+                        error.contains("manual versus future capability disclosure missing")),
+                        "full-site case={case} newline={newline:?} trailing={trailing}: {:?}",
+                        site.errors);
                 }
             }
         }
         assert_eq!(inspect_help_guide_contract(guide), Ok(()));
+        let sandbox = Sandbox::new();
+        for document in DOCUMENTS {
+            sandbox.write(document, "");
+        }
+        sandbox.write("HELP-A-PROJECT.md", guide);
+        let site = check(&sandbox.0, &DOCUMENTS);
+        assert!(site.errors.is_empty(), "valid full-site HELP: {:?}", site.errors);
     }
 
     // Issue #333: CommonMark blank lines contain ASCII spaces/tabs only.
