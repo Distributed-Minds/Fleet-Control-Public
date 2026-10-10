@@ -133,6 +133,8 @@ fn evaluate(selection: &TrustedSelection, cut: &ProposedCut) -> Outcome {
             || !target.drained
             || cause.accepted_but_unmaterialized
             || !cause.terminal_or_independently_transferred
+            // Synthetic shared sequence must be covered by *both* causal ends.
+            || cause.enqueue_sequence > source.acknowledged_through
             || cause.enqueue_sequence > target.acknowledged_through
         {
             return Outcome::Partial;
@@ -292,5 +294,33 @@ mod tests {
         let (selection, mut cut) = baseline();
         cut.composition = Composition::AnyOfDeclared;
         assert_eq!(evaluate(&selection, &cut), Outcome::CompleteForDeclaredSurfaces);
+    }
+
+    #[test]
+    fn source_frontier_cannot_lag_accepted_cross_provider_emission() {
+        // The baseline has A -> B at logical emission seq 4 and B -> C at 5.
+        // Destination-only checking falsely reports COMPLETE for A ack < 4.
+        // This models shared logical ordering, not trusted provider attestations.
+        let (selection, baseline_cut) = baseline();
+        let mut cases = 0;
+        for emission_sequence in 1..=16_u64 {
+            for source_ack in 0..=16_u64 {
+                let mut cut = baseline_cut.clone();
+                cut.causes[0].enqueue_sequence = emission_sequence;
+                cut.surfaces[0].acknowledged_through = source_ack;
+                let expected = if emission_sequence <= source_ack && emission_sequence <= 10 {
+                    Outcome::CompleteForDeclaredSurfaces
+                } else {
+                    Outcome::Partial
+                };
+                assert_eq!(
+                    evaluate(&selection, &cut),
+                    expected,
+                    "emission_sequence={emission_sequence} source_ack={source_ack}"
+                );
+                cases += 1;
+            }
+        }
+        assert_eq!(cases, 272);
     }
 }

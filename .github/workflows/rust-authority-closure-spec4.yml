@@ -5,6 +5,7 @@ on:
   pull_request:
     branches:
       - phase0/public-v0
+      - test/16-closure-cut-rust-20261010-c4n5
     paths:
       - .github/workflows/rust-authority-closure-spec4.yml
       - tests/authority_closure_spec4.rs
