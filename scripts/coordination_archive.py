@@ -727,18 +727,37 @@ def compact(args: argparse.Namespace) -> int:
 
 
 def status(args: argparse.Namespace) -> int:
-    slots = discover_slots(args.repo, args.config, trusted_authors(args))
+    authors = trusted_authors(args)
+    slots = discover_slots(args.repo, args.config, authors)
     active = live_slot(slots)
     print(f"active=slot-{active['slot']} issue=#{active['number']} epoch={active['epoch']}")
+    deletion_enabled = os.environ.get("ARCHIVE_DELETE_ENABLED") == "true"
+    agents = configured_agents(args.config) if deletion_enabled else set()
     counts = {}
     for slot in ("A", "B"):
         issue = slots[slot]
-        count = len(fetch_comments(args.repo, issue["number"]))
+        comments = fetch_comments(args.repo, issue["number"])
+        count = len(comments)
         counts[slot] = count
         print(f"slot={slot} issue=#{issue['number']} state={issue['slot_state']} epoch={issue['epoch']} comments={count} switch_at={args.switch_at} compact_above={args.compact_above} standby_max={args.standby_max} hard_cap={HARD_COMMENT_CAP}")
-    if any(issue["slot_state"] == "DRAINING" for issue in slots.values()) and os.environ.get("ARCHIVE_DELETE_ENABLED") != "true":
+        if deletion_enabled and count > args.standby_max:
+            # Reuse the exact protection rules used by compact, without
+            # reading archive state or treating retention eligibility as
+            # permission to delete. All comments were already fetched above.
+            protected, _ = record_info(comments, issue.get("body") or "",
+                                       args.tail_min, agents, authors)
+            minimum_retained = sum(item["id"] in protected for item in comments)
+            eligible = count - minimum_retained
+            print(f"retention: slot={slot} minimum_retained={minimum_retained} "
+                  f"maximum_retention_eligible={eligible}; not permission to delete")
+            if minimum_retained > args.standby_max:
+                print(f"WARNING: deletion is enabled, but retention rules alone protect at least "
+                      f"{minimum_retained} comments in slot {slot}; cannot reach "
+                      f"standby_max={args.standby_max}, even with fully verified archives and "
+                      "independent deletion authority; later rotation may block")
+    if any(issue["slot_state"] == "DRAINING" for issue in slots.values()) and not deletion_enabled:
         print("WARNING: deletion is disabled; a DRAINING slot cannot be compacted to STANDBY, so the next rotation will block until deletion is enabled and maintenance drains it")
-    if os.environ.get("ARCHIVE_DELETE_ENABLED") != "true":
+    if not deletion_enabled:
         remaining = sum(max(0, HARD_COMMENT_CAP - count) for count in counts.values())
         active_remaining = max(0, HARD_COMMENT_CAP - counts[active["slot"]])
         standby = slots["B" if active["slot"] == "A" else "A"]
@@ -747,7 +766,6 @@ def status(args: argparse.Namespace) -> int:
               f"(active cap headroom={active_remaining}, standby headroom to standby-max={standby_remaining}); "
               "rotation will block when the active slot reaches switch-at and standby is not below standby-max")
     return 0
-
 
 def rotate(args: argparse.Namespace) -> int:
     slots = discover_slots(args.repo, args.config, trusted_authors(args))

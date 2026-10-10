@@ -415,6 +415,64 @@ class CoordinationArchiveTests(unittest.TestCase):
         self.assertIn("a DRAINING slot cannot be compacted to STANDBY", rendered)
         self.assertIn("next rotation will block", rendered)
 
+    def test_status_warns_of_protected_capacity_even_with_delete_enabled(self):
+        # Each one-shot manual actor's latest terminal record also protects
+        # its OWNED/INTENT predecessors. Fully archived bytes are not enough
+        # to reclaim this live slot to standby size.
+        records = []
+        for index in range(8):
+            first = 3 * index + 1
+            run = f"manual-run-{index}"
+            agent = f"manual.v8.gpt6.{index}"
+            records.extend([
+                phase(first, run, agent=agent, state="INTENT"),
+                phase(first + 1, run, agent=agent, state="OWNED", prev=first),
+                phase(first + 2, run, agent=agent, state="RELEASE", prev=first + 1),
+            ])
+        issues = [slot_issue(11, "A", "ACTIVE", 1),
+                  slot_issue(12, "B", "STANDBY", 0)]
+        args = archive.make_parser().parse_args([
+            "status", "--repo", "o/r", "--trusted-authors", "tester",
+            "--tail-min", "1", "--standby-max", "5"])
+        with mock.patch.dict(os.environ, {"ARCHIVE_DELETE_ENABLED": "true"}), \
+             mock.patch.object(archive, "fetch_open_issues", return_value=issues), \
+             mock.patch.object(archive, "fetch_comments",
+                               side_effect=lambda _r, n: records if n == 11 else []), \
+             mock.patch("builtins.print") as output:
+            self.assertEqual(archive.status(args), 0)
+        rendered = " ".join(str(call.args[0]) for call in output.call_args_list)
+        self.assertIn("slot=A minimum_retained=24 maximum_retention_eligible=0", rendered)
+        self.assertIn("cannot reach standby_max=5", rendered)
+        self.assertIn("not permission to delete", rendered)
+
+    def test_status_does_not_warn_when_retention_alone_allows_headroom(self):
+        # Reusing one persistent actor identity leaves only its latest
+        # completed run's three linked records protected by this rule.
+        records = []
+        for index in range(8):
+            first = 3 * index + 1
+            run = f"stable-run-{index}"
+            records.extend([
+                phase(first, run, agent="manual.stable", state="INTENT"),
+                phase(first + 1, run, agent="manual.stable", state="OWNED", prev=first),
+                phase(first + 2, run, agent="manual.stable", state="RELEASE", prev=first + 1),
+            ])
+        issues = [slot_issue(11, "A", "ACTIVE", 1),
+                  slot_issue(12, "B", "STANDBY", 0)]
+        args = archive.make_parser().parse_args([
+            "status", "--repo", "o/r", "--trusted-authors", "tester",
+            "--tail-min", "1", "--standby-max", "5"])
+        with mock.patch.dict(os.environ, {"ARCHIVE_DELETE_ENABLED": "true"}), \
+             mock.patch.object(archive, "fetch_open_issues", return_value=issues), \
+             mock.patch.object(archive, "fetch_comments",
+                               side_effect=lambda _r, n: records if n == 11 else []), \
+             mock.patch("builtins.print") as output:
+            self.assertEqual(archive.status(args), 0)
+        rendered = " ".join(str(call.args[0]) for call in output.call_args_list)
+        self.assertIn("slot=A minimum_retained=3 maximum_retention_eligible=21", rendered)
+        self.assertNotIn("cannot reach standby_max=5", rendered)
+        self.assertIn("not permission to delete", rendered)
+
     def test_per_issue_archives_are_isolated(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
