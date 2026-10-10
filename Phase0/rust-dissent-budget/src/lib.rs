@@ -182,6 +182,7 @@ impl Ledger {
             return if existing.amendment.payload == a.payload
                 && existing.amendment.evidence == a.evidence
                 && existing.amendment.lineage == a.lineage
+                && existing.amendment.materiality == a.materiality
             {
                 Ok(Admission::Existing(a.id, existing.state.clone()))
             } else {
@@ -421,6 +422,45 @@ mod tests {
         assert_eq!(l.charged(), 1);
         invariant(&l);
     }
+    #[test]
+    fn same_id_replay_rejects_changed_materiality() {
+        let mut l = ledger(1);
+        let original = a("a");
+        let observed = l.basis();
+        assert!(matches!(
+            l.reserve(&observed, original.clone()),
+            Ok(Admission::Reserved(_))
+        ));
+
+        let mut changed = original.clone();
+        changed.materiality = Materiality::Unknown;
+        assert_eq!(l.reserve(&observed, changed), Err(Error::Conflict));
+        let mut changed = original.clone();
+        changed.materiality = Materiality::EquivalentTo("a".into());
+        assert_eq!(l.reserve(&observed, changed), Err(Error::Conflict));
+        assert_eq!(
+            l.reserve(&observed, original.clone()),
+            Ok(Admission::Existing("a".into(), State::Pending))
+        );
+
+        l.begin_emission("a", EffectBasis::current()).unwrap();
+        l.acknowledge("a", "receipt-a").unwrap();
+        let mut changed = original.clone();
+        changed.materiality = Materiality::Unknown;
+        assert_eq!(l.reserve(&observed, changed), Err(Error::Conflict));
+        assert_eq!(
+            l.reserve(&observed, original),
+            Ok(Admission::Existing(
+                "a".into(),
+                State::Committed {
+                    receipt: "receipt-a".into()
+                }
+            ))
+        );
+        assert_eq!(l.charged(), 1);
+        invariant(&l);
+    }
+
     #[test]
     fn stale_policy_lineage_and_changed_payload_denied() {
         let mut l = ledger(2);
