@@ -12,6 +12,7 @@ use std::collections::HashSet;
 use std::env;
 use std::fmt::Write as _;
 use std::fs;
+use std::io::Read;
 use std::process;
 
 const K: [u32; 64] = [
@@ -371,6 +372,92 @@ fn admit_fixture_shell(root: &Value) -> Result<(), String> {
     Ok(())
 }
 
+/* A digest receipt is not a semantic verdict, but it must not launder a
+ * contradictory historical fixture as a valid identity witness. The structural
+ * integration_candidate oracle remains the authoritative independent check;
+ * this preflight fails closed on mismatched declared outcomes before any digest
+ * is returned or written to stdout. */
+fn validate_fixture_outcomes(root: &Value) -> Result<(), String> {
+    let cases = root["cases"].as_array().ok_or("missing candidate cases")?;
+    let normal = cases
+        .iter()
+        .find(|case| case["name"] == "normal-two-parent")
+        .ok_or("missing normal candidate baseline")?;
+    let baseline = &normal["candidate"];
+    let parents = baseline["parents"]
+        .as_array()
+        .ok_or("baseline parents must be an array")?;
+    if parents.len() != 2
+        || parents[0] != baseline["target_commit"]
+        || parents[1] != baseline["source_commit"]
+        || baseline["constructor_version"] != "constructor-v1"
+        || baseline["compatibility_basis"] != "constructor-v1-exact"
+    {
+        return Err("invalid normal candidate parent order or constructor basis".to_owned());
+    }
+
+    for case in cases {
+        let name = case["name"].as_str().ok_or("missing case name")?;
+        let candidate = &case["candidate"];
+        let count = candidate["parent_count"]
+            .as_u64()
+            .ok_or("missing candidate parent count")?;
+        let support = case["constructor_support"]
+            .as_array()
+            .ok_or("missing constructor support")?;
+        let supported = support.iter().any(|value| value.as_u64() == Some(count));
+        let actual = if !supported {
+            "UNSUPPORTED_PARENT_CARDINALITY"
+        } else if candidate == baseline {
+            "SUPPORTED"
+        } else {
+            let mut reverse = baseline.clone();
+            reverse["parents"]
+                .as_array_mut()
+                .ok_or("baseline parent array missing")?
+                .reverse();
+            if candidate == &reverse && reverse != *baseline {
+                "SUPPORTED_DISTINCT_FROM:normal-two-parent"
+            } else {
+                let mut restored = candidate.clone();
+                restored["constructor_version"] = baseline["constructor_version"].clone();
+                restored["compatibility_basis"] = baseline["compatibility_basis"].clone();
+                if restored == *baseline
+                    && candidate["constructor_version"] == "constructor-v2"
+                    && candidate["compatibility_basis"] == "v2-preserves-v1-two-parent-envelope"
+                {
+                    "SUPPORTED_COMPATIBLE_WITH:normal-two-parent"
+                } else {
+                    return Err(format!("{name}: unsupported semantic candidate change"));
+                }
+            }
+        };
+        if case["expect"].as_str() != Some(actual) {
+            return Err(format!("{name}: declared outcome does not match {actual}"));
+        }
+    }
+
+    for case in root["stale_head_cases"]
+        .as_array()
+        .ok_or("missing stale-head cases")?
+    {
+        let name = case["name"]
+            .as_str()
+            .ok_or("missing stale-head case name")?;
+        let current = case["predicted_target"] == case["live_target"]
+            && case["predicted_source"] == case["live_source"];
+        let actual = if current {
+            "CURRENT"
+        } else {
+            "STALE_OR_INCOMPATIBLE"
+        };
+        if case["expect"].as_str() != Some(actual) {
+            return Err(format!("{name}: declared outcome does not match {actual}"));
+        }
+    }
+    Ok(())
+}
+
 fn candidate_ids(fixture_text: &str) -> Result<Vec<(String, String)>, String> {
     let StrictJson(root) = serde_json::from_str(fixture_text).map_err(|e| e.to_string())?;
     admit_fixture_shell(&root)?;
@@ -447,11 +534,81 @@ fn candidate_ids(fixture_text: &str) -> Result<Vec<(String, String)>, String> {
             serde_json::to_vec(&Value::Object(candidate.clone())).map_err(|e| e.to_string())?;
         ids.push((name.to_owned(), sha256_hex(&bytes)));
     }
+    validate_fixture_outcomes(&root)?;
     Ok(ids)
 }
 
+// Fixture input is a local caller-supplied path, not authenticated provider
+// evidence. Reject path replacement between metadata and open on Unix;
+// Linux additionally refuses symlink following and FIFO-blocking at open.
+// This is bounded local input hygiene, not a general filesystem sandbox.
+const MAX_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
+
+fn read_fixture_file_with_metadata(path: &str, before: &fs::Metadata) -> Result<String, String> {
+    if !before.file_type().is_file() {
+        return Err("fixture must be a regular non-symlink file".to_owned());
+    }
+    if before.len() > MAX_FIXTURE_BYTES {
+        return Err("fixture exceeds maximum input size".to_owned());
+    }
+
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // Linux O_NONBLOCK | O_NOFOLLOW: do not hang on a swapped-in FIFO
+        // or follow a symlink installed between lstat and open.
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let file = options.open(path).map_err(|error| error.to_string())?;
+    let opened = file.metadata().map_err(|error| error.to_string())?;
+    if !opened.file_type().is_file() {
+        return Err("opened fixture is not a regular file".to_owned());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if before.dev() != opened.dev() || before.ino() != opened.ino() {
+            return Err("fixture changed between metadata check and open".to_owned());
+        }
+    }
+    if opened.len() > MAX_FIXTURE_BYTES {
+        return Err("fixture exceeds maximum input size".to_owned());
+    }
+
+    // A writer may append after fstat: retain a descriptor-level byte cap.
+    let mut contents = String::new();
+    file.take(MAX_FIXTURE_BYTES + 1)
+        .read_to_string(&mut contents)
+        .map_err(|error| error.to_string())?;
+    if contents.len() as u64 > MAX_FIXTURE_BYTES {
+        return Err("fixture exceeds maximum input size".to_owned());
+    }
+    Ok(contents)
+}
+
+fn read_fixture_file(path: &str) -> Result<String, String> {
+    let before = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+    read_fixture_file_with_metadata(path, &before)
+}
+
 fn main() {
-    let args: Vec<String> = env::args().skip(1).collect();
+    // OS arguments may contain non-UTF-8 bytes; env::args() would panic and
+    // bypass the digest CLI's deterministic failure/exit contract.
+    let args: Vec<String> = match env::args_os()
+        .skip(1)
+        .map(|arg| arg.into_string())
+        .collect::<Result<Vec<String>, _>>()
+    {
+        Ok(args) => args,
+        Err(_) => {
+            eprintln!("FAIL: non-UTF-8 CLI argument");
+            process::exit(1);
+        }
+    };
     if args.len() > 1 {
         eprintln!("usage: integration_candidate_digest [fixture-path]");
         process::exit(2);
@@ -460,7 +617,7 @@ fn main() {
         .first()
         .map(String::as_str)
         .unwrap_or("Phase0/fixtures/integration-candidate-v1.json");
-    let result = fs::read_to_string(path)
+    let result = read_fixture_file(path)
         .map_err(|e| e.to_string())
         .and_then(|text| candidate_ids(&text));
     match result {
@@ -481,7 +638,259 @@ fn main() {
 mod tests {
     use super::*;
 
+    // Independent SHA-256 reference digests, computed with the standard
+    // hashlib.sha256 implementation rather than this candidate identity code.
+    // 55/56, 63/64, and 119/120 bytes straddle SHA-256 padding boundaries.
+    #[test]
+    fn sha256_matches_independent_multiblock_padding_vectors() {
+        const VECTORS: &[(usize, &str)] = &[
+            (
+                0,
+                "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            ),
+            (
+                1,
+                "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+            ),
+            (
+                3,
+                "9834876dcfb05cb167a5c24953eba58c4ac89b1adf57f28f2f9d09af107ee8f0",
+            ),
+            (
+                55,
+                "9f4390f8d30c2dd92ec9f095b65e2b9ae9b0a925a5258e241c9f1e910f734318",
+            ),
+            (
+                56,
+                "b35439a4ac6f0948b6d6f9e3c6af0f5f590ce20f1bde7090ef7970686ec6738a",
+            ),
+            (
+                63,
+                "7d3e74a05d7db15bce4ad9ec0658ea98e3f06eeecf16b4c6fff2da457ddc2f34",
+            ),
+            (
+                64,
+                "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb",
+            ),
+            (
+                65,
+                "635361c48bb9eab14198e76ea8ab7f1a41685d6ad62aa9146d301d4f17eb0ae0",
+            ),
+            (
+                119,
+                "31eba51c313a5c08226adf18d4a359cfdfd8d2e816b13f4af952f7ea6584dcfb",
+            ),
+            (
+                120,
+                "2f3d335432c70b580af0e8e1b3674a7c020d683aa5f73aaaedfdc55af904c21c",
+            ),
+            (
+                128,
+                "6836cf13bac400e9105071cd6af47084dfacad4e5e302c94bfed24e013afb73e",
+            ),
+            (
+                1000,
+                "41edece42d63e8d9bf515a9ba6932e1c20cbc9f5a5d134645adb5db1b9737ea3",
+            ),
+        ];
+
+        for &(len, expected) in VECTORS {
+            let input = vec![b'a'; len];
+            assert_eq!(
+                sha256_hex(&input),
+                expected,
+                "SHA-256 mismatch at {len} bytes"
+            );
+
+            // A single changed input byte must not match the published digest.
+            if len > 0 {
+                let mut changed = input;
+                changed[len - 1] = b'b';
+                assert_ne!(
+                    sha256_hex(&changed),
+                    expected,
+                    "single-byte mutation retained original digest at {len} bytes"
+                );
+            }
+        }
+    }
+
+    // Binary input exercises high-bit byte handling and all 256 byte values,
+    // not only the ASCII-repeated inputs in the padding-boundary test above.
+    // Expected values were calculated independently with Python hashlib.sha256.
+    #[test]
+    fn sha256_matches_independent_binary_boundary_vectors() {
+        const REPEATED: &[(u8, usize, &str)] = &[
+            (
+                0x00,
+                55,
+                "02779466cdec163811d078815c633f21901413081449002f24aa3e80f0b88ef7",
+            ),
+            (
+                0x80,
+                56,
+                "ab44ecde4bac7f799c8588f617770b1a5877bead1a4bee5d3d848cd41b8855a0",
+            ),
+            (
+                0x80,
+                63,
+                "19cac792c6caf6b1218607e8a46fcea40d7c7bade71844a331aa841223bcc2f1",
+            ),
+            (
+                0x80,
+                64,
+                "1df1b7ce1fd8fcbe20cde61646875e54fe38d8945ea7911afd59e025cc520a68",
+            ),
+            (
+                0xff,
+                119,
+                "b863f94597d433ef2280e3b4656f13ea265a79bb8047287321c218905b03c99b",
+            ),
+            (
+                0xff,
+                120,
+                "9088fee917e5a748c2f0b4f5458c1cbdabbd696291c69be6e605bae0ef779e8f",
+            ),
+        ];
+        for &(byte, len, expected) in REPEATED {
+            let input = vec![byte; len];
+            assert_eq!(
+                sha256_hex(&input),
+                expected,
+                "SHA-256 binary padding mismatch: byte {byte:#04x}, length {len}"
+            );
+        }
+
+        let spectrum: Vec<u8> = (0..=255).collect();
+        assert_eq!(
+            sha256_hex(&spectrum),
+            "40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880"
+        );
+        assert_eq!(
+            sha256_hex(&spectrum.repeat(16)),
+            "c8f5d0341d54d951a71b136e6e2afcb14d11ed8489a7ae126a8fee0df6ecf193"
+        );
+        let mut changed = spectrum;
+        changed[0] ^= 0xff;
+        assert_ne!(
+            sha256_hex(&changed),
+            "40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880"
+        );
+    }
+
     const HISTORICAL: &str = include_str!("../../../fixtures/integration-candidate-v1.json");
+
+    #[test]
+    fn bounded_digest_input_preserves_historical_identities_and_rejects_unsafe_files() {
+        let historical_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../fixtures/integration-candidate-v1.json"
+        );
+        let bytes = read_fixture_file(historical_path).expect("read historical regular fixture");
+        assert_eq!(bytes, HISTORICAL);
+        assert_eq!(candidate_ids(&bytes).unwrap().len(), 4);
+
+        let scratch = std::env::temp_dir().join(format!(
+            "free-energy-candidate-digest-input-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&scratch).expect("create fixture test directory");
+
+        let oversized = scratch.join("oversized.json");
+        let file = fs::File::create(&oversized).expect("create sparse fixture");
+        file.set_len(MAX_FIXTURE_BYTES + 1)
+            .expect("create oversized sparse fixture");
+        assert!(read_fixture_file(oversized.to_str().unwrap())
+            .unwrap_err()
+            .contains("maximum input size"));
+        assert!(read_fixture_file(scratch.to_str().unwrap())
+            .unwrap_err()
+            .contains("regular non-symlink"));
+
+        #[cfg(unix)]
+        {
+            let symlink = scratch.join("alias.json");
+            std::os::unix::fs::symlink(historical_path, &symlink)
+                .expect("create fixture path symlink");
+            assert!(read_fixture_file(symlink.to_str().unwrap())
+                .unwrap_err()
+                .contains("regular non-symlink"));
+        }
+
+        let invalid_utf8 = scratch.join("invalid-utf8.json");
+        fs::write(&invalid_utf8, [0xff, 0xfe]).expect("create invalid UTF-8 fixture");
+        assert!(read_fixture_file(invalid_utf8.to_str().unwrap()).is_err());
+
+        drop(file);
+        fs::remove_dir_all(&scratch).expect("remove fixture test directory");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn digest_reader_rejects_equal_size_inode_replacement_after_preflight() {
+        let scratch = env::temp_dir().join(format!(
+            "free-energy-candidate-digest-swap-{}",
+            process::id()
+        ));
+        fs::create_dir_all(&scratch).expect("create digest swap directory");
+        let path = scratch.join("fixture.json");
+        let replacement = scratch.join("replacement.json");
+        fs::write(&path, HISTORICAL).expect("write original fixture");
+        fs::write(&replacement, HISTORICAL).expect("write identical replacement");
+        let before = fs::symlink_metadata(&path).expect("stat original inode");
+        fs::rename(&replacement, &path).expect("replace original inode");
+        let error = read_fixture_file_with_metadata(path.to_str().unwrap(), &before).unwrap_err();
+        assert_eq!(error, "fixture changed between metadata check and open");
+        fs::remove_dir_all(&scratch).expect("remove digest swap directory");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn digest_reader_rejects_symlink_substitution_after_preflight() {
+        let scratch = env::temp_dir().join(format!(
+            "free-energy-candidate-digest-link-swap-{}",
+            process::id()
+        ));
+        fs::create_dir_all(&scratch).expect("create link swap directory");
+        let path = scratch.join("fixture.json");
+        fs::write(&path, HISTORICAL).expect("write original fixture");
+        let before = fs::symlink_metadata(&path).expect("stat regular fixture");
+        fs::remove_file(&path).expect("remove regular fixture");
+        let historical_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../fixtures/integration-candidate-v1.json"
+        );
+        std::os::unix::fs::symlink(historical_path, &path).expect("swap in symlink");
+        assert!(read_fixture_file_with_metadata(path.to_str().unwrap(), &before).is_err());
+        fs::remove_dir_all(&scratch).expect("remove link swap directory");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn digest_reader_rejects_fifo_swapped_in_after_preflight_without_blocking() {
+        // A plain blocking File::open would hang here indefinitely; on Linux
+        // O_NONBLOCK must permit descriptor inspection to reject the FIFO.
+        let scratch = env::temp_dir().join(format!(
+            "free-energy-candidate-digest-fifo-swap-{}",
+            process::id()
+        ));
+        fs::create_dir_all(&scratch).expect("create FIFO swap directory");
+        let path = scratch.join("fixture.json");
+        fs::write(&path, HISTORICAL).expect("write regular fixture");
+        let before = fs::symlink_metadata(&path).expect("preflight regular fixture");
+        fs::remove_file(&path).expect("remove original fixture");
+
+        let status = process::Command::new("mkfifo")
+            .arg(&path)
+            .status()
+            .expect("create FIFO with Linux mkfifo");
+        assert!(status.success(), "mkfifo failed");
+
+        let error = read_fixture_file_with_metadata(path.to_str().unwrap(), &before)
+            .expect_err("swapped FIFO must never be accepted");
+        assert_eq!(error, "opened fixture is not a regular file");
+        fs::remove_dir_all(&scratch).expect("remove FIFO swap directory");
+    }
 
     #[test]
     fn sha256_standard_vectors_and_long_message() {
@@ -584,34 +993,38 @@ mod tests {
     fn changed_semantic_bytes_change_digest_without_changing_case_name() {
         let original = candidate_ids(HISTORICAL).unwrap();
         let mut fixture: Value = serde_json::from_str(HISTORICAL).unwrap();
+        // An unsupported cardinality still has a distinct prediction identity.
+        // Mutating its envelope preserves the required negative verdict.
         let cases = fixture["cases"].as_array_mut().unwrap();
-        cases[0]["candidate"]["metadata"]["message"] = Value::String("Changed\n".to_owned());
+        cases[2]["candidate"]["metadata"]["message"] = Value::String("Changed\n".to_owned());
         let mutated = candidate_ids(&fixture.to_string()).unwrap();
-        assert_ne!(original[0].1, mutated[0].1);
-        assert_eq!(original[1..], mutated[1..]);
+        assert_ne!(original[2].1, mutated[2].1);
+        assert_eq!(original[..2], mutated[..2]);
+        assert_eq!(original[3..], mutated[3..]);
     }
 
     #[test]
     fn unicode_is_utf8_not_ascii_escaped_and_order_is_semantic() {
+        // Keep semantic acceptance stable while exercising canonical hashing.
         let mut fixture: Value = serde_json::from_str(HISTORICAL).unwrap();
-        fixture["cases"][0]["candidate"]["metadata"]["author"] =
+        fixture["cases"][2]["candidate"]["metadata"]["author"] =
             Value::String("Jörg ∑ 東京".to_owned());
         let unicode = candidate_ids(&fixture.to_string()).unwrap();
-        fixture["cases"][0]["candidate"]["metadata"]["author"] =
+        fixture["cases"][2]["candidate"]["metadata"]["author"] =
             Value::String("J\\u00f6rg".to_owned());
         assert_ne!(
-            unicode[0].1,
-            candidate_ids(&fixture.to_string()).unwrap()[0].1
+            unicode[2].1,
+            candidate_ids(&fixture.to_string()).unwrap()[2].1
         );
         let baseline: Value = serde_json::from_str(HISTORICAL).unwrap();
         let mut reordered = baseline.clone();
-        let a = reordered["cases"][0]["candidate"]["parents"][0].clone();
-        let b = reordered["cases"][0]["candidate"]["parents"][1].clone();
-        reordered["cases"][0]["candidate"]["parents"][0] = b;
-        reordered["cases"][0]["candidate"]["parents"][1] = a;
+        let a = reordered["cases"][2]["candidate"]["parents"][0].clone();
+        let b = reordered["cases"][2]["candidate"]["parents"][1].clone();
+        reordered["cases"][2]["candidate"]["parents"][0] = b;
+        reordered["cases"][2]["candidate"]["parents"][1] = a;
         assert_ne!(
-            candidate_ids(&baseline.to_string()).unwrap()[0].1,
-            candidate_ids(&reordered.to_string()).unwrap()[0].1
+            candidate_ids(&baseline.to_string()).unwrap()[2].1,
+            candidate_ids(&reordered.to_string()).unwrap()[2].1
         );
     }
 
@@ -649,6 +1062,51 @@ mod tests {
         assert_ne!(input, HISTORICAL);
         assert!(serde_json::from_str::<Value>(&input).is_ok());
         assert!(candidate_ids(&input).is_err());
+    }
+
+    #[test]
+    fn digest_receipts_reject_contradictory_semantic_witnesses() {
+        let original: Value = serde_json::from_str(HISTORICAL).unwrap();
+        let baseline = candidate_ids(HISTORICAL).expect("historical witnesses are consistent");
+
+        let mut scenarios = Vec::new();
+
+        let mut forged_expectation = original.clone();
+        forged_expectation["cases"][0]["expect"] =
+            Value::String("UNSUPPORTED_PARENT_CARDINALITY".to_owned());
+        scenarios.push(("forged normal verdict", forged_expectation));
+
+        let mut unsupported_now_supported = original.clone();
+        unsupported_now_supported["cases"][2]["constructor_support"] = serde_json::json!([1, 2, 3]);
+        scenarios.push(("contradictory cardinality", unsupported_now_supported));
+
+        let mut forged_reversal = original.clone();
+        forged_reversal["cases"][1]["candidate"]["parents"] =
+            original["cases"][0]["candidate"]["parents"].clone();
+        scenarios.push(("reversed-parent witness absent", forged_reversal));
+
+        let mut unapproved_migration = original.clone();
+        unapproved_migration["cases"][3]["candidate"]["constructor_version"] =
+            Value::String("constructor-v3".to_owned());
+        scenarios.push(("unapproved constructor migration", unapproved_migration));
+
+        let mut target_no_longer_stale = original.clone();
+        target_no_longer_stale["stale_head_cases"][0]["live_target"] =
+            original["stale_head_cases"][0]["predicted_target"].clone();
+        scenarios.push(("stale target became current", target_no_longer_stale));
+
+        let mut source_no_longer_stale = original.clone();
+        source_no_longer_stale["stale_head_cases"][1]["live_source"] =
+            original["stale_head_cases"][1]["predicted_source"].clone();
+        scenarios.push(("stale source became current", source_no_longer_stale));
+
+        for (name, fixture) in scenarios {
+            assert!(
+                candidate_ids(&fixture.to_string()).is_err(),
+                "{name}: accepted a contradictory digest witness"
+            );
+        }
+        assert_eq!(candidate_ids(HISTORICAL).unwrap(), baseline);
     }
 
     #[test]
