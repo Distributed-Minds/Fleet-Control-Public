@@ -172,7 +172,13 @@ impl Scheduler {
         if lane.classes.contains_key(class) {
             return Err(Error::DuplicateClass);
         }
-        lane.classes.insert(class.to_owned(), ClassBudget { limit, remaining: limit });
+        lane.classes.insert(
+            class.to_owned(),
+            ClassBudget {
+                limit,
+                remaining: limit,
+            },
+        );
         Ok(())
     }
 
@@ -722,16 +728,32 @@ mod tests {
         let mut s = scheduler(4, 0, 8);
         s.register_operation_class("effective-credential-1", "ref-update", 1)
             .unwrap();
-        let mut a = request("ref-a", "effective-credential-1", "repo-a", "tenant-a", Priority::Normal);
+        let mut a = request(
+            "ref-a",
+            "effective-credential-1",
+            "repo-a",
+            "tenant-a",
+            Priority::Normal,
+        );
         a.operation_class = "ref-update".into();
         let mut b = a.clone();
         b.operation_id = "ref-b".into();
         s.enqueue(a).unwrap();
         s.enqueue(b).unwrap();
-        s.enqueue(request("comment-a", "effective-credential-1", "repo-a", "tenant-a", Priority::Normal)).unwrap();
+        s.enqueue(request(
+            "comment-a",
+            "effective-credential-1",
+            "repo-a",
+            "tenant-a",
+            Priority::Normal,
+        ))
+        .unwrap();
 
         assert_eq!(next(&mut s).unwrap().request.operation_id, "ref-a");
-        assert_eq!(s.remaining_class("effective-credential-1", "ref-update"), Ok(0));
+        assert_eq!(
+            s.remaining_class("effective-credential-1", "ref-update"),
+            Ok(0)
+        );
         assert_eq!(s.remaining("effective-credential-1"), Ok(3));
         // The second ref is still pending, but it must not head-of-line block
         // an authorized separate class in the same tenant's FIFO.
@@ -750,16 +772,22 @@ mod tests {
         let mut s = scheduler(5, 1, 10);
         s.register_operation_class("effective-credential-1", "ref-update", 1)
             .unwrap();
-        for (id, repo, tenant) in [
-            ("r1", "repo-a", "tenant-a"),
-            ("r2", "repo-b", "tenant-b"),
-        ] {
-            let mut req = request(id, "effective-credential-1", repo, tenant, Priority::Recovery);
+        for (id, repo, tenant) in [("r1", "repo-a", "tenant-a"), ("r2", "repo-b", "tenant-b")] {
+            let mut req = request(
+                id,
+                "effective-credential-1",
+                repo,
+                tenant,
+                Priority::Recovery,
+            );
             req.operation_class = "ref-update".into();
             s.enqueue(req).unwrap();
         }
         assert_eq!(next(&mut s).unwrap().request.operation_id, "r1");
-        assert_eq!(s.remaining_class("effective-credential-1", "ref-update"), Ok(0));
+        assert_eq!(
+            s.remaining_class("effective-credential-1", "ref-update"),
+            Ok(0)
+        );
         assert_eq!(s.pending("effective-credential-1"), Ok(1));
         assert_eq!(s.remaining("effective-credential-1"), Ok(4));
         assert!(next(&mut s).is_none());
@@ -768,17 +796,43 @@ mod tests {
     #[test]
     fn unknown_or_invalid_class_fails_closed_without_enqueuing() {
         let mut s = scheduler(3, 0, 3);
-        let mut req = request("unknown", "effective-credential-1", "repo-a", "tenant-a", Priority::Normal);
+        let mut req = request(
+            "unknown",
+            "effective-credential-1",
+            "repo-a",
+            "tenant-a",
+            Priority::Normal,
+        );
         req.operation_class = "not-configured".into();
         assert_eq!(s.enqueue(req), Err(Error::UnknownClass));
         assert_eq!(s.pending("effective-credential-1"), Ok(0));
-        assert_eq!(s.remaining_class("effective-credential-1", "unknown"), Err(Error::UnknownClass));
-        assert_eq!(s.register_operation_class("effective-credential-1", "bad class", 1), Err(Error::InvalidConfig));
-        assert_eq!(s.register_operation_class("effective-credential-1", "ref-update", 0), Err(Error::InvalidConfig));
-        assert_eq!(s.register_operation_class("effective-credential-1", "ref-update", 2), Ok(()));
-        assert_eq!(s.register_operation_class("effective-credential-1", "ref-update", 2), Err(Error::DuplicateClass));
-        assert_eq!(s.remaining_class("effective-credential-1", "ref-update"), Ok(2));
-        assert_eq!(s.remaining_class("missing-group", "ref-update"), Err(Error::UnknownGroup));
+        assert_eq!(
+            s.remaining_class("effective-credential-1", "unknown"),
+            Err(Error::UnknownClass)
+        );
+        assert_eq!(
+            s.register_operation_class("effective-credential-1", "bad class", 1),
+            Err(Error::InvalidConfig)
+        );
+        assert_eq!(
+            s.register_operation_class("effective-credential-1", "ref-update", 0),
+            Err(Error::InvalidConfig)
+        );
+        assert_eq!(
+            s.register_operation_class("effective-credential-1", "ref-update", 2),
+            Ok(())
+        );
+        assert_eq!(
+            s.register_operation_class("effective-credential-1", "ref-update", 2),
+            Err(Error::DuplicateClass)
+        );
+        assert_eq!(
+            s.remaining_class("effective-credential-1", "ref-update"),
+            Ok(2)
+        );
+        assert_eq!(
+            s.remaining_class("missing-group", "ref-update"),
+            Err(Error::UnknownGroup)
+        );
     }
-
 }
