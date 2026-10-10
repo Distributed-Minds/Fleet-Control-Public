@@ -1,0 +1,63 @@
+{
+  "archived_comment_count": 1503,
+  "issue": 168,
+  "schema": 1,
+  "segments": [
+    {
+      "count": 200,
+      "first_comment_id": 6072460160,
+      "last_comment_id": 6086765381,
+      "path": "Phase0/archives/coordination/issue-168/comments-6072460160-6086765381.jsonl",
+      "sha256": "878e7fc8c338cc02a3356b0b92fab2f9edf89329505ed4583e1fc5ec300de031"
+    },
+    {
+      "count": 200,
+      "first_comment_id": 6086766229,
+      "last_comment_id": 6087216111,
+      "path": "Phase0/archives/coordination/issue-168/comments-6086766229-6087216111.jsonl",
+      "sha256": "f1b9f0f70034f6ba253cfe1920a0ec3f4947263f0f81be12949cf0ef151f0ea2"
+    },
+    {
+      "count": 200,
+      "first_comment_id": 6087217403,
+      "last_comment_id": 6090103693,
+      "path": "Phase0/archives/coordination/issue-168/comments-6087217403-6090103693.jsonl",
+      "sha256": "2534906c1cd78687c30b8a8c1452c608cc967457dd0daebfca6c601097d57912"
+    },
+    {
+      "count": 200,
+      "first_comment_id": 6090104306,
+      "last_comment_id": 6090401560,
+      "path": "Phase0/archives/coordination/issue-168/comments-6090104306-6090401560.jsonl",
+      "sha256": "36585be1ec4af89690f0dc5d9fa27ed3f2eaab62be2912b869c06372dc6e3d8e"
+    },
+    {
+      "count": 200,
+      "first_comment_id": 6090401640,
+      "last_comment_id": 6090843837,
+      "path": "Phase0/archives/coordination/issue-168/comments-6090401640-6090843837.jsonl",
+      "sha256": "0e073bf5cbfa53fb7f45517521d63bbfaa8b574492092e8f9b31435af9eeffbc"
+    },
+    {
+      "count": 200,
+      "first_comment_id": 6090847210,
+      "last_comment_id": 6091047347,
+      "path": "Phase0/archives/coordination/issue-168/comments-6090847210-6091047347.jsonl",
+      "sha256": "381ee63947ec00b914a57792a330fccc28cc19d9bee18dcaddfafb2b9de0ce86"
+    },
+    {
+      "count": 200,
+      "first_comment_id": 6091047388,
+      "last_comment_id": 6097574254,
+      "path": "Phase0/archives/coordination/issue-168/comments-6091047388-6097574254.jsonl",
+      "sha256": "3580c1d64eaa14e836ae3525688dc33b609f0e3ecc797ab929e652027f27b039"
+    },
+    {
+      "count": 103,
+      "first_comment_id": 6097574557,
+      "last_comment_id": 6097728511,
+      "path": "Phase0/archives/coordination/issue-168/comments-6097574557-6097728511.jsonl",
+      "sha256": "3a7aa1735c188138ac79eb14035b18beca04407a85b8abbc4c51f351759489ae"
+    }
+  ]
+}
