@@ -4,8 +4,116 @@
 //! fixture integration test, without runtime Python or network access.
 //! NOTE: canonical SHA-256 identity parity is not established by this CLI.
 
+use serde::de::{self, MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer};
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
+
+// Identity-bearing fixture JSON must not silently discard duplicate object
+// keys. serde_json::Value alone keeps the last one, including when the same
+// decoded key is spelled using distinct JSON escape sequences.
+// This is stricter input admission than the historical Python fixture runner;
+// its otherwise identical 47 semantic decisions remain the parity target.
+struct StrictJson(Value);
+
+impl<'de> Deserialize<'de> for StrictJson {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct StrictVisitor;
+        impl<'de> Visitor<'de> for StrictVisitor {
+            type Value = StrictJson;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("JSON with unique decoded object keys at every depth")
+            }
+
+            fn visit_unit<E>(self) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::Null))
+            }
+
+            fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::Bool(value)))
+            }
+
+            fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::from(value)))
+            }
+
+            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::from(value)))
+            }
+
+            fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                serde_json::Number::from_f64(value)
+                    .map(|number| StrictJson(Value::Number(number)))
+                    .ok_or_else(|| de::Error::custom("non-finite JSON number"))
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::String(value.to_owned())))
+            }
+
+            fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictJson(Value::String(value)))
+            }
+
+            fn visit_seq<A>(self, mut sequence: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut values = Vec::new();
+                while let Some(StrictJson(value)) = sequence.next_element::<StrictJson>()? {
+                    values.push(value);
+                }
+                Ok(StrictJson(Value::Array(values)))
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut values = Map::new();
+                while let Some((key, StrictJson(value))) = map.next_entry::<String, StrictJson>()? {
+                    if values.contains_key(&key) {
+                        return Err(de::Error::custom(format!(
+                            "duplicate JSON object member: {key:?}"
+                        )));
+                    }
+                    values.insert(key, value);
+                }
+                Ok(StrictJson(Value::Object(values)))
+            }
+        }
+        deserializer.deserialize_any(StrictVisitor)
+    }
+}
+
+fn parse_fixture_json(source: &str) -> Result<Value, serde_json::Error> {
+    serde_json::from_str::<StrictJson>(source).map(|strict| strict.0)
+}
 
 const SEMANTIC_FIELDS: [&str; 16] = [
     "packet_schema",
@@ -182,13 +290,22 @@ fn projection(packet: &Value) -> Result<Value, String> {
         .ok_or_else(|| "packet must be an object".to_owned())?;
     let mut result = Map::new();
     for key in SEMANTIC_FIELDS {
-        result.insert(
-            key.to_owned(),
-            object
-                .get(key)
-                .ok_or_else(|| format!("missing semantic packet field: {key}"))?
-                .clone(),
-        );
+        let value = object
+            .get(key)
+            .ok_or_else(|| format!("missing semantic packet field: {key}"))?;
+        // All historical scalar coordinates are strings; packet collections
+        // are string arrays (including intentionally empty arrays). Presence
+        // alone must not make null, booleans or forged objects authoritative.
+        let valid_shape = match key {
+            "packet_schema" | "topic" | "authoritative_baseline" => value.is_string(),
+            _ => value
+                .as_array()
+                .is_some_and(|items| items.iter().all(Value::is_string)),
+        };
+        if !valid_shape {
+            return Err(format!("invalid semantic packet field type: {key}"));
+        }
+        result.insert(key.to_owned(), value.clone());
     }
     Ok(Value::Object(result))
 }
@@ -477,8 +594,11 @@ fn packet_fields(case: &Value) -> Value {
         "useful_next_actions",
     ]
     .iter()
-    .all(|key| case.get(*key).is_some())
-    {
+    .all(|key| {
+        case.get(*key)
+            .and_then(Value::as_array)
+            .is_some_and(|items| items.iter().all(Value::is_string))
+    }) {
         json!("PRESERVE_REQUIRED_FIELDS")
     } else {
         json!("REJECT_INCOMPLETE_PACKET")
@@ -564,8 +684,84 @@ fn validate(data: &Value) -> Result<usize, Vec<String>> {
 
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::process;
+
+// Offline developer fixtures are untrusted caller-selected files, not authority.
+// Reject non-regular/symlink inputs, bound allocation and read length, and
+// defend against a file replacement between path metadata and open on Unix.
+const MAX_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
+
+fn read_fixture_with_metadata(path: &Path, before: &fs::Metadata) -> Result<String, String> {
+    if !before.file_type().is_file() {
+        return Err("ad-hoc research fixture must be a regular, non-symlink file".to_owned());
+    }
+    if before.len() > MAX_FIXTURE_BYTES {
+        return Err("ad-hoc research fixture exceeds 8 MiB limit".to_owned());
+    }
+
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // Do not block on a swapped-in FIFO or follow a swapped-in symlink.
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let file = options
+        .open(path)
+        .map_err(|error| format!("cannot open {path:?}: {error}"))?;
+    let opened = file
+        .metadata()
+        .map_err(|error| format!("cannot stat opened {path:?}: {error}"))?;
+    if !opened.file_type().is_file() {
+        return Err("opened ad-hoc research fixture is not a regular file".to_owned());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if before.dev() != opened.dev() || before.ino() != opened.ino() {
+            return Err("ad-hoc research fixture changed before open".to_owned());
+        }
+    }
+    if opened.len() > MAX_FIXTURE_BYTES {
+        return Err("ad-hoc research fixture exceeds 8 MiB limit".to_owned());
+    }
+
+    let mut bytes = Vec::new();
+    file.take(MAX_FIXTURE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("cannot read {path:?}: {error}"))?;
+    if bytes.len() as u64 > MAX_FIXTURE_BYTES {
+        return Err("ad-hoc research fixture exceeds 8 MiB limit".to_owned());
+    }
+    String::from_utf8(bytes).map_err(|_| "ad-hoc research fixture must be UTF-8".to_owned())
+}
+
+fn read_fixture_bounded(path: &Path) -> Result<String, String> {
+    // A symlink in an ancestor would otherwise bypass a leaf-only metadata check.
+    // This preflight is diagnostic hygiene, not atomic protection against path swaps.
+    #[cfg(target_os = "linux")]
+    for ancestor in path.ancestors().skip(1) {
+        if ancestor.as_os_str().is_empty() {
+            break;
+        }
+        let meta = fs::symlink_metadata(ancestor)
+            .map_err(|error| format!("cannot inspect fixture ancestor {ancestor:?}: {error}"))?;
+        if meta.file_type().is_symlink() {
+            return Err(format!(
+                "ad-hoc research fixture ancestor {ancestor:?} must not be a symlink"
+            ));
+        }
+    }
+
+    let before =
+        fs::symlink_metadata(path).map_err(|error| format!("cannot read {path:?}: {error}"))?;
+    read_fixture_with_metadata(path, &before)
+}
 
 fn run() -> Result<usize, String> {
     let mut args = env::args_os().skip(1);
@@ -576,10 +772,9 @@ fn run() -> Result<usize, String> {
     if args.next().is_some() {
         return Err("usage: ad_hoc_research [fixture.json]".to_owned());
     }
-    let data = fs::read_to_string(&path)
-        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
-    let fixture: Value = serde_json::from_str(&data)
-        .map_err(|error| format!("invalid fixture {}: {error}", path.display()))?;
+    let data = read_fixture_bounded(&path)?;
+    let fixture: Value =
+        parse_fixture_json(&data).map_err(|error| format!("invalid fixture {path:?}: {error}"))?;
     validate(&fixture).map_err(|errors| errors.join("\n"))
 }
 
@@ -598,6 +793,102 @@ mod cli_semantic_tests {
     use super::*;
 
     const BASELINE: &str = include_str!("../../../fixtures/ad-hoc-research-spec1.json");
+
+    #[test]
+    fn raw_and_escaped_duplicate_members_fail_before_semantic_evaluation() {
+        let canonical =
+            serde_json::to_string(&parse_fixture_json(BASELINE).expect("strict original fixture"))
+                .expect("serialize canonical fixture");
+
+        // Exercise the actual input decoder at the shell, nested packet,
+        // nested expected verdict, and escaped-key alias boundaries.
+        for (needle, replacement) in [
+            (
+                r#""packet_templates":"#,
+                r#""packet_templates":{},"packet_templates":"#,
+            ),
+            (r#""topic":"#, r#""topic":"forged","topic":"#),
+            (r#""expected":"#, r#""expected":"forged","expected":"#),
+            (r#""topic":"#, r#""\u0074opic":"forged","topic":"#),
+        ] {
+            assert!(canonical.contains(needle), "missing test insertion point");
+            let forged = canonical.replacen(needle, replacement, 1);
+            let error = parse_fixture_json(&forged)
+                .expect_err("duplicate decoded object key must not be last-wins");
+            assert!(
+                error.to_string().contains("duplicate JSON object member"),
+                "missing duplicate-member diagnostic: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn strict_fixture_decoder_preserves_all_original_semantic_verdicts() {
+        let input = parse_fixture_json(BASELINE).expect("original fixture must decode");
+        assert_eq!(validate(&input), Ok(47));
+        let ordered = serde_json::to_string(&input).expect("serialize canonical fixture");
+        assert_eq!(
+            validate(&parse_fixture_json(&ordered).expect("canonical fixture")),
+            Ok(47)
+        );
+    }
+
+    #[test]
+    fn untrusted_fixture_read_is_bounded_and_rejects_unsafe_paths() {
+        let scratch = env::temp_dir().join(format!("free-energy-adhoc-input-{}", process::id()));
+        fs::create_dir_all(&scratch).unwrap();
+        let input = scratch.join("research.json");
+        fs::write(&input, BASELINE).unwrap();
+        let fixture: Value = serde_json::from_str(&read_fixture_bounded(&input).unwrap()).unwrap();
+        assert_eq!(validate(&fixture), Ok(47));
+
+        assert!(read_fixture_bounded(&scratch).is_err());
+        let large = scratch.join("too-large.json");
+        fs::File::create(&large)
+            .unwrap()
+            .set_len(MAX_FIXTURE_BYTES + 1)
+            .unwrap();
+        assert!(read_fixture_bounded(&large).unwrap_err().contains("8 MiB"));
+
+        let invalid = scratch.join("invalid-utf8.json");
+        fs::write(&invalid, [0xff_u8, 0xfe_u8]).unwrap();
+        assert!(read_fixture_bounded(&invalid)
+            .unwrap_err()
+            .contains("UTF-8"));
+
+        #[cfg(unix)]
+        {
+            let link = scratch.join("link.json");
+            std::os::unix::fs::symlink(&input, &link).unwrap();
+            assert!(read_fixture_bounded(&link).is_err());
+
+            #[cfg(target_os = "linux")]
+            {
+                let ancestor_link = scratch.with_extension("alias");
+                std::os::unix::fs::symlink(&scratch, &ancestor_link).unwrap();
+                let through_ancestor = ancestor_link.join("research.json");
+                let error = read_fixture_bounded(&through_ancestor)
+                    .expect_err("symlinked ancestor must not bypass admission");
+                assert!(
+                    error.contains("ancestor") && error.contains("symlink"),
+                    "{error}"
+                );
+                fs::remove_file(ancestor_link).unwrap();
+                assert_eq!(read_fixture_bounded(&input).unwrap(), BASELINE);
+            }
+
+            let observed = fs::symlink_metadata(&input).unwrap();
+            let replacement = scratch.join("replacement.json");
+            fs::write(&replacement, BASELINE).unwrap();
+            fs::rename(&replacement, &input).unwrap();
+            assert_eq!(
+                read_fixture_with_metadata(&input, &observed).unwrap_err(),
+                "ad-hoc research fixture changed before open",
+                "same bytes under a replacement inode must not pass"
+            );
+        }
+        fs::remove_dir_all(&scratch).unwrap();
+    }
 
     #[test]
     fn baseline_47_cases_execute_without_reading_expected_as_oracle() {
@@ -683,5 +974,75 @@ mod cli_semantic_tests {
             .remove("packet_ref");
         modified["publication_cases"][0]["packet"] = packet;
         assert_eq!(validate(&modified), Ok(47));
+    }
+
+    #[test]
+    fn required_handoff_fields_must_be_text_arrays_not_just_present() {
+        let baseline: Value = serde_json::from_str(BASELINE).expect("valid baseline");
+        assert_eq!(
+            packet_fields(&baseline["packet_field_cases"][0]),
+            json!("PRESERVE_REQUIRED_FIELDS")
+        );
+        for field in [
+            "stale_source_warnings",
+            "discovery_vocabulary",
+            "useful_next_actions",
+        ] {
+            for invalid in [
+                Value::Null,
+                json!(false),
+                json!("not-a-list"),
+                json!({ "forged": "list" }),
+                json!([null]),
+                json!(["valid", 7]),
+            ] {
+                let mut mutated = baseline.clone();
+                mutated["packet_field_cases"][0][field] = invalid;
+                assert_eq!(
+                    packet_fields(&mutated["packet_field_cases"][0]),
+                    json!("REJECT_INCOMPLETE_PACKET"),
+                    "field {field} with non-text-list content was accepted"
+                );
+                assert!(
+                    validate(&mutated).is_err(),
+                    "forged accepted disposition must fail fixture validation for {field}"
+                );
+            }
+        }
+        // Empty arrays deliberately represent truthful absence, not an
+        // omitted field; retain this historical positive control.
+        assert_eq!(
+            packet_fields(&baseline["packet_field_cases"][1]),
+            json!("PRESERVE_REQUIRED_FIELDS")
+        );
+    }
+
+    #[test]
+    fn packet_identity_projection_rejects_invalid_semantic_field_types() {
+        let baseline: Value = serde_json::from_str(BASELINE).expect("valid baseline");
+        let packet = &baseline["packet_templates"]["base"];
+        assert!(projection(packet).is_ok());
+        for field in SEMANTIC_FIELDS {
+            let mut mutated = packet.clone();
+            mutated[field] =
+                if matches!(field, "packet_schema" | "topic" | "authoritative_baseline") {
+                    json!(["not-a-scalar"])
+                } else {
+                    json!(["legitimate", null])
+                };
+            let result = projection(&mutated);
+            assert!(
+                result
+                    .unwrap_err()
+                    .contains(&format!("invalid semantic packet field type: {field}")),
+                "invalid semantic field was not rejected: {field}"
+            );
+        }
+        let mut mutated = baseline;
+        mutated["packet_templates"]["base"]["observations"] = json!(["real", false]);
+        assert!(validate(&mutated)
+            .expect_err("invalid packet template must fail the historical oracle")
+            .iter()
+            .any(|error| error.contains("invalid semantic packet field type: observations")));
     }
 }

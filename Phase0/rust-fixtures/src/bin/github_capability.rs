@@ -6,11 +6,14 @@
 //! independently (e.g. several identical inputs have different expected states).
 //! Do not report Python/Rust full semantic equivalence until those inputs exist.
 
-use serde::Deserialize;
+use serde::de::{self, MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer};
 use std::collections::HashSet;
 use std::env;
+use std::fmt;
 use std::fs;
-use std::path::PathBuf;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::process;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize)]
@@ -344,6 +347,151 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
     }
 }
 
+// Reject conflicting raw object members before serde_json's normal struct
+// decoding. JSON object membership is checked at *every* depth, including
+// escaped spellings of the same decoded key. This is input admission only,
+// not a claim that the fixture is an independent capability oracle.
+struct UniqueJsonMemberCheck;
+
+impl<'de> Deserialize<'de> for UniqueJsonMemberCheck {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(UniqueJsonMemberVisitor)
+    }
+}
+
+struct UniqueJsonMemberVisitor;
+
+impl<'de> Visitor<'de> for UniqueJsonMemberVisitor {
+    type Value = UniqueJsonMemberCheck;
+
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("a JSON value with no duplicate object keys")
+    }
+
+    fn visit_bool<E: de::Error>(self, _: bool) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_i64<E: de::Error>(self, _: i64) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_u64<E: de::Error>(self, _: u64) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_f64<E: de::Error>(self, _: f64) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_str<E: de::Error>(self, _: &str) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_string<E: de::Error>(self, _: String) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+        while seq.next_element::<UniqueJsonMemberCheck>()?.is_some() {}
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+        let mut seen = HashSet::new();
+        while let Some(key) = map.next_key::<String>()? {
+            if !seen.insert(key.clone()) {
+                return Err(de::Error::custom(format!(
+                    "duplicate JSON object key: {key:?}"
+                )));
+            }
+            map.next_value::<UniqueJsonMemberCheck>()?;
+        }
+        Ok(UniqueJsonMemberCheck)
+    }
+}
+
+const MAX_EXTERNAL_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
+
+// Model-only fixture CLI: bound caller-controlled IO; this is not an
+// atomic directory confinement protocol or a live provider authority check.
+fn read_fixture_bounded_with_metadata(
+    input: &Path,
+    before: &fs::Metadata,
+) -> Result<String, String> {
+    if !before.file_type().is_file() {
+        return Err(format!(
+            "fixture {input:?} must be a regular file (no symlinks)"
+        ));
+    }
+    if before.len() > MAX_EXTERNAL_FIXTURE_BYTES {
+        return Err(format!(
+            "fixture {input:?} exceeds {MAX_EXTERNAL_FIXTURE_BYTES} bytes"
+        ));
+    }
+
+    // On Linux, a FIFO installed after the metadata check must not block open.
+    // O_NOFOLLOW also rejects a symlink substituted at this boundary.
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let file = options
+        .open(input)
+        .map_err(|e| format!("cannot open {input:?}: {e}"))?;
+    let opened = file
+        .metadata()
+        .map_err(|e| format!("cannot inspect opened fixture {input:?}: {e}"))?;
+    if !opened.is_file() {
+        return Err(format!("opened fixture {input:?} is not a regular file"));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if opened.dev() != before.dev() || opened.ino() != before.ino() {
+            return Err(format!("fixture identity changed before opening {input:?}"));
+        }
+    }
+    if opened.len() > MAX_EXTERNAL_FIXTURE_BYTES {
+        return Err(format!(
+            "opened fixture {input:?} exceeds {MAX_EXTERNAL_FIXTURE_BYTES} bytes"
+        ));
+    }
+
+    // The read cap also rejects data added between metadata checks and read.
+    let mut json = String::new();
+    file.take(MAX_EXTERNAL_FIXTURE_BYTES + 1)
+        .read_to_string(&mut json)
+        .map_err(|e| format!("cannot read {input:?}: {e}"))?;
+    if json.len() as u64 > MAX_EXTERNAL_FIXTURE_BYTES {
+        return Err(format!(
+            "fixture {input:?} exceeds {MAX_EXTERNAL_FIXTURE_BYTES} bytes"
+        ));
+    }
+    Ok(json)
+}
+
+fn read_fixture_bounded(input: &Path) -> Result<String, String> {
+    let before = fs::symlink_metadata(input).map_err(|e| format!("cannot read {input:?}: {e}"))?;
+    read_fixture_bounded_with_metadata(input, &before)
+}
+
+fn parse_fixture(json: &str) -> Result<Fixture, serde_json::Error> {
+    // Deliberately parse twice: the first walk inspects raw JSON member
+    // multiplicity, which would be lost after Value or typed deserialization.
+    let _: UniqueJsonMemberCheck = serde_json::from_str(json)?;
+    serde_json::from_str(json)
+}
+
 fn run() -> Result<(), String> {
     let mut args = env::args_os().skip(1);
     let input = args
@@ -353,10 +501,9 @@ fn run() -> Result<(), String> {
     if args.next().is_some() {
         return Err("usage: github_capability [fixture.json]".to_owned());
     }
-    let json =
-        fs::read_to_string(&input).map_err(|e| format!("cannot read {}: {e}", input.display()))?;
-    let fixture: Fixture = serde_json::from_str(&json)
-        .map_err(|e| format!("invalid fixture {}: {e}", input.display()))?;
+    let json = read_fixture_bounded(&input)?;
+    let fixture: Fixture =
+        parse_fixture(&json).map_err(|e| format!("invalid fixture {input:?}: {e}"))?;
     match validate(&fixture) {
         Ok(count) => {
             println!("GitHub capability invariant fixtures (Rust): {count} checked");
@@ -445,6 +592,28 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_json_members_fail_even_when_escaped_or_nested() {
+        for raw in [
+            r#"{"spec":5,"spec":5}"#,
+            r#"{"outer":{"authority":"current","authority":"forged"}}"#,
+            r#"{"cases":[{"lineage":"current","\u006cineage":"unknown"}]}"#,
+        ] {
+            let err = serde_json::from_str::<UniqueJsonMemberCheck>(raw)
+                .err()
+                .expect("duplicate member must fail");
+            assert!(
+                err.to_string().contains("duplicate JSON object key"),
+                "unexpected duplicate-key failure: {err}"
+            );
+        }
+        assert!(parse_fixture(BASELINE).is_ok());
+        assert!(serde_json::from_str::<UniqueJsonMemberCheck>(
+            r#"{"left":{"id":1},"right":{"id":2}}"#
+        )
+        .is_ok());
+    }
+
+    #[test]
     fn original_twenty_eight_cases_pass_invariant_checks() {
         assert_eq!(checked(fixture()), Ok(28));
     }
@@ -518,5 +687,47 @@ mod tests {
         // Case 1 previously had no input rule pinning this false outcome.
         let changed_outcome = mutate(1, "expected", json!("ACTION_BLOCKED"));
         assert!(checked(changed_outcome).is_err());
+    }
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn swapped_fifo_and_symlink_cannot_bypass_open_time_admission() {
+        // Reproduce an adversarial replacement after the original lstat.
+        // Without O_NONBLOCK, opening the FIFO for reading can hang forever.
+        let scratch =
+            std::env::temp_dir().join(format!("free-energy-ghcap-open-swap-{}", process::id()));
+        fs::create_dir(&scratch).expect("create isolated fixture directory");
+        let input = scratch.join("fixture.json");
+        fs::write(&input, BASELINE).expect("create regular fixture");
+        let original = fs::symlink_metadata(&input).expect("observe regular fixture");
+        assert_eq!(
+            read_fixture_bounded_with_metadata(&input, &original).unwrap(),
+            BASELINE
+        );
+
+        fs::remove_file(&input).expect("remove original fixture");
+        let status = std::process::Command::new("mkfifo")
+            .arg(&input)
+            .status()
+            .expect("create substituted Linux FIFO");
+        assert!(status.success(), "mkfifo failed");
+        let fifo_error = read_fixture_bounded_with_metadata(&input, &original)
+            .expect_err("swapped FIFO must fail without blocking");
+        assert!(
+            fifo_error.contains("not a regular file"),
+            "unexpected FIFO rejection: {fifo_error}"
+        );
+
+        fs::remove_file(&input).expect("remove FIFO");
+        fs::write(&input, BASELINE).expect("restore regular fixture");
+        let observed = fs::symlink_metadata(&input).expect("observe new regular fixture");
+        fs::remove_file(&input).expect("remove before symlink substitution");
+        let canonical = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../fixtures/github-capability-spec5.json");
+        std::os::unix::fs::symlink(canonical, &input).expect("substitute symlink");
+        assert!(
+            read_fixture_bounded_with_metadata(&input, &observed).is_err(),
+            "swapped symlink cannot be followed"
+        );
+        fs::remove_dir_all(&scratch).expect("remove isolated fixture directory");
     }
 }
