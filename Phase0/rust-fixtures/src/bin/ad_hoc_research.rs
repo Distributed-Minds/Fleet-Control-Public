@@ -742,6 +742,22 @@ fn read_fixture_with_metadata(path: &Path, before: &fs::Metadata) -> Result<Stri
 }
 
 fn read_fixture_bounded(path: &Path) -> Result<String, String> {
+    // A symlink in an ancestor would otherwise bypass a leaf-only metadata check.
+    // This preflight is diagnostic hygiene, not atomic protection against path swaps.
+    #[cfg(target_os = "linux")]
+    for ancestor in path.ancestors().skip(1) {
+        if ancestor.as_os_str().is_empty() {
+            break;
+        }
+        let meta = fs::symlink_metadata(ancestor)
+            .map_err(|error| format!("cannot inspect fixture ancestor {ancestor:?}: {error}"))?;
+        if meta.file_type().is_symlink() {
+            return Err(format!(
+                "ad-hoc research fixture ancestor {ancestor:?} must not be a symlink"
+            ));
+        }
+    }
+
     let before =
         fs::symlink_metadata(path).map_err(|error| format!("cannot read {path:?}: {error}"))?;
     read_fixture_with_metadata(path, &before)
@@ -845,6 +861,21 @@ mod cli_semantic_tests {
             let link = scratch.join("link.json");
             std::os::unix::fs::symlink(&input, &link).unwrap();
             assert!(read_fixture_bounded(&link).is_err());
+
+            #[cfg(target_os = "linux")]
+            {
+                let ancestor_link = scratch.with_extension("alias");
+                std::os::unix::fs::symlink(&scratch, &ancestor_link).unwrap();
+                let through_ancestor = ancestor_link.join("research.json");
+                let error = read_fixture_bounded(&through_ancestor)
+                    .expect_err("symlinked ancestor must not bypass admission");
+                assert!(
+                    error.contains("ancestor") && error.contains("symlink"),
+                    "{error}"
+                );
+                fs::remove_file(ancestor_link).unwrap();
+                assert_eq!(read_fixture_bounded(&input).unwrap(), BASELINE);
+            }
 
             let observed = fs::symlink_metadata(&input).unwrap();
             let replacement = scratch.join("replacement.json");
