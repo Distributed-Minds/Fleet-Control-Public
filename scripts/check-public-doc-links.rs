@@ -2189,6 +2189,10 @@ mod tests {
             ("H11h-image-alt", format!("{removed}\n![**Not available yet:**](https://example.org/notice.svg)\n"), false),
             ("H11i-title", format!("{removed}\n<span title=\"**Not available yet:**\">Details</span>\n"), false),
             ("H11j-raw-image-alt", format!("{removed}\n<img src=\"https://example.org/notice.svg\" alt=\"**Not available yet:**\">\n"), false),
+            ("H11h-nested-image-label", format!("{removed}\n![picture [**Not available yet:**]](https://example.org/notice.svg)\n"), false),
+            ("H11i-quoted-angle", format!("{removed}\n<span title=\"ignored > **Not available yet:**\">Details</span>\n"), false),
+            ("H11j-mixed-case-attributes", format!("{removed}\n<IMG SRC='https://example.org/notice.svg' ALT='**Not available yet:**'>\n"), false),
+            ("H11k-visible-in-span", format!("{removed}\n<span title=\"**Not available yet:**\">**Not available yet:** visible prose</span>\n"), true),
             ("H11k-visible", format!("{removed}\n**Not available yet:** This is visible prose.\n"), true),
             ("H11k-visible-and-image", format!("{removed}\n![**Not available yet:**](https://example.org/notice.svg)\n**Not available yet:** This is visible prose.\n"), true),
         ];
