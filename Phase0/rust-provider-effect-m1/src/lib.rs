@@ -42,11 +42,31 @@ pub enum ManifestError {
     InvalidRow(usize),
     DuplicateOperation(usize),
     UnsupportedPositiveClaim(usize),
+    UnverifiedProofRoot(usize),
+    IncompleteMatrix,
 }
 
 /// Parse a *data-only* support matrix. A row is not runtime permission.
 /// Unknown and unsupported are distinct; proof-free SUPPORT claims are invalid.
 /// No parser result can upgrade an operation into current effect authorization.
+fn known_v1_effect(operation: &str, transport: &str) -> bool {
+    match transport {
+        "github-rest" => matches!(
+            operation,
+            "create_issue"
+                | "create_comment"
+                | "create_pr"
+                | "edit_metadata"
+                | "contents_update"
+                | "move_ref"
+                | "merge_pr"
+                | "rerun_workflow"
+        ),
+        "github-connected-chat" => matches!(operation, "create_comment" | "merge_pr"),
+        _ => false,
+    }
+}
+
 pub fn parse_manifest(contents: &str) -> Result<Vec<ProviderEffectCapability>, ManifestError> {
     let mut lines = contents.lines();
     if lines.next() != Some(MANIFEST_HEADER) {
@@ -57,12 +77,12 @@ pub fn parse_manifest(contents: &str) -> Result<Vec<ProviderEffectCapability>, M
     for (offset, line) in lines.enumerate() {
         let lineno = offset + 2;
         if line.is_empty() {
-            continue;
+            return Err(ManifestError::InvalidRow(lineno));
         }
         let fields: Vec<&str> = line.split('\t').collect();
         if fields.len() != 8
             || fields[0] != "1"
-            || fields[2].is_empty()
+            || !known_v1_effect(fields[1], fields[2])
             || fields[7].is_empty()
             || !matches!(
                 fields[1],
@@ -85,6 +105,11 @@ pub fn parse_manifest(contents: &str) -> Result<Vec<ProviderEffectCapability>, M
         if statuses.contains(&Capability::SupportedConditionally) && fields[7] == "none" {
             return Err(ManifestError::UnsupportedPositiveClaim(lineno));
         }
+        // V1 has no independently authenticated transport proof root. A text
+        // label (including a plausible receipt name) is not causal evidence.
+        if fields[7] != "none" {
+            return Err(ManifestError::UnverifiedProofRoot(lineno));
+        }
         if !seen.insert((fields[1], fields[2])) {
             return Err(ManifestError::DuplicateOperation(lineno));
         }
@@ -100,6 +125,11 @@ pub fn parse_manifest(contents: &str) -> Result<Vec<ProviderEffectCapability>, M
     }
     if output.is_empty() {
         return Err(ManifestError::Empty);
+    }
+    // Ten unique allowlisted pairs constitute the complete V1 denominator.
+    // A truncated manifest cannot silently remove an unsupported operation.
+    if output.len() != 10 {
+        return Err(ManifestError::IncompleteMatrix);
     }
     Ok(output)
 }
@@ -447,4 +477,64 @@ mod tests {
         assert_eq!(op.dispatch(true, true), Err(ModelError::InvalidState));
         assert_eq!(op.transmitted_calls(), 1);
     }
+    #[test]
+    fn m1_manifest_rejects_unregistered_transport_and_effect_pairs() {
+        let row = "1\tcreate_comment\tgithub-rest\tUNKNOWN\tUNSUPPORTED\tUNSUPPORTED\tUNKNOWN\tnone";
+        let unknown_transport = row.replace("github-rest", "unknown-provider");
+        assert_eq!(
+            parse_manifest(&format!("{MANIFEST_HEADER}\\n{unknown_transport}\\n")),
+            Err(ManifestError::InvalidRow(2))
+        );
+        let unregistered_pair = row.replace("create_comment", "contents_update")
+            .replace("github-rest", "github-connected-chat");
+        assert_eq!(
+            parse_manifest(&format!("{MANIFEST_HEADER}\\n{unregistered_pair}\\n")),
+            Err(ManifestError::InvalidRow(2))
+        );
+    }
+
+    #[test]
+    fn m1_manifest_rejects_unverified_proof_roots_even_without_support_claim() {
+        let row = "1\tcreate_comment\tgithub-rest\tUNKNOWN\tUNSUPPORTED\tUNSUPPORTED\tUNKNOWN\tsearch-matched-id";
+        assert_eq!(
+            parse_manifest(&format!("{MANIFEST_HEADER}\\n{row}\\n")),
+            Err(ManifestError::UnverifiedProofRoot(2))
+        );
+        let unsafe_positive = row.replace("UNSUPPORTED", "SUPPORTED_CONDITIONALLY");
+        assert_eq!(
+            parse_manifest(&format!("{MANIFEST_HEADER}\\n{unsafe_positive}\\n")),
+            Err(ManifestError::UnverifiedProofRoot(2))
+        );
+    }
+
+    #[test]
+    fn m1_manifest_requires_all_ten_registered_effect_transport_pairs() {
+        assert_eq!(
+            parse_manifest(EMBEDDED_MANIFEST).unwrap().len(),
+            10
+        );
+        let omitted = EMBEDDED_MANIFEST
+            .lines()
+            .filter(|line| !line.starts_with("1\tcreate_issue\t"))
+            .collect::<Vec<_>>()
+            .join("\\n");
+        assert_eq!(
+            parse_manifest(&omitted),
+            Err(ManifestError::IncompleteMatrix)
+        );
+    }
+
+    #[test]
+    fn m1_manifest_rejects_blank_data_rows_instead_of_skipping_them() {
+        let malformed = EMBEDDED_MANIFEST.replacen(
+            "\\n1\tcreate_issue\t",
+            "\\n\\n1\tcreate_issue\t",
+            1,
+        );
+        assert_eq!(
+            parse_manifest(&malformed),
+            Err(ManifestError::InvalidRow(2))
+        );
+    }
+
 }
