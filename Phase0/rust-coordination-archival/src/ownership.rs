@@ -420,6 +420,13 @@ mod tests {
     }
 
     #[test]
+    fn mongolian_selector_four_is_rejected_by_identity_predicate() {
+        // U+180F is Mn, not Cf: guard the scalar predicate directly.
+        assert!(ambiguous_identity_scalar('\u{180F}'));
+        assert!(!ambiguous_identity_scalar('β'));
+    }
+
+    #[test]
     fn serialized_phase0_field_delimiters_cannot_be_authority_identities() {
         // The installed log uses PHASE0 | field=value | field=value. A pipe
         // inside an identity would manufacture an apparent second field.
