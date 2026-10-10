@@ -157,7 +157,11 @@ impl OperationIdentity {
             &self.payload_digest,
         ]
         .iter()
-        .all(|s| !s.is_empty())
+        .all(|s| {
+            // These are opaque machine identities, never display text. Reject
+            // confusable formatting/control characters and unbounded strings.
+            !s.is_empty() && s.len() <= 512 && s.bytes().all(|byte| byte.is_ascii_graphic())
+        })
     }
 }
 
@@ -289,7 +293,9 @@ impl CreateOperation {
 
         let attributable = if enumeration_complete && authority_and_provider_current {
             receipt.is_some_and(|r| {
-                r.operation_id == self.identity.operation_id
+                // Zero is a placeholder, never an attributable GitHub object ID.
+                r.remote_id != 0
+                    && r.operation_id == self.identity.operation_id
                     && r.attempt_id == self.identity.attempt_id
                     && r.repository_incarnation == self.identity.repository_incarnation
                     && r.parent_incarnation == self.identity.parent_incarnation
@@ -367,6 +373,55 @@ mod tests {
         op.dispatch(true, true).unwrap();
         op.lose_ack().unwrap();
         op
+    }
+
+    #[test]
+    fn opaque_create_identity_rejects_spoofable_or_unbounded_fields() {
+        let invalid = [
+            String::new(),
+            " ".into(),
+            "line\nforged".into(),
+            "tab\tvalue".into(),
+            "bidi\u{202e}override".into(),
+            "nonascii-é".into(),
+            "x".repeat(513),
+        ];
+        for bad in &invalid {
+            for field in 0..6 {
+                let mut attempted = identity();
+                match field {
+                    0 => attempted.operation_id = bad.clone(),
+                    1 => attempted.attempt_id = bad.clone(),
+                    2 => attempted.repository_incarnation = bad.clone(),
+                    3 => attempted.parent_incarnation = bad.clone(),
+                    4 => attempted.credential_group_incarnation = bad.clone(),
+                    _ => attempted.payload_digest = bad.clone(),
+                }
+                assert_eq!(
+                    CreateOperation::new(attempted),
+                    Err(ModelError::InvalidIdentity),
+                    "accepted invalid identity field {field}: {bad:?}"
+                );
+            }
+        }
+        let mut maximum = identity();
+        maximum.operation_id = "a".repeat(512);
+        assert!(CreateOperation::new(maximum).is_ok());
+    }
+
+    #[test]
+    fn c14_placeholder_object_id_is_not_trusted_attribution() {
+        let mut receipt = trusted_receipt();
+        receipt.remote_id = 0;
+        let mut object = remote();
+        object.id = 0;
+        let mut op = lost_ack_operation();
+        assert_eq!(
+            op.reconcile(&[object], true, true, Some(&receipt)),
+            Ok(State::ManualHold)
+        );
+        assert_eq!(op.transmitted_calls(), 1);
+        assert!(!op.automatic_retry_allowed());
     }
 
     #[test]
