@@ -921,6 +921,34 @@ mod tests {
         }
     }
 
+
+    // Regression guard for every Unicode 15.1 General_Category=Cf scalar,
+    // not just the familiar bidi and zero-width examples.
+    #[test]
+    fn diagnostic_rendering_covers_unicode_format_category() {
+        let cf_ranges: &[(u32, u32)] = &[
+            (0x00AD, 0x00AD), (0x0600, 0x0605), (0x061C, 0x061C),
+            (0x06DD, 0x06DD), (0x070F, 0x070F), (0x0890, 0x0891),
+            (0x08E2, 0x08E2), (0x180E, 0x180E), (0x200B, 0x200F),
+            (0x202A, 0x202E), (0x2060, 0x2064), (0x2066, 0x206F),
+            (0xFEFF, 0xFEFF), (0xFFF9, 0xFFFB), (0x110BD, 0x110BD),
+            (0x110CD, 0x110CD), (0x13430, 0x1343F),
+            (0x1BCA0, 0x1BCA3), (0x1D173, 0x1D17A),
+            (0xE0001, 0xE0001), (0xE0020, 0xE007F),
+        ];
+        let mut tested = 0;
+        for &(first, last) in cf_ranges {
+            for point in first..=last {
+                let ch = std::char::from_u32(point).expect("Unicode format scalar");
+                let actual = render_failure(&format!("a{ch}b"));
+                let expected = format!("FAIL: a\\u{{{point:X}}}b");
+                assert_eq!(actual, expected, "U+{point:04X}");
+                tested += 1;
+            }
+        }
+        assert!(tested > 130, "must cover the entire pinned format table");
+    }
+
     #[test]
     fn diagnostic_rendering_preserves_ordinary_printable_text() {
         for value in ["README.md: target missing: a/b.md", "café.md", "emoji-🧪.md",
