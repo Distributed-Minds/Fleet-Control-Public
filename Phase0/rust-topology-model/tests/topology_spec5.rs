@@ -580,16 +580,37 @@ fn historical_machine_semantics_do_not_follow_topology_generation() {
 #[test]
 fn same_basis_cannot_reinterpret_legacy_machine_or_old_current_machine() {
     let mut top = topology(&["A", "B", "C"], "basis", 12);
-    let mut prior = previous("B", "basis", 12, 3, 2, state(Mode::Predict, Phase::Analytic, 1));
+    let mut prior = previous(
+        "B",
+        "basis",
+        12,
+        3,
+        2,
+        state(Mode::Predict, Phase::Analytic, 1),
+    );
     prior.source_machine = StateMachine::RotatingAnalystV1;
     assert_eq!(
-        check(&top, "B", Some(prior), Lineage::SameBasis, ResultClass::Noop).unwrap_err(),
+        check(
+            &top,
+            "B",
+            Some(prior),
+            Lineage::SameBasis,
+            ResultClass::Noop
+        )
+        .unwrap_err(),
         Rejection::UnprovenLineage
     );
 
     top.state_machine = StateMachine::RotatingAnalystV1;
     assert_eq!(
-        check(&top, "B", None, Lineage::FirstEnrollment, ResultClass::Observe).unwrap_err(),
+        check(
+            &top,
+            "B",
+            None,
+            Lineage::FirstEnrollment,
+            ResultClass::Observe
+        )
+        .unwrap_err(),
         Rejection::TopologyUnknown,
         "corrected-topology model cannot claim obsolete current semantics"
     );
