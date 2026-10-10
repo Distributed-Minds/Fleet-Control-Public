@@ -20,7 +20,9 @@ fn historical_fixture_still_emits_four_sha256_identities() {
         let (name, digest) = line.split_once(": ").expect("named SHA-256 identity");
         assert!(!name.is_empty());
         assert_eq!(digest.len(), 64, "{line:?}");
-        assert!(digest.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()));
+        assert!(digest
+            .bytes()
+            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()));
     }
     assert_eq!(
         String::from_utf8(output.stderr).expect("UTF-8 advisory"),
@@ -44,7 +46,10 @@ fn malformed_os_arguments_fail_without_panic_or_identity_output() {
             .output()
             .expect("run compiled digest with malformed OS argv");
         assert!(!output.status.success(), "invalid argv succeeded");
-        assert!(output.stdout.is_empty(), "invalid argv printed SHA-256 identities");
+        assert!(
+            output.stdout.is_empty(),
+            "invalid argv printed SHA-256 identities"
+        );
         let stderr = String::from_utf8(output.stderr).expect("safe UTF-8 diagnostic");
         assert_eq!(stderr, "FAIL: non-UTF-8 CLI argument\n");
         assert!(!stderr.contains("panicked"));
