@@ -127,7 +127,32 @@ fn read_fixture_with_observed_metadata(
     Ok(contents)
 }
 
+// O_NOFOLLOW protects only the final path component. A symlink in a parent
+// directory would otherwise bypass the explicit non-symlink fixture path rule.
+// This is static path admission, not an atomic defense against parent swaps.
+fn reject_symlinked_ancestors(path: &str) -> Result<(), String> {
+    let mut prefix = std::path::PathBuf::new();
+    let mut components = std::path::Path::new(path).components().peekable();
+    while let Some(component) = components.next() {
+        prefix.push(component.as_os_str());
+        if components.peek().is_none()
+            || !matches!(component, std::path::Component::Normal(_))
+        {
+            continue;
+        }
+        let metadata = fs::symlink_metadata(&prefix).map_err(|error| error.to_string())?;
+        if metadata.file_type().is_symlink() {
+            return Err("fixture path has symbolic-link ancestor".to_owned());
+        }
+        if !metadata.file_type().is_dir() {
+            return Err("fixture ancestor is not a directory".to_owned());
+        }
+    }
+    Ok(())
+}
+
 fn read_fixture_file(path: &str) -> Result<String, String> {
+    reject_symlinked_ancestors(path)?;
     let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
     read_fixture_with_observed_metadata(path, &metadata)
 }
@@ -409,6 +434,46 @@ mod tests {
 
         drop(file);
         fs::remove_dir_all(&scratch).expect("remove isolated fixture test directory");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bounded_fixture_rejects_symlinked_parent_paths() {
+        let scratch = std::env::temp_dir().join(format!(
+            "free-energy-integration-candidate-parent-alias-{}",
+            std::process::id()
+        ));
+        let real = scratch.join("real");
+        let nested = real.join("nested");
+        fs::create_dir_all(&nested).expect("create isolated real fixture directories");
+        let valid = nested.join("candidate.json");
+        fs::write(&valid, HISTORICAL_FIXTURE).expect("write original fixture bytes");
+        assert_eq!(
+            read_fixture_file(valid.to_str().unwrap()).expect("real parent is admissible"),
+            HISTORICAL_FIXTURE
+        );
+
+        let outer_alias = scratch.join("linked-real");
+        std::os::unix::fs::symlink(&real, &outer_alias).expect("create outer directory alias");
+        let outer_path = outer_alias.join("nested/candidate.json");
+        let outer_error = read_fixture_file(outer_path.to_str().unwrap())
+            .expect_err("outer symlinked ancestor cannot select fixture bytes");
+        assert!(
+            outer_error.contains("symbolic-link ancestor"),
+            "unexpected outer-ancestor rejection: {outer_error}"
+        );
+
+        let inner_alias = real.join("linked-nested");
+        std::os::unix::fs::symlink(&nested, &inner_alias).expect("create inner directory alias");
+        let inner_path = inner_alias.join("candidate.json");
+        let inner_error = read_fixture_file(inner_path.to_str().unwrap())
+            .expect_err("inner symlinked ancestor cannot select fixture bytes");
+        assert!(
+            inner_error.contains("symbolic-link ancestor"),
+            "unexpected inner-ancestor rejection: {inner_error}"
+        );
+
+        fs::remove_dir_all(&scratch).expect("remove isolated fixture directory");
     }
 
     #[cfg(unix)]
