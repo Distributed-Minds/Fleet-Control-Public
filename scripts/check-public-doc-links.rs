@@ -822,6 +822,11 @@ fn inspect_help_guide_contract(guide: &str) -> Result<(), &'static str> {
     Ok(())
 }
 
+
+fn render_failure(problem: &str) -> String {
+    format!("FAIL: {problem}")
+}
+
 fn main() {
     let mut arguments = env::args().skip(1);
     let mut root: Option<PathBuf> = None;
@@ -833,7 +838,7 @@ fn main() {
                 return;
             }
             _ => {
-                eprintln!("FAIL: unsupported argument: {arg}");
+                eprintln!("{}", render_failure(&format!("unsupported argument: {arg}")));
                 std::process::exit(2);
             }
         }
@@ -844,7 +849,7 @@ fn main() {
     });
     let result = check(&root, &DOCUMENTS);
     for problem in &result.errors {
-        eprintln!("FAIL: {problem}");
+        eprintln!("{}", render_failure(problem));
     }
     println!(
         "Checked {} local links across {} documents; {} errors",
@@ -860,6 +865,56 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // #345: stderr rendering must never emit a new fake line or terminal
+    // control character from Markdown destinations or CLI arguments.
+    #[test]
+    fn diagnostic_rendering_escapes_invisible_and_control_characters() {
+        let cases: &[(&str, &str)] = &[
+            ("missing\nFAIL: fake.md", "missing\\nFAIL: fake.md"),
+            ("missing\rFAIL: fake.md", "missing\\rFAIL: fake.md"),
+            ("missing\tname.md", "missing\\tname.md"),
+            ("missing\u{1B}[31m.md", "missing\\u{1B}[31m.md"),
+            ("missing\u{7F}.md", "missing\\u{7F}.md"),
+            ("missing\u{85}.md", "missing\\u{85}.md"),
+            ("missing\u{200B}.md", "missing\\u{200B}.md"),
+            ("missing\u{200D}.md", "missing\\u{200D}.md"),
+            ("missing\u{202E}.md", "missing\\u{202E}.md"),
+            ("missing\u{2066}.md", "missing\\u{2066}.md"),
+            ("missing\u{2028}.md", "missing\\u{2028}.md"),
+            ("missing\u{2029}.md", "missing\\u{2029}.md"),
+            ("missing\u{FEFF}.md", "missing\\u{FEFF}.md"),
+        ];
+        for &(source, expected) in cases {
+            let actual = render_failure(source);
+            assert_eq!(actual, format!("FAIL: {expected}"), "source={source:?}");
+            assert_eq!(actual.lines().count(), 1, "source={source:?}");
+        }
+    }
+
+    #[test]
+    fn diagnostic_rendering_preserves_ordinary_printable_text() {
+        for value in ["README.md: target missing: a/b.md", "café.md", "emoji-🧪.md",
+            "space name.md", "percent%20literal", "שלום.md"] {
+            assert_eq!(render_failure(value), format!("FAIL: {value}"));
+        }
+    }
+
+    #[test]
+    fn diagnostic_rendering_preserves_missing_target_failure() {
+        let sandbox = Sandbox::new();
+        sandbox.write("README.md", "[bad](missing%0AFAIL%3A%20fake.md)\n");
+        let result = sandbox.scan();
+        assert_eq!(result.local_links, 1);
+        assert_eq!(result.errors.len(), 1, "{:?}", result.errors);
+        assert!(result.errors[0].contains("missing\nFAIL: fake.md"),
+            "missing target was not preserved: {:?}", result.errors);
+        let rendered = render_failure(&result.errors[0]);
+        assert!(rendered.starts_with("FAIL: README.md:"));
+        assert!(rendered.contains("missing\\nFAIL: fake.md"), "{rendered:?}");
+        assert_eq!(rendered.lines().count(), 1, "{rendered:?}");
+    }
+
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT: AtomicU64 = AtomicU64::new(0);
 
