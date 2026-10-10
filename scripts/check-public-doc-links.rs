@@ -732,6 +732,61 @@ mod tests {
 
 
 
+
+    // Spec #334 v2: CommonMark HTML block/inline comments, code precedence,
+    // escaped openers, and unterminated-inline negative controls.
+    #[test]
+    fn html_comment_spec2_link_destinations() {
+        let cases: &[(&str, &str, &[&str])] = &[
+            ("H1", "<!-- [ghost](missing.md) -->\n[real](present.md)", &["present.md"]),
+            ("H2", "<!--\n[ghost](missing.md)\n[other](other.md)\n-->\n[real](present.md)", &["present.md"]),
+            ("H3", "<!--\n[ghost](missing.md)\n[other](other.md)", &[]),
+            ("H4", "prefix <!-- [ghost](missing.md) --> [real](present.md)", &["present.md"]),
+            ("H5", "\\<!-- [real](present.md) -->", &["present.md"]),
+            ("H6", "~~~md\n<!-- [ghost](missing.md) -->\n~~~\n[real](present.md)", &["present.md"]),
+            ("H7", "<!-- [ghost](missing.md) -->\r\n[real](present.md)", &["present.md"]),
+            ("H8", "<!-- [ghost](missing.md) --> [real](present.md)", &[]),
+            ("N1", "`<!--` [real](present.md)", &["present.md"]),
+            ("N2", "Text `<!--` [real](present.md)", &["present.md"]),
+            ("N3", "``<!--`` [real](present.md)", &["present.md"]),
+            ("N4", "`<!-- [ghost](missing.md) -->` [real](present.md)", &["present.md"]),
+            ("N5", "prefix <!-- [ghost](missing.md)", &["missing.md"]),
+            ("N6", "Text <!-- [ghost](missing.md)\n[real](present.md)", &["missing.md", "present.md"]),
+            ("N7", "<!-- [ghost](missing.md)\n[real](present.md)", &[]),
+            ("N8", "Text <!-- [ghost](missing.md) --> [real](present.md)", &["present.md"]),
+        ];
+        for &(id, source, expected) in cases {
+            let mut diagnostics = Report::default();
+            let actual_paths = collect_links(source, "README.md", &mut diagnostics);
+            let actual: Vec<&str> = actual_paths.iter().map(String::as_str).collect();
+            assert_eq!(actual, expected, "case={id}; source={source:?}");
+            assert!(diagnostics.errors.is_empty(), "case={id}: {:?}", diagnostics.errors);
+        }
+    }
+
+    #[test]
+    fn html_comment_spec2_sandbox_negative_controls() {
+        let sandbox = Sandbox::new();
+        sandbox.write("present.md", "present");
+        for source in [
+            "<!-- [ghost](missing.md) -->\\n[real](present.md)\\n",
+            "prefix <!-- [ghost](missing.md) --> [real](present.md)\\n",
+            "<!-- [ghost](missing.md) --> [real](present.md)\\n",
+        ] {
+            let source = source.replace("\\n", "\n");
+            sandbox.write("README.md", &source);
+            let result = sandbox.scan();
+            let expected_count = if source.starts_with("<!--") && !source.contains("\n[real]") { 0 } else { 1 };
+            assert_eq!(result.local_links, expected_count, "source={source:?}");
+            assert!(result.errors.is_empty(), "source={source:?}: {:?}", result.errors);
+        }
+        sandbox.write("README.md", "Text <!-- [ghost](missing.md)\n[real](present.md)\n");
+        let result = sandbox.scan();
+        assert_eq!(result.local_links, 2);
+        assert_eq!(result.errors.len(), 1, "{:?}", result.errors);
+        assert!(result.errors[0].contains("README.md:1: target missing: missing.md"));
+    }
+
     #[test]
     fn indented_code_blocks_do_not_emit_markdown_destinations() {
         for source in [
