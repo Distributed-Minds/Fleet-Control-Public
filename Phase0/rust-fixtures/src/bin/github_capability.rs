@@ -6,9 +6,11 @@
 //! independently (e.g. several identical inputs have different expected states).
 //! Do not report Python/Rust full semantic equivalence until those inputs exist.
 
-use serde::Deserialize;
+use serde::de::{self, MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer};
 use std::collections::HashSet;
 use std::env;
+use std::fmt;
 use std::fs;
 use std::path::PathBuf;
 use std::process;
@@ -344,6 +346,81 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
     }
 }
 
+// Reject conflicting raw object members before serde_json's normal struct
+// decoding. JSON object membership is checked at *every* depth, including
+// escaped spellings of the same decoded key. This is input admission only,
+// not a claim that the fixture is an independent capability oracle.
+struct UniqueJsonMemberCheck;
+
+impl<'de> Deserialize<'de> for UniqueJsonMemberCheck {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(UniqueJsonMemberVisitor)
+    }
+}
+
+struct UniqueJsonMemberVisitor;
+
+impl<'de> Visitor<'de> for UniqueJsonMemberVisitor {
+    type Value = UniqueJsonMemberCheck;
+
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("a JSON value with no duplicate object keys")
+    }
+
+    fn visit_bool<E: de::Error>(self, _: bool) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_i64<E: de::Error>(self, _: i64) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_u64<E: de::Error>(self, _: u64) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_f64<E: de::Error>(self, _: f64) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_str<E: de::Error>(self, _: &str) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_string<E: de::Error>(self, _: String) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+        while seq.next_element::<UniqueJsonMemberCheck>()?.is_some() {}
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+        let mut seen = HashSet::new();
+        while let Some(key) = map.next_key::<String>()? {
+            if !seen.insert(key.clone()) {
+                return Err(de::Error::custom(format!(
+                    "duplicate JSON object key: {key:?}"
+                )));
+            }
+            map.next_value::<UniqueJsonMemberCheck>()?;
+        }
+        Ok(UniqueJsonMemberCheck)
+    }
+}
+
+fn parse_fixture(json: &str) -> Result<Fixture, serde_json::Error> {
+    // Deliberately parse twice: the first walk inspects raw JSON member
+    // multiplicity, which would be lost after Value or typed deserialization.
+    let _: UniqueJsonMemberCheck = serde_json::from_str(json)?;
+    serde_json::from_str(json)
+}
+
 fn run() -> Result<(), String> {
     let mut args = env::args_os().skip(1);
     let input = args
@@ -355,8 +432,8 @@ fn run() -> Result<(), String> {
     }
     let json =
         fs::read_to_string(&input).map_err(|e| format!("cannot read {}: {e}", input.display()))?;
-    let fixture: Fixture = serde_json::from_str(&json)
-        .map_err(|e| format!("invalid fixture {}: {e}", input.display()))?;
+    let fixture: Fixture =
+        parse_fixture(&json).map_err(|e| format!("invalid fixture {}: {e}", input.display()))?;
     match validate(&fixture) {
         Ok(count) => {
             println!("GitHub capability invariant fixtures (Rust): {count} checked");
@@ -442,6 +519,28 @@ mod tests {
         }
         // Both unchanged historical positives remain admitted.
         assert_eq!(checked(fixture()), Ok(28));
+    }
+
+    #[test]
+    fn duplicate_json_members_fail_even_when_escaped_or_nested() {
+        for raw in [
+            r#"{"spec":5,"spec":5}"#,
+            r#"{"outer":{"authority":"current","authority":"forged"}}"#,
+            r#"{"cases":[{"lineage":"current","\u006cineage":"unknown"}]}"#,
+        ] {
+            let err = serde_json::from_str::<UniqueJsonMemberCheck>(raw)
+                .err()
+                .expect("duplicate member must fail");
+            assert!(
+                err.to_string().contains("duplicate JSON object key"),
+                "unexpected duplicate-key failure: {err}"
+            );
+        }
+        assert!(parse_fixture(BASELINE).is_ok());
+        assert!(serde_json::from_str::<UniqueJsonMemberCheck>(
+            r#"{"left":{"id":1},"right":{"id":2}}"#
+        )
+        .is_ok());
     }
 
     #[test]
