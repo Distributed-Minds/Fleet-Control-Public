@@ -11,12 +11,16 @@ This std-only Rust crate implements one **bounded, executable component** of the
 - `cargo +1.85.1 clippy --all-targets --locked --offline -- -D warnings`
 - `cargo +1.85.1 run --locked --offline --bin scope_demo`
 
-The pinned std-only Cargo package has a committed lockfile and no external dependencies. Tests validate the simulation's decisions, not a real SQLite concurrent transaction or provider mutation.
+The pinned std-only Cargo package has a committed lockfile and no external dependencies. Current hosted tests cover **19 Rust cases** (scope, fixture-authenticated poll/replay and synthetic delivery); they validate simulation decisions, not a real SQLite concurrent transaction or provider mutation.
+
+### Fixture-only ACK and result submission
+
+`SimulatedReplay` includes bounded `acknowledge` and `submit_result` decisions keyed to the immutable, previously issued synthetic poll receipt: fixture-injected principal identity/generation, request ID, exact task and assignment generation, and current exact scope basis. Duplicate identical events reconcile without extra state; wrong principal, moved basis, missing ACK, changed result digest, revoked generation and recovery-held assignment fail closed. This is **not** an authenticated HTTP transport or a provider-verified result: a digest is merely caller-supplied fixture data, not semantic truth. No durable journal, external signature, result acceptance or GitHub mutation authority is inferred.
 
 ## Explicit incomplete acceptance
 
 - **NO SQLite / durable state:** no transactional BEGIN IMMEDIATE, WAL, outbox, restart, crash recovery or schema migration. Production work requires an independently vetted and pinned SQLite Rust binding/Cargo.lock, dependency/license audit and compiled crash/restart tests.
-- **NO authenticated worker API:** no principal provisioning, request digest or replay, ACK/results, authority generation, worker enrollment, concurrent service or real provider token access.
+- **NO authenticated worker API:** no real authentication adapter, persistent identity/replay ledger, network ACK/result endpoint, result provenance or trusted acceptance, authoritative generation fencing, worker enrollment, concurrent service or provider token access.
 - **NO trusted provider resource registry:** this model works only with fixtures claiming an exact current basis. A future server must independently establish canonical identities, alias/ancestry semantics and real effect-time #43/#50/#10 fencing.
 - **NO live release:** this model neither grants provider mutation capability nor satisfies issue #280, parent #70, or M1–M4 product acceptance. A green test must not be interpreted as permission to schedule a real worker.
 
