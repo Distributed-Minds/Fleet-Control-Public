@@ -4,8 +4,12 @@ use std::collections::{BTreeMap, BTreeSet};
 
 // Offline fixture identifiers must not silently collapse to an absent scope.
 // This is synthetic admission only, not verification of external identity.
+const MAX_SYNTHETIC_ID_BYTES: usize = 256;
+
 fn valid_identity(value: &str) -> bool {
-    !value.trim().is_empty() && !value.chars().any(char::is_control)
+    !value.trim().is_empty()
+        && value.len() <= MAX_SYNTHETIC_ID_BYTES
+        && !value.chars().any(char::is_control)
 }
 
 impl Scope {
@@ -209,7 +213,8 @@ impl Registry {
         if !request.authorized_action {
             return Err(Denied::NoActionAuthority);
         }
-        if request.observed_resource.is_empty()
+        if !valid_identity(&request.observed_resource)
+            || !valid_identity(&request.expected_resource)
             || request.observed_resource != request.expected_resource
         {
             return Err(Denied::WrongResource);

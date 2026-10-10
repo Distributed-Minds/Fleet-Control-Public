@@ -260,3 +260,96 @@ fn blank_or_control_bearing_successor_identifiers_never_advance() {
         assert_eq!(db.admitted_count(), 0);
     }
 }
+
+#[test]
+fn unbounded_scope_head_and_obligation_identifiers_cannot_admit() {
+    let oversized = "x".repeat(257);
+    for field in 0..4 {
+        let (_, mut selected, mut transition) = fixture();
+        let mut scope = selected.scope.clone();
+        match field {
+            0 => scope.repo_incarnation = oversized.clone(),
+            1 => scope.installation = oversized.clone(),
+            2 => scope.tenant = oversized.clone(),
+            3 => scope.namespace = oversized.clone(),
+            _ => unreachable!(),
+        }
+        selected.scope = scope.clone();
+        transition.scope = scope.clone();
+        let mut db = Registry::new(scope, "h0".into(), 0, 2, selected.obligations.clone());
+        assert_eq!(
+            db.admit(&selected, transition),
+            Err(Denied::UnknownLineage),
+            "oversized scope field {field}"
+        );
+        assert_eq!(db.admitted_count(), 0);
+    }
+
+    let (_, mut selected, mut transition) = fixture();
+    selected.head = oversized.clone();
+    transition.predecessor = oversized.clone();
+    let mut db = Registry::new(
+        selected.scope.clone(),
+        oversized.clone(),
+        0,
+        2,
+        selected.obligations.clone(),
+    );
+    assert_eq!(db.admit(&selected, transition), Err(Denied::UnknownLineage));
+    assert_eq!(db.admitted_count(), 0);
+
+    let (_, mut selected, transition) = fixture();
+    selected.obligations.insert(oversized);
+    let mut db = Registry::new(
+        selected.scope.clone(),
+        "h0".into(),
+        0,
+        2,
+        selected.obligations.clone(),
+    );
+    assert_eq!(db.admit(&selected, transition), Err(Denied::UnknownLineage));
+    assert_eq!(db.admitted_count(), 0);
+}
+
+#[test]
+fn unbounded_transition_identifiers_cannot_create_receipts() {
+    let oversized = "x".repeat(257);
+    for field in 0..3 {
+        let (mut db, selected, mut transition) = fixture();
+        match field {
+            0 => transition.id = oversized.clone(),
+            1 => transition.successor = oversized.clone(),
+            2 => transition.new_head = oversized.clone(),
+            _ => unreachable!(),
+        }
+        assert_eq!(
+            db.admit(&selected, transition),
+            Err(Denied::InvalidTransition),
+            "oversized transition field {field}"
+        );
+        assert_eq!(db.admitted_count(), 0);
+        assert_eq!(db.head(), ("h0", 0));
+    }
+}
+
+#[test]
+fn matching_malformed_resource_identifiers_do_not_authorize_synthetic_effects() {
+    let (mut db, selected, transition) = fixture();
+    let receipt = db.admit(&selected, transition).unwrap();
+    for invalid in ["", " ", "\n", "valid\u{0007}spoof"] {
+        let mut effect = request(&selected, &receipt);
+        effect.observed_resource = invalid.into();
+        effect.expected_resource = invalid.into();
+        assert_eq!(db.effect(&receipt, &effect), Err(Denied::WrongResource));
+    }
+    let mut effect = request(&selected, &receipt);
+    effect.observed_resource = "x".repeat(257);
+    effect.expected_resource = effect.observed_resource.clone();
+    assert_eq!(db.effect(&receipt, &effect), Err(Denied::WrongResource));
+
+    let mut valid = request(&selected, &receipt);
+    valid.observed_resource = "resource-incarnation:1".into();
+    valid.expected_resource = valid.observed_resource.clone();
+    assert_eq!(db.effect(&receipt, &valid), Ok(Eligibility::SimulationOnly));
+    assert_eq!(db.admitted_count(), 1);
+}
