@@ -708,6 +708,26 @@ mod tests {
 
 
     #[test]
+    fn block_delimiter_recognizers_reject_near_misses() {
+        for line in ["=", "==", "   ==  ", "-", "--", "   --\t", "---"] {
+            assert!(is_setext_underline(line), "setext: {line:?}");
+        }
+        for line in ["---", " - - -\t", "***", "* * *", "___", "** **"] {
+            assert!(is_thematic_break(line), "thematic: {line:?}");
+        }
+        for line in ["    --", "\t---", "\\---", "-x", "==x", "--=", "----x"] {
+            assert!(!is_setext_underline(line), "not setext: {line:?}");
+            assert!(!is_thematic_break(line), "not thematic: {line:?}");
+        }
+        assert!(!is_thematic_break("--"));
+        assert!(!is_thematic_break("=="));
+        // Three dashes match both raw grammars: the caller gives thematic
+        // breaks precedence over a Setext underline.
+        assert!(is_setext_underline("---"));
+        assert!(is_thematic_break("---"));
+    }
+
+    #[test]
     fn setext_and_thematic_boundaries_expose_later_missing_links() {
         for underline in [
             "=", "==", "===", "   ==   ", "-", "--", "   --\t", "---",
