@@ -6,6 +6,10 @@ use std::collections::{BTreeMap, BTreeSet};
 // This is synthetic admission only, not verification of external identity.
 const MAX_SYNTHETIC_ID_BYTES: usize = 256;
 
+/// Bound the offline fixture's journal and head-history growth. Historical
+/// receipts are retained for exact replay; this is not a production quota.
+pub const MAX_SYNTHETIC_LINEAGE_RECEIPTS: usize = 1024;
+
 fn valid_identity(value: &str) -> bool {
     // Offline machine-token identities, not human-facing names. Bounded ASCII
     // syntax rejects invisible/bidi Unicode and whitespace-padded aliases.
@@ -90,6 +94,7 @@ pub enum Denied {
     NoActionAuthority,
     WrongResource,
     RecoveryHold,
+    CapacityExhausted,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -185,6 +190,12 @@ impl Registry {
         }
         if self.seen_heads.contains(&transition.new_head) {
             return Err(Denied::ReplayConflict);
+        }
+        // Never evict old receipts/head tombstones to accept a new operation:
+        // doing so would downgrade historical idempotency and ABA protection.
+        // Exact historical replays above still resolve when the journal is full.
+        if self.receipts.len() >= MAX_SYNTHETIC_LINEAGE_RECEIPTS {
+            return Err(Denied::CapacityExhausted);
         }
         let generation = self
             .generation
