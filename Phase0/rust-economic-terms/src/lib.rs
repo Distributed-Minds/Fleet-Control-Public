@@ -167,9 +167,7 @@ pub fn prepare(request: &Request) -> Result<Prepared, Decision> {
     if mandate.provenance != Evidence::Synthetic {
         return Err(Decision::Blocked(Reason::MissingAuthority));
     }
-    if mandate.root_generation == 0
-        || mandate.root_generation != mandate.current_root_generation
-    {
+    if mandate.root_generation == 0 || mandate.root_generation != mandate.current_root_generation {
         return Err(Decision::Blocked(Reason::StaleAuthority));
     }
     if valuation.provenance != Evidence::Synthetic {
@@ -310,7 +308,8 @@ impl SimulationJournal {
         } else {
             provider.compare_and_commit(&prepared)
         };
-        self.attempts.insert(prepared.operation.clone(), (prepared, verdict));
+        self.attempts
+            .insert(prepared.operation.clone(), (prepared, verdict));
         Replay::First(verdict)
     }
 

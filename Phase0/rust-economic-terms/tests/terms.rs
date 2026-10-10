@@ -83,10 +83,16 @@ fn malformed_operation_and_exact_terms_identifiers_fail_closed() {
     for bad in ["", "padded op", "evil\nnew", "bidi\u{202e}", "x/y"] {
         let mut x = request();
         x.operation = bad.into();
-        assert_eq!(prepare(&x), Err(Decision::Unknown(Reason::MalformedIdentity)));
+        assert_eq!(
+            prepare(&x),
+            Err(Decision::Unknown(Reason::MalformedIdentity))
+        );
         let mut x = request();
         x.observed_offer.offer_incarnation = bad.into();
-        assert_eq!(prepare(&x), Err(Decision::Unknown(Reason::MalformedIdentity)));
+        assert_eq!(
+            prepare(&x),
+            Err(Decision::Unknown(Reason::MalformedIdentity))
+        );
     }
 }
 
@@ -95,7 +101,10 @@ fn synthetic_authority_cannot_be_replaced_by_a_caller_claim() {
     for bad in [Evidence::Absent, Evidence::CallerClaim] {
         let mut x = request();
         x.mandate.provenance = bad;
-        assert_eq!(prepare(&x), Err(Decision::Blocked(Reason::MissingAuthority)));
+        assert_eq!(
+            prepare(&x),
+            Err(Decision::Blocked(Reason::MissingAuthority))
+        );
     }
 }
 
@@ -114,7 +123,10 @@ fn valuation_requires_synthetic_source_and_current_generation() {
     for bad in [Evidence::Absent, Evidence::CallerClaim] {
         let mut x = request();
         x.valuation.provenance = bad;
-        assert_eq!(prepare(&x), Err(Decision::Unknown(Reason::MissingValuation)));
+        assert_eq!(
+            prepare(&x),
+            Err(Decision::Unknown(Reason::MissingValuation))
+        );
     }
     for (generation, current) in [(0, 0), (5, 6)] {
         let mut x = request();
@@ -144,7 +156,10 @@ fn exposure_requires_current_provenance_and_generation() {
     assert_eq!(prepare(&x), Err(Decision::Unknown(Reason::StaleExposure)));
     let mut x = request();
     x.exposure.allocation_receipt = "".into();
-    assert_eq!(prepare(&x), Err(Decision::Unknown(Reason::MalformedIdentity)));
+    assert_eq!(
+        prepare(&x),
+        Err(Decision::Unknown(Reason::MalformedIdentity))
+    );
 }
 
 #[test]
@@ -154,7 +169,10 @@ fn capacity_and_maximum_worst_case_cannot_be_exceeded() {
     assert_eq!(prepare(&x), Err(Decision::Blocked(Reason::MandateExceeded)));
     let mut x = request();
     x.exposure.remaining_headroom = 124;
-    assert_eq!(prepare(&x), Err(Decision::Blocked(Reason::UnavailableHeadroom)));
+    assert_eq!(
+        prepare(&x),
+        Err(Decision::Blocked(Reason::UnavailableHeadroom))
+    );
     let mut x = request();
     x.valuation.conservative_worst_case = 119;
     assert_eq!(prepare(&x), Err(Decision::Blocked(Reason::MandateExceeded)));
@@ -215,7 +233,10 @@ fn all_twelve_material_preparation_term_changes_fail_closed() {
     for candidate in drifted_quotes() {
         let mut x = request();
         x.observed_offer = candidate;
-        assert_eq!(prepare(&x), Err(Decision::Blocked(Reason::IncompatibleTerms)));
+        assert_eq!(
+            prepare(&x),
+            Err(Decision::Blocked(Reason::IncompatibleTerms))
+        );
     }
 }
 
@@ -366,7 +387,10 @@ fn two_distinct_roots_with_unproved_shared_exposure_do_not_both_prepare() {
     second.mandate.root_generation = 9;
     second.mandate.current_root_generation = 9;
     second.exposure.current_generation += 1; // stale same-component receipt
-    assert_eq!(prepare(&second), Err(Decision::Unknown(Reason::StaleExposure)));
+    assert_eq!(
+        prepare(&second),
+        Err(Decision::Unknown(Reason::StaleExposure))
+    );
 }
 
 #[test]
