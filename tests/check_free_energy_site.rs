@@ -243,7 +243,7 @@ fn has_valid_head_title(elements: &[&str]) -> bool {
 fn disallowed_site_elements(elements: &[&str]) -> Vec<&'static str> {
     [
         "script", "iframe", "form", "object", "embed", "template", "noscript",
-        "textarea", "xmp", "plaintext", "noembed", "noframes", "details", "dialog",
+        "textarea", "xmp", "plaintext", "noembed", "noframes", "details", "dialog", "select", "datalist",
     ]
         .into_iter()
         .filter(|name| elements.iter().any(|tag| is_open_element(tag, name)))
