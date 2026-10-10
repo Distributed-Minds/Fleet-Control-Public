@@ -4,6 +4,23 @@
 **Readiness:** [independent PLAN READY](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/189#issuecomment-6098215676) and [independent ADVERSARIAL READY](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/189#issuecomment-6098355206), **both limited to preparation of this non-destructive packet**.  
 **Evidence at publication:** DESIGN / NOT_RUN. This Markdown is not a host inspection, a security attestation, or permission to provision a device.
 
+## Operator-supplied host checkpoint (2026-10-10) — not S0 acceptance
+
+The [canonical #189 checkpoint](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/189) records later **operator-provided terminal observations**. These supersede this packet's original *Windows/not-yet-installed* planning assumption, but **were not collected, repeated or validated by the GitHub agent**. They are not a coherent, timestamped network or guest-containment attestation.
+
+| Surface | Operator-reported evidence | Current limitation |
+| --- | --- | --- |
+| Host operating system | A newly provisioned Linux build node is being administered; KVM/libvirt commands succeeded | Exact `/etc/os-release`, kernel and configuration generation still need a local capture |
+| CPU/virtualization | Intel VT-x; `kvm_intel` / `kvm` loaded; `/dev/kvm` exists; `virt-host-validate qemu` passes core host checks | No disposable guest was booted or tested; `/dev/kvm` was observed as world-accessible and needs policy review |
+| libvirt | `libvirtd` enabled/running; `qemu:///system` queried successfully; virtual `default` network active | No VMs listed; active default NAT is **not** guest egress isolation |
+| Optional GPU | `nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv` reported **NVIDIA GeForce GTX 1050, 4096 MiB, 580.178.04** | Driver/device reporting only; CUDA, NVENC, remotely dispatched jobs and guest GPU access **NOT RUN** |
+| IOMMU/VFIO | Host hardware DMAR available, but IOMMU disabled in kernel | No VFIO passthrough readiness claim; optional GPU work must not weaken VM isolation |
+
+**Evidence progression:** The original S0 decision ledger below remains a snapshot of document creation (`NOT_RUN`); the host capability prerequisites now have *partial operator observations*. Each S0 security and integration verdict remains **NOT_RUN / BLOCKED pending the separately approved, versioned local negative/positive controls**, especially IPv4+IPv6 on both Wi-Fi and Ethernet, privileged socket/canary denial, guest teardown and fresh-harness execution. Do **not** reinstall Fedora/NVIDIA or edit host firewall/virtualization settings based solely on this report.
+
+**Next trusted collection:** after separate local approval, record exact OS/kernel/driver/tool versions, `/dev/kvm` permissions, current network routes, effective nftables policy and immutable guest-image/configuration identity using the S0 evidence envelope below. Do not elevate older shell transcripts into a security PASS.
+
+
 ## 0. Boundaries and operator decisions
 
 The trusted primary is the operator's Fedora desktop and approval surface. The secondary is the proposed Fedora Server hypervisor/limited dispatch appliance. An ephemeral KVM guest is a third, untrusted zone where an agent harness would eventually run. The physical Ethernet cable and a design diagram do not establish sandbox containment.
