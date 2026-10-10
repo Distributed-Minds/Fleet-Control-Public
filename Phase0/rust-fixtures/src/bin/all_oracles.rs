@@ -303,7 +303,10 @@ fn main() {
     // bypasses the normal deterministic FAIL diagnostic for rejected input.
     let result = env::args_os()
         .skip(1)
-        .map(|arg| arg.into_string().map_err(|_| "non-UTF-8 CLI argument".to_owned()))
+        .map(|arg| {
+            arg.into_string()
+                .map_err(|_| "non-UTF-8 CLI argument".to_owned())
+        })
         .collect::<Result<Vec<String>, String>>()
         .and_then(|args| parse_args(&args))
         .and_then(|(selection, root)| run_oracles(selection, &root));
