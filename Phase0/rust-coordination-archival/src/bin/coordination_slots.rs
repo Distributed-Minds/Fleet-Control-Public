@@ -279,7 +279,9 @@ fn main() -> ExitCode {
     {
         Ok(args) => args,
         Err(_) => {
-            eprintln!("SLOT_UNKNOWN arguments must be valid UTF-8; no coordination write authority");
+            eprintln!(
+                "SLOT_UNKNOWN arguments must be valid UTF-8; no coordination write authority"
+            );
             return ExitCode::FAILURE;
         }
     };
