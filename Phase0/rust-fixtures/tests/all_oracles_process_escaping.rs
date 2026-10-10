@@ -49,3 +49,31 @@ fn oversized_argument_does_not_leak_an_unbounded_diagnostic() {
         diagnostic.len()
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn invalid_utf8_os_arguments_fail_without_a_panic_or_success_output() {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+
+    let invalid = OsString::from_vec(vec![b'x', 0xff, b'y']);
+    for args in [
+        vec![invalid.clone()],
+        vec![OsString::from("--family"), invalid.clone()],
+        vec![OsString::from("--root"), invalid.clone()],
+    ] {
+        let output = Command::new(RUNNER)
+            .args(&args)
+            .output()
+            .expect("execute compiled runner with non-UTF-8 OS arguments");
+        assert!(!output.status.success(), "invalid OS argv was accepted");
+        assert!(output.stdout.is_empty(), "failed argv emitted PASS stdout");
+        let diagnostic = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
+        assert!(
+            diagnostic.starts_with("FAIL: non-UTF-8 CLI argument\n"),
+            "{diagnostic:?}"
+        );
+        assert!(!diagnostic.contains("panicked"), "{diagnostic:?}");
+        assert_eq!(diagnostic.lines().count(), 2, "{diagnostic:?}");
+    }
+}
