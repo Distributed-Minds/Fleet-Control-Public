@@ -251,12 +251,7 @@ fn globally_sparse_github_comment_ids_require_exact_archived_copy() {
     // This ID lies between the same numeric segment boundaries but does not
     // occur in the archived records. Numeric-span membership grants nothing.
     assert_eq!(
-        plan_compaction(
-            &archived,
-            &live,
-            &scoped_cut,
-            &[witness(&live[2])]
-        ),
+        plan_compaction(&archived, &live, &scoped_cut, &[witness(&live[2])]),
         Err(PlanFailure::MissingOrAmbiguousArchivedCopy)
     );
 }
