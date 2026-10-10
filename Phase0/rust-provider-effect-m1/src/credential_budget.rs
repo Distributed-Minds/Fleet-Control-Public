@@ -487,7 +487,8 @@ mod tests {
 
     #[test]
     fn hundred_workers_do_not_starve_tenants_or_exceed_aggregate_budget() {
-        let mut s = scheduler(50, 5, 100);
+        // 100 normal workers plus five protected pending recovery slots.
+        let mut s = scheduler(50, 5, 105);
         for worker in 0..100 {
             s.enqueue(request(
                 &format!("worker-{worker:03}"),
