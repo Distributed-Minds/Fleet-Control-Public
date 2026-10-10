@@ -822,6 +822,43 @@ fn inspect_help_guide_contract(guide: &str) -> Result<(), &'static str> {
     Ok(())
 }
 
+
+// Only stderr presentation is encoded. Parsing, filesystem lookup, and
+// failure/exit decisions retain their exact original strings and outcomes.
+// ASCII control characters, Unicode format controls, and line separators
+// must not create fake CI log lines or alter terminal rendering.
+fn render_failure(problem: &str) -> String {
+    let mut rendered = String::with_capacity(problem.len() + 6);
+    rendered.push_str("FAIL: ");
+    for ch in problem.chars() {
+        match ch {
+            '\n' => rendered.push_str("\\n"),
+            '\r' => rendered.push_str("\\r"),
+            '\t' => rendered.push_str("\\t"),
+            c if c.is_control()
+                || matches!(c,
+                    '\u{00AD}' | '\u{034F}' | '\u{0600}'..='\u{0605}'
+                    | '\u{061C}' | '\u{06DD}'
+                    | '\u{070F}' | '\u{0890}'..='\u{0891}'
+                    | '\u{08E2}' | '\u{180E}'
+                    | '\u{200B}'..='\u{200F}' | '\u{2028}'..='\u{202E}'
+                    | '\u{2060}'..='\u{206F}' | '\u{FEFF}'
+                    | '\u{FFF9}'..='\u{FFFB}'
+                    | '\u{110BD}' | '\u{110CD}'
+                    | '\u{13430}'..='\u{13440}'
+                    | '\u{1BCA0}'..='\u{1BCA3}'
+                    | '\u{1D173}'..='\u{1D17A}'
+                    | '\u{E0001}' | '\u{E0020}'..='\u{E007F}'
+                ) =>
+            {
+                rendered.push_str(&format!("\\u{{{:X}}}", c as u32));
+            }
+            c => rendered.push(c),
+        }
+    }
+    rendered
+}
+
 fn main() {
     let mut arguments = env::args().skip(1);
     let mut root: Option<PathBuf> = None;
@@ -833,7 +870,7 @@ fn main() {
                 return;
             }
             _ => {
-                eprintln!("FAIL: unsupported argument: {arg}");
+                eprintln!("{}", render_failure(&format!("unsupported argument: {arg}")));
                 std::process::exit(2);
             }
         }
@@ -844,7 +881,7 @@ fn main() {
     });
     let result = check(&root, &DOCUMENTS);
     for problem in &result.errors {
-        eprintln!("FAIL: {problem}");
+        eprintln!("{}", render_failure(problem));
     }
     println!(
         "Checked {} local links across {} documents; {} errors",
@@ -860,6 +897,84 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // #345: stderr rendering must never emit a new fake line or terminal
+    // control character from Markdown destinations or CLI arguments.
+    #[test]
+    fn diagnostic_rendering_escapes_invisible_and_control_characters() {
+        let cases: &[(&str, &str)] = &[
+            ("missing\nFAIL: fake.md", "missing\\nFAIL: fake.md"),
+            ("missing\rFAIL: fake.md", "missing\\rFAIL: fake.md"),
+            ("missing\tname.md", "missing\\tname.md"),
+            ("missing\u{1B}[31m.md", "missing\\u{1B}[31m.md"),
+            ("missing\u{7F}.md", "missing\\u{7F}.md"),
+            ("missing\u{85}.md", "missing\\u{85}.md"),
+            ("missing\u{200B}.md", "missing\\u{200B}.md"),
+            ("missing\u{200D}.md", "missing\\u{200D}.md"),
+            ("missing\u{202E}.md", "missing\\u{202E}.md"),
+            ("missing\u{2066}.md", "missing\\u{2066}.md"),
+            ("missing\u{2028}.md", "missing\\u{2028}.md"),
+            ("missing\u{2029}.md", "missing\\u{2029}.md"),
+            ("missing\u{FEFF}.md", "missing\\u{FEFF}.md"),
+        ];
+        for &(source, expected) in cases {
+            let actual = render_failure(source);
+            assert_eq!(actual, format!("FAIL: {expected}"), "source={source:?}");
+            assert_eq!(actual.lines().count(), 1, "source={source:?}");
+        }
+    }
+
+
+    // Regression guard for every Unicode 15.1 General_Category=Cf scalar,
+    // not just the familiar bidi and zero-width examples.
+    #[test]
+    fn diagnostic_rendering_covers_unicode_format_category() {
+        let cf_ranges: &[(u32, u32)] = &[
+            (0x00AD, 0x00AD), (0x0600, 0x0605), (0x061C, 0x061C),
+            (0x06DD, 0x06DD), (0x070F, 0x070F), (0x0890, 0x0891),
+            (0x08E2, 0x08E2), (0x180E, 0x180E), (0x200B, 0x200F),
+            (0x202A, 0x202E), (0x2060, 0x2064), (0x2066, 0x206F),
+            (0xFEFF, 0xFEFF), (0xFFF9, 0xFFFB), (0x110BD, 0x110BD),
+            (0x110CD, 0x110CD), (0x13430, 0x1343F),
+            (0x1BCA0, 0x1BCA3), (0x1D173, 0x1D17A),
+            (0xE0001, 0xE0001), (0xE0020, 0xE007F),
+        ];
+        let mut tested = 0;
+        for &(first, last) in cf_ranges {
+            for point in first..=last {
+                let ch = std::char::from_u32(point).expect("Unicode format scalar");
+                let actual = render_failure(&format!("a{ch}b"));
+                let expected = format!("FAIL: a\\u{{{point:X}}}b");
+                assert_eq!(actual, expected, "U+{point:04X}");
+                tested += 1;
+            }
+        }
+        assert!(tested > 130, "must cover the entire pinned format table");
+    }
+
+    #[test]
+    fn diagnostic_rendering_preserves_ordinary_printable_text() {
+        for value in ["README.md: target missing: a/b.md", "café.md", "emoji-🧪.md",
+            "space name.md", "percent%20literal", "שלום.md"] {
+            assert_eq!(render_failure(value), format!("FAIL: {value}"));
+        }
+    }
+
+    #[test]
+    fn diagnostic_rendering_preserves_missing_target_failure() {
+        let sandbox = Sandbox::new();
+        sandbox.write("README.md", "[bad](missing%0AFAIL%3A%20fake.md)\n");
+        let result = sandbox.scan();
+        assert_eq!(result.local_links, 1);
+        assert_eq!(result.errors.len(), 1, "{:?}", result.errors);
+        assert!(result.errors[0].contains("missing\nFAIL: fake.md"),
+            "missing target was not preserved: {:?}", result.errors);
+        let rendered = render_failure(&result.errors[0]);
+        assert!(rendered.starts_with("FAIL: README.md:"));
+        assert!(rendered.contains("missing\\nFAIL: fake.md"), "{rendered:?}");
+        assert_eq!(rendered.lines().count(), 1, "{rendered:?}");
+    }
+
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT: AtomicU64 = AtomicU64::new(0);
 
