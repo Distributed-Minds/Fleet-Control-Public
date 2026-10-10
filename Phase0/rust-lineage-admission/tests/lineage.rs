@@ -479,11 +479,12 @@ fn invisible_resource_identity_never_admits_even_when_both_sides_match() {
     assert_eq!(db.admitted_count(), 1);
 }
 
-
 #[test]
 fn late_ack_is_historical_receipt_not_current_effect_authority() {
     let (mut registry, original_cut, first_transition) = fixture();
-    let first = registry.admit(&original_cut, first_transition.clone()).unwrap();
+    let first = registry
+        .admit(&original_cut, first_transition.clone())
+        .unwrap();
 
     let mut successor_cut = original_cut.clone();
     successor_cut.head = first.transition.new_head.clone();
@@ -506,10 +507,7 @@ fn late_ack_is_historical_receipt_not_current_effect_authority() {
     assert_eq!(registry.head(), ("h2", 2));
 
     let stale_effect = request(&original_cut, &first);
-    assert_eq!(
-        registry.effect(&first, &stale_effect),
-        Err(Denied::Stale)
-    );
+    assert_eq!(registry.effect(&first, &stale_effect), Err(Denied::Stale));
 
     // Even copying the current selection cut onto the old receipt cannot
     // turn its former successor into the currently admitted successor.
@@ -540,7 +538,9 @@ fn late_ack_is_historical_receipt_not_current_effect_authority() {
 #[test]
 fn cross_generation_conflicting_replays_preserve_the_new_head() {
     let (mut registry, original_cut, first_transition) = fixture();
-    let first = registry.admit(&original_cut, first_transition.clone()).unwrap();
+    let first = registry
+        .admit(&original_cut, first_transition.clone())
+        .unwrap();
     let mut successor_cut = original_cut.clone();
     successor_cut.head = first.transition.new_head.clone();
     successor_cut.generation = first.generation;
@@ -580,10 +580,7 @@ fn cross_generation_conflicting_replays_preserve_the_new_head() {
         Err(Denied::Stale)
     );
 
-    assert_eq!(
-        registry.admit(&original_cut, first_transition),
-        Ok(first)
-    );
+    assert_eq!(registry.admit(&original_cut, first_transition), Ok(first));
     assert_eq!(
         registry.admit(&successor_cut, second_transition),
         Ok(second)
