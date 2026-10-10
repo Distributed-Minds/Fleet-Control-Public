@@ -292,13 +292,14 @@ impl SimulationJournal {
             return Replay::Conflict;
         }
 
-        // A superseding authority generation cannot turn the *same* operation
-        // ID into a fresh effect attempt. Reconcile the original instead.
+        // A changed repository incarnation or authority generation cannot
+        // reuse the *same* operation ID as a fresh effect attempt. Preserve
+        // the original receipt for reconciliation, even across recreation.
         if self.records.keys().any(|old| {
             old.repository_id == key.repository_id
-                && old.repository_incarnation == key.repository_incarnation
                 && old.operation_id == key.operation_id
-                && old.authority_generation != key.authority_generation
+                && (old.repository_incarnation != key.repository_incarnation
+                    || old.authority_generation != key.authority_generation)
         }) {
             return Replay::Conflict;
         }

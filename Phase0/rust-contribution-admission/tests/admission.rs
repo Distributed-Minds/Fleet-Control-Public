@@ -308,6 +308,37 @@ fn journal_rejects_reused_operation_id_after_authority_generation_change() {
 }
 
 #[test]
+fn journal_rejects_reused_operation_after_repository_reincarnation() {
+    let mut journal = SimulationJournal::default();
+    let original = good();
+    assert_eq!(
+        journal.record(key(), &original),
+        Replay::First(Decision::ReviewableInSimulation)
+    );
+
+    let mut reincarnated = original.clone();
+    reincarnated.repository_incarnation = "synthetic-repo-generation-b".into();
+    let mut recycled_key = key();
+    recycled_key.repository_incarnation = reincarnated.repository_incarnation.clone();
+    assert_eq!(journal.record(recycled_key, &reincarnated), Replay::Conflict);
+    assert_eq!(
+        journal.record(key(), &original),
+        Replay::Identical(Decision::ReviewableInSimulation)
+    );
+
+    let mut independent = original.clone();
+    independent.repository_id += 1;
+    let mut independent_key = key();
+    independent_key.repository_id = independent.repository_id;
+    assert_eq!(
+        journal.record(independent_key, &independent),
+        Replay::First(Decision::ReviewableInSimulation),
+        "independent repositories have distinct operation namespaces"
+    );
+    assert_eq!(journal.provider_effects_emitted(), 0);
+}
+
+#[test]
 fn canonical_encoding_is_unicode_safe_field_separated_and_sensitive() {
     let mut a = good();
     let base = canonical_digest(&a);
