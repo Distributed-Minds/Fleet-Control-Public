@@ -36,7 +36,7 @@ Phase0 gives a fleet:
 - a human-request / mission protocol;
 - a small scheduler/automation contract.
 
-The bootstrap is intentionally Markdown-only. It does not require a custom service, database, queue, or coordinator.
+**The Phase0 operating contracts are Markdown-first, not an installed central control plane.** They can be followed using repository files and GitHub coordination without running a custom service, database, or queue. The preview also includes a [compiled Rust public-document link checker](scripts/check-public-doc-links.rs) for validation; that checker does **not** implement task dispatch, worker enrollment, or provider-wide write brokerage. A functional central dispatcher and write broker remain tracked separately in [#70](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/70) and [#91](https://github.com/Distributed-Minds/Fleet-Control-Public/issues/91).
 
 ## Why this exists
 
@@ -44,7 +44,7 @@ A large collaborative game-remastering ecosystem cannot work if every human and 
 
 FREE ENERGY is intended to turn useful work into durable shared artifacts: reusable research, source ports, compatibility fixes, build knowledge, assets, tools, remasters, mods, experiments, and eventually higher-level mashups across many game projects.
 
-The current Phase0 release is infrastructure for that larger system, not the final product.
+The current Phase0 **preview** is a repository-local coordination starter, not a deployed central dispatcher or the finished FREE ENERGY product. Starter releases are separate published artifacts; preview-branch updates are not automatically included in them.
 
 ## Core philosophy
 
