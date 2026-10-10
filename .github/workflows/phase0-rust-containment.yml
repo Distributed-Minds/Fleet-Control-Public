@@ -1,0 +1,68 @@
+name: Validate Phase0 Rust fixture candidates
+on:
+  pull_request:
+    branches: [phase0/public-v0, rust/phase0-fixture-oracles-71]
+    paths:
+      - '.github/workflows/phase0-rust-containment.yml'
+      - 'Phase0/rust-fixtures/**'
+      - 'Phase0/fixtures/**'
+permissions:
+  contents: read
+jobs:
+  containment-rust:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install Rust compiler
+        run: rustup toolchain install 1.85.1 --profile minimal --component clippy --component rustfmt
+      - name: Compile and run semantic fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup run 1.85.1 cargo fmt --manifest-path Phase0/rust-fixtures/Cargo.toml -- --check
+          rustup run 1.85.1 cargo fetch --manifest-path Phase0/rust-fixtures/Cargo.toml --locked
+          rustup run 1.85.1 cargo test --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline
+          # Explicit opt-in: historical differential; never needed by Rust-only consumers.
+          rustup run 1.85.1 cargo test --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline --test historical_containment_differential -- --ignored
+          rustup run 1.85.1 cargo test --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline --test historical_containment_capacity_differential -- --ignored
+          rustup run 1.85.1 cargo test --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline --test historical_authority_closure_differential -- --ignored
+          rustup run 1.85.1 cargo test --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline --test historical_ad_hoc_research_differential -- --ignored
+          rustup run 1.85.1 cargo test --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline --test historical_adaptive_stress_differential -- --ignored
+          rustup run 1.85.1 cargo test --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline --test historical_github_capability_differential -- --ignored
+          rustup run 1.85.1 cargo test --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline --test historical_integration_candidate_differential -- --ignored
+          rustup run 1.85.1 cargo test --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline --test historical_merge_base_differential -- --ignored
+          rustup run 1.85.1 cargo clippy --manifest-path Phase0/rust-fixtures/Cargo.toml --all-targets --locked --offline -- -D warnings
+          rustup run 1.85.1 cargo run --manifest-path Phase0/rust-fixtures/Cargo.toml --locked --offline -- Phase0/fixtures/containment-spec3.json
+          # CLI execution is distinct from cargo test: exercise every staged oracle.
+          for entry in \
+            "ad_hoc_research:ad-hoc-research-spec1.json" \
+            "adaptive_stress:adaptive-stress-spec2.json" \
+            "authority_closure:authority-closure-spec2.json" \
+            "containment_capacity:containment-capacity-spec2.json" \
+            "coordination_history:coordination-history-spec5.json" \
+            "github_capability:github-capability-spec5.json" \
+            "integration_candidate:integration-candidate-v1.json"
+          do
+            binary="${entry%%:*}"
+            fixture="Phase0/fixtures/${entry#*:}"
+            rustup run 1.85.1 cargo run --manifest-path Phase0/rust-fixtures/Cargo.toml --bin "$binary" --locked --offline -- "$fixture"
+          done
+          # This model checker embeds its fixture at compile time.
+          rustup run 1.85.1 cargo run --manifest-path Phase0/rust-fixtures/Cargo.toml --bin merge_base_topology --locked --offline
+          # Compiled digest and aggregate runner must execute as programs, not only test helpers.
+          rustup run 1.85.1 cargo run --manifest-path Phase0/rust-fixtures/Cargo.toml --bin integration_candidate_digest --locked --offline -- Phase0/fixtures/integration-candidate-v1.json
+          rustup run 1.85.1 cargo run --manifest-path Phase0/rust-fixtures/Cargo.toml --bin all_oracles --locked --offline -- --all --root .
+          # Fail if a fixture-taking CLI mistakes malformed input for a PASS.
+          malformed="$(mktemp)"
+          trap 'rm -f "$malformed"' EXIT
+          printf '{invalid-json\n' > "$malformed"
+          for binary in free-energy-phase0-fixtures ad_hoc_research adaptive_stress authority_closure containment_capacity coordination_history github_capability integration_candidate integration_candidate_digest
+          do
+            if rustup run 1.85.1 cargo run --manifest-path Phase0/rust-fixtures/Cargo.toml --bin "$binary" --locked --offline -- "$malformed"; then
+              echo "::error::$binary accepted malformed JSON as a valid fixture"
+              exit 1
+            fi
+          done

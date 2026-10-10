@@ -1,0 +1,16 @@
+[package]
+name = "free-energy-phase0-fixtures"
+version = "0.1.0"
+edition = "2021"
+# Keep the original containment CLI as the bare cargo run target when
+# additional independent Rust fixture binaries exist under src/bin/.
+default-run = "free-energy-phase0-fixtures"
+# Rust 1.85.1 is the exact compiler/toolchain exercised by this PR's CI.
+rust-version = "1.85.1"
+publish = false
+
+# Exact direct versions; committed Cargo.lock pins the transitive graph.
+# Dependency provenance and license review are still required before integration.
+[dependencies]
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.145"
