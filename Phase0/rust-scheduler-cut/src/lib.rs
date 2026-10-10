@@ -518,5 +518,5 @@ mod tests {
         );
         assert_eq!(book.emitted_starts(), MAX_SIMULATED_START_RECEIPTS);
         assert_eq!(book.reconcile(81).unwrap().historical_cut, original());
-     }
+    }
 }
