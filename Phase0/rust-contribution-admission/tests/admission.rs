@@ -320,7 +320,10 @@ fn journal_rejects_reused_operation_after_repository_reincarnation() {
     reincarnated.repository_incarnation = "synthetic-repo-generation-b".into();
     let mut recycled_key = key();
     recycled_key.repository_incarnation = reincarnated.repository_incarnation.clone();
-    assert_eq!(journal.record(recycled_key, &reincarnated), Replay::Conflict);
+    assert_eq!(
+        journal.record(recycled_key, &reincarnated),
+        Replay::Conflict
+    );
     assert_eq!(
         journal.record(key(), &original),
         Replay::Identical(Decision::ReviewableInSimulation)
