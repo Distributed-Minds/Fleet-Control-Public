@@ -1927,6 +1927,106 @@ mod tests {
         }
     }
 
+    // The rendered text prompt may use either CommonMark fence marker.
+    #[test]
+    fn help_guide_tilde_prompt_count_matches_rendered_fences() {
+        let guide = include_str!("../HELP-A-PROJECT.md");
+        let start = guide.find("```text\nI want to help [").expect("real prompt opener");
+        let end = guide[start..].find("\n```\n")
+            .map(|offset| start + offset + 4).expect("real prompt closer");
+        let prompt = &guide[start..end];
+        let tilde = prompt.replacen("```text", "~~~text", 1)
+            .replacen("\n```", "\n~~~", 1);
+        assert_ne!(prompt, tilde);
+        let four_tilde = tilde.replacen("~~~text", "~~~~text", 1)
+            .replacen("\n~~~", "\n~~~~", 1);
+        let cases = [
+            ("tilde-only", guide.replacen(prompt, &tilde, 1), Ok(())),
+            ("four-tilde-only", guide.replacen(prompt, &four_tilde, 1), Ok(())),
+            ("backtick-and-tilde", format!("{guide}\n{tilde}\n"),
+                Err("expected one copyable HELP prompt")),
+            ("backtick-and-four-tilde", format!("{guide}\n{four_tilde}\n"),
+                Err("expected one copyable HELP prompt")),
+        ];
+        for (case, source, expected) in cases {
+            for newline in ["\n", "\r\n"] {
+                for trailing in [false, true] {
+                    let mut fixture = source.replace('\n', newline);
+                    if trailing && !fixture.ends_with(newline) {
+                        fixture.push_str(newline);
+                    } else if !trailing {
+                        while fixture.ends_with(newline) {
+                            fixture.truncate(fixture.len() - newline.len());
+                        }
+                    }
+                    assert_eq!(inspect_help_guide_contract(&fixture), expected,
+                        "case={case} newline={newline:?} trailing={trailing}");
+                    // Exercise the compiled ten-document acceptance path too:
+                    // the HELP contract must not behave differently in check().
+                    let sandbox = Sandbox::new();
+                    for document in DOCUMENTS {
+                        sandbox.write(document, "");
+                    }
+                    sandbox.write("HELP-A-PROJECT.md", &fixture);
+                    let site = check(&sandbox.0, &DOCUMENTS);
+                    assert_eq!(site.errors.is_empty(), expected.is_ok(),
+                        "full-site case={case} newline={newline:?} trailing={trailing}: {:?}",
+                        site.errors);
+                }
+            }
+        }
+    }
+
+    // H11g: a link title is a tooltip, not an emphasized visible notice.
+    #[test]
+    fn help_guide_disclosure_in_link_title_is_not_visible_prose() {
+        let guide = include_str!("../HELP-A-PROJECT.md");
+        let removed = guide.replacen("**Not available yet:**", "", 1);
+        assert_ne!(removed, guide);
+        let link = "](GETTING-STARTED.md)";
+        assert!(removed.contains(link));
+        for (case, replacement) in [
+            ("double", "](GETTING-STARTED.md \"**Not available yet:**\")"),
+            ("single", "](GETTING-STARTED.md '**Not available yet:**')"),
+            ("prefix-suffix", "](GETTING-STARTED.md \"prefix **Not available yet:** suffix\")"),
+        ] {
+            let hidden = removed.replacen(link, replacement, 1);
+            for newline in ["\n", "\r\n"] {
+                for trailing in [false, true] {
+                    let mut fixture = hidden.replace('\n', newline);
+                    if trailing && !fixture.ends_with(newline) {
+                        fixture.push_str(newline);
+                    } else if !trailing {
+                        while fixture.ends_with(newline) {
+                            fixture.truncate(fixture.len() - newline.len());
+                        }
+                    }
+                    assert_eq!(inspect_help_guide_contract(&fixture),
+                        Err("manual versus future capability disclosure missing"),
+                        "case={case} newline={newline:?} trailing={trailing}");
+                    let sandbox = Sandbox::new();
+                    for document in DOCUMENTS {
+                        sandbox.write(document, "");
+                    }
+                    sandbox.write("HELP-A-PROJECT.md", &fixture);
+                    let site = check(&sandbox.0, &DOCUMENTS);
+                    assert!(site.errors.iter().any(|error|
+                        error.contains("manual versus future capability disclosure missing")),
+                        "full-site case={case} newline={newline:?} trailing={trailing}: {:?}",
+                        site.errors);
+                }
+            }
+        }
+        assert_eq!(inspect_help_guide_contract(guide), Ok(()));
+        let sandbox = Sandbox::new();
+        for document in DOCUMENTS {
+            sandbox.write(document, "");
+        }
+        sandbox.write("HELP-A-PROJECT.md", guide);
+        let site = check(&sandbox.0, &DOCUMENTS);
+        assert!(site.errors.is_empty(), "valid full-site HELP: {:?}", site.errors);
+    }
+
     // Issue #333: CommonMark blank lines contain ASCII spaces/tabs only.
     // Unicode whitespace inside a paragraph does not split an inline code span.
     #[test]
