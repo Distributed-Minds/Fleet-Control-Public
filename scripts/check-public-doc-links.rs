@@ -842,10 +842,10 @@ fn render_failure(problem: &str) -> String {
                     | '\u{070F}' | '\u{0890}'..='\u{0891}'
                     | '\u{08E2}' | '\u{180E}'
                     | '\u{200B}'..='\u{200F}' | '\u{2028}'..='\u{202E}'
-                    | '\u{2060}'..='\u{206F}' | '\u{FEFF}'
+                    | '\u{2060}'..='\u{2064}' | '\u{2066}'..='\u{206F}' | '\u{FEFF}'
                     | '\u{FFF9}'..='\u{FFFB}'
                     | '\u{110BD}' | '\u{110CD}'
-                    | '\u{13430}'..='\u{13440}'
+                    | '\u{13430}'..='\u{1343F}'
                     | '\u{1BCA0}'..='\u{1BCA3}'
                     | '\u{1D173}'..='\u{1D17A}'
                     | '\u{E0001}' | '\u{E0020}'..='\u{E007F}'
@@ -950,6 +950,24 @@ mod tests {
             }
         }
         assert!(tested > 130, "must cover the entire pinned format table");
+    }
+
+    // Unicode 15.1 adjacent non-format scalars are ordinary diagnostic text.
+    // U+2065 is unassigned (Cn); U+13440 is a combining mark (Mn).
+    // Their immediately adjacent assigned Cf controls must still be escaped.
+    #[test]
+    fn diagnostic_rendering_preserves_non_format_range_neighbors() {
+        let controls: &[(char, &str)] = &[
+            ('\u{2064}', "FAIL: a\\u{2064}b"),
+            ('\u{2065}', "FAIL: a\u{2065}b"),
+            ('\u{2066}', "FAIL: a\\u{2066}b"),
+            ('\u{1343F}', "FAIL: a\\u{1343F}b"),
+            ('\u{13440}', "FAIL: a\u{13440}b"),
+        ];
+        for &(codepoint, expected) in controls {
+            let input = format!("a{codepoint}b");
+            assert_eq!(render_failure(&input), expected, "U+{:X}", codepoint as u32);
+        }
     }
 
     #[test]
