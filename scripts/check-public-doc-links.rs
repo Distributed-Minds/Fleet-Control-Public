@@ -650,6 +650,111 @@ mod tests {
 
 
 
+
+    #[test]
+    fn setext_and_thematic_boundaries_expose_later_missing_links() {
+        for underline in [
+            "=", "==", "===", "   ==   ", "-", "--", "   --\t", "---",
+            "- - -", "***", "* * *", "___", "_ _ _", "** **",
+        ] {
+            let source = format!(
+                "`unmatched opener\nHeading\n{underline}\n[broken](missing.md) and `close`\n"
+            );
+            let mut report = Report::default();
+            assert_eq!(
+                collect_links(&source, "README.md", &mut report),
+                vec!["missing.md"],
+                "underline: {underline:?}"
+            );
+            assert!(report.errors.is_empty(), "{:?}", report.errors);
+        }
+        let sandbox = Sandbox::new();
+        sandbox.write(
+            "README.md",
+            "`unmatched opener\nHeading\n--\n[broken](missing.md) and `close`\n",
+        );
+        let report = sandbox.scan();
+        assert_eq!(report.local_links, 1);
+        assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+        assert!(
+            report.errors[0].contains("target missing: missing.md"),
+            "{:?}",
+            report.errors
+        );
+    }
+
+    #[test]
+    fn setext_headings_preserve_multiline_code_spans_within_heading() {
+        for (source, expected) in [
+            (
+                "Heading `open\n[hidden](missing.md) and `close`\n--\n[visible](later.md)\n",
+                vec!["later.md"],
+            ),
+            (
+                "`open\n[hidden](missing.md) and `close`\n==\n[visible](later.md)\n",
+                vec!["later.md"],
+            ),
+            (
+                "[visible](some.md) `open\n[hidden](missing.md) and `close`\n==\n[visible](later.md)\n",
+                vec!["some.md", "later.md"],
+            ),
+            (
+                "`open\n[visible](missing.md)\n--\n[visible](later.md) and `close`\n",
+                vec!["missing.md", "later.md"],
+            ),
+        ] {
+            let mut report = Report::default();
+            assert_eq!(
+                collect_links(source, "README.md", &mut report),
+                expected,
+                "source: {source:?}"
+            );
+            assert!(report.errors.is_empty(), "{:?}", report.errors);
+        }
+    }
+
+    #[test]
+    fn marker_shaped_non_boundaries_do_not_split_inline_code() {
+        for marker in [
+            "    --", "-x", "==x", "--=", "\\---", "----x", "    ---",
+            "\t---", "\\==", "\\* * *", "--- \\", "   ==x",
+        ] {
+            let source = format!(
+                "`open\n{marker}\n[hidden](missing.md) and `close`\n"
+            );
+            let mut report = Report::default();
+            assert!(
+                collect_links(&source, "README.md", &mut report).is_empty(),
+                "marker: {marker:?}"
+            );
+            assert!(report.errors.is_empty(), "{:?}", report.errors);
+        }
+        let mut report = Report::default();
+        let paths = collect_links(
+            "`open\n[not-a-link](missing.md)\nclose` [real](exists.md)\n",
+            "README.md",
+            &mut report,
+        );
+        assert_eq!(paths, vec!["exists.md"]);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn setext_and_thematic_delimiters_handle_crlf_without_false_links() {
+        for delimiter in ["==", "--", "* * *", "_ _ _"] {
+            let source = format!(
+                "`open\r\nHeading\r\n{delimiter}\t\r\n[visible](exists.md) and `close`\r\n"
+            );
+            let mut report = Report::default();
+            assert_eq!(
+                collect_links(&source, "README.md", &mut report),
+                vec!["exists.md"],
+                "delimiter: {delimiter:?}"
+            );
+            assert!(report.errors.is_empty(), "{:?}", report.errors);
+        }
+    }
+
     #[test]
     fn atx_headings_interrupt_unmatched_inline_code_with_missing_link_diagnostics() {
         for heading in [
