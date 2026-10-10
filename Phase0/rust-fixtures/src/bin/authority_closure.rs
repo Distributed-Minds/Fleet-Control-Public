@@ -6,6 +6,7 @@ use serde_json::{Map, Value};
 use std::collections::HashSet;
 use std::env;
 use std::fs;
+use std::io::Read;
 use std::process;
 
 const REQUIRED: [&str; 26] = [
@@ -212,6 +213,12 @@ fn composition(case: &Map<String, Value>) -> Result<Option<(String, Value)>, Str
 fn evaluate(case: &Map<String, Value>) -> Result<(String, Value), String> {
     validate_inputs(case)?;
     require_necessary_witnesses(case)?;
+    // A separate denial can short-circuit composition evaluation. Validate
+    // supplied root-count evidence regardless of which outcome wins, rather
+    // than silently accepting impossible/missing declared-root witnesses.
+    if case.contains_key("composition") {
+        composition(case)?;
+    }
 
     // Compatibility, inventory, and durable closure evidence are gates.
     if no(case, "lineage_protocol_compatible") && yes(case, "mutation_requested") {
@@ -383,15 +390,66 @@ fn validate_fixture(source: &str) -> Result<usize, String> {
     Ok(seen.len())
 }
 
+// The historical fixture is small. A caller-controlled file must not be able to
+// exhaust the verification runner before the typed semantic checks execute.
+// This is local input hygiene, not proof of repository or provider authority.
+const MAX_AUTHORITY_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
+
+fn read_fixture_file_checked(path: &str, before: &fs::Metadata) -> Result<String, String> {
+    if !before.file_type().is_file() {
+        return Err("authority fixture must be a regular non-symlink file".to_owned());
+    }
+    if before.len() > MAX_AUTHORITY_FIXTURE_BYTES {
+        return Err("authority fixture exceeds 8 MiB input limit".to_owned());
+    }
+
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // Refuse a symlink or FIFO substituted between lstat and open.
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let file = options.open(path).map_err(|error| error.to_string())?;
+    let opened = file.metadata().map_err(|error| error.to_string())?;
+    if !opened.file_type().is_file() {
+        return Err("opened authority fixture is not a regular file".to_owned());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if before.dev() != opened.dev() || before.ino() != opened.ino() {
+            return Err("authority fixture changed between metadata check and open".to_owned());
+        }
+    }
+    if opened.len() > MAX_AUTHORITY_FIXTURE_BYTES {
+        return Err("authority fixture exceeds 8 MiB input limit".to_owned());
+    }
+    let mut source = String::new();
+    file.take(MAX_AUTHORITY_FIXTURE_BYTES + 1)
+        .read_to_string(&mut source)
+        .map_err(|error| error.to_string())?;
+    if source.len() as u64 > MAX_AUTHORITY_FIXTURE_BYTES {
+        return Err("authority fixture exceeds 8 MiB input limit".to_owned());
+    }
+    Ok(source)
+}
+
+fn read_fixture_file(path: &str) -> Result<String, String> {
+    let before = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+    read_fixture_file_checked(path, &before)
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
         eprintln!("Usage: authority_closure <Phase0/fixtures/authority-closure-spec2.json>");
         process::exit(2);
     }
-    let outcome = fs::read_to_string(&args[1])
-        .map_err(|e| e.to_string())
-        .and_then(|source| validate_fixture(&source));
+    let outcome = read_fixture_file(&args[1]).and_then(|source| validate_fixture(&source));
     match outcome {
         Ok(count) => println!("authority closure Rust semantic fixtures: {count} cases passed"),
         Err(reason) => {
@@ -405,6 +463,28 @@ fn main() {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[cfg(unix)]
+    #[test]
+    fn authority_fixture_rejects_identical_bytes_after_inode_replacement() {
+        let scratch = env::temp_dir().join(format!(
+            "free-energy-authority-inode-swap-{}",
+            process::id()
+        ));
+        fs::create_dir_all(&scratch).expect("create isolated fixture directory");
+        let path = scratch.join("source.json");
+        let replacement = scratch.join("replacement.json");
+        let historical = include_str!("../../../fixtures/authority-closure-spec2.json");
+        fs::write(&path, historical).expect("write original fixture");
+        fs::write(&replacement, historical).expect("write identical replacement");
+        let before = fs::symlink_metadata(&path).expect("capture original file identity");
+        fs::rename(&replacement, &path).expect("replace file after preflight");
+        assert_eq!(
+            read_fixture_file_checked(path.to_str().unwrap(), &before).unwrap_err(),
+            "authority fixture changed between metadata check and open"
+        );
+        fs::remove_dir_all(&scratch).expect("remove fixture directory");
+    }
 
     fn input(value: Value) -> Map<String, Value> {
         value.as_object().unwrap().clone()
@@ -677,6 +757,32 @@ mod tests {
         let mut fixture: Value = serde_json::from_str(source).unwrap();
         fixture["cases"][0]["name"] = fixture["cases"][1]["name"].clone();
         assert!(validate_fixture(&fixture.to_string()).is_err());
+    }
+
+    #[test]
+    fn invalid_declared_roots_cannot_hide_behind_unrelated_denial() {
+        for invalid in [
+            json!({"composition":"ALL_REQUIRED"}),
+            json!({"composition":"ANY_OF_DECLARED","surviving_roots":0,"required_roots":0}),
+            json!({"composition":"ALL_REQUIRED","surviving_roots":3,"required_roots":2}),
+        ] {
+            let mut case = input(invalid.clone());
+            case.insert("provider_access".to_owned(), json!("ERROR"));
+            assert!(
+                evaluate(&case).is_err(),
+                "invalid root evidence bypassed by provider denial: {invalid}"
+            );
+        }
+
+        // Validation does not elevate a valid composition over a stronger
+        // provider denial; preserve the historical decision precedence.
+        let mut valid =
+            input(json!({"composition":"ALL_REQUIRED","surviving_roots":1,"required_roots":2}));
+        valid.insert("provider_access".to_owned(), json!("ERROR"));
+        assert_eq!(
+            evaluate(&valid).unwrap(),
+            result("expected_closure", "ERROR")
+        );
     }
 
     #[test]
