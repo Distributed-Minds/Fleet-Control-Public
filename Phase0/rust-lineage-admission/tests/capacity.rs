@@ -28,13 +28,7 @@ fn bounded_receipt_journal_fails_closed_but_preserves_old_replay() {
         forked: false,
         revoked: false,
     };
-    let mut registry = Registry::new(
-        scope.clone(),
-        selected.head.clone(),
-        0,
-        2,
-        obligations,
-    );
+    let mut registry = Registry::new(scope.clone(), selected.head.clone(), 0, 2, obligations);
     let initial_selection = selected.clone();
     let mut first_operation = None;
     let mut latest_receipt = None;
@@ -72,10 +66,7 @@ fn bounded_receipt_journal_fails_closed_but_preserves_old_replay() {
         new_head: "head-overflow".into(),
         admitted_by_issuer: true,
     };
-    assert_eq!(
-        registry.admit(&selected, overflow.clone()),
-        Err(Denied::CapacityExhausted)
-    );
+    assert_eq!(registry.admit(&selected, overflow.clone()), Err(Denied::CapacityExhausted));
     assert_eq!(registry.admit(&selected, overflow), Err(Denied::CapacityExhausted));
     assert_eq!(registry.head(), (full_head.as_str(), full_generation));
     assert_eq!(registry.admitted_count(), MAX_SYNTHETIC_LINEAGE_RECEIPTS);
@@ -83,16 +74,10 @@ fn bounded_receipt_journal_fails_closed_but_preserves_old_replay() {
     // Old receipts remain accessible with the original historical selection,
     // even though that selection is no longer authorized for any NEW action.
     let (original, original_receipt) = first_operation.unwrap();
-    assert_eq!(
-        registry.admit(&initial_selection, original.clone()),
-        Ok(original_receipt.clone())
-    );
+    assert_eq!(registry.admit(&initial_selection, original.clone()), Ok(original_receipt.clone()));
     let mut replay_forgery = original;
     replay_forgery.successor = "other-worker".into();
-    assert_eq!(
-        registry.admit(&initial_selection, replay_forgery),
-        Err(Denied::ReplayConflict)
-    );
+    assert_eq!(registry.admit(&initial_selection, replay_forgery), Err(Denied::ReplayConflict));
 
     // The newest previously admitted operation remains reviewable in the
     // bounded offline simulation; capacity does not revoke its own receipt.
@@ -107,9 +92,6 @@ fn bounded_receipt_journal_fails_closed_but_preserves_old_replay() {
         observed_resource: "synthetic-incarnation".into(),
         expected_resource: "synthetic-incarnation".into(),
     };
-    assert_eq!(
-        registry.effect(&last_receipt, &effect),
-        Ok(Eligibility::SimulationOnly)
-    );
+    assert_eq!(registry.effect(&last_receipt, &effect), Ok(Eligibility::SimulationOnly));
     assert_eq!(registry.head(), (full_head.as_str(), full_generation));
 }
