@@ -28,7 +28,6 @@ pub enum ReplayError {
     Scope(AdmissionError),
 }
 
-
 /// Model-only acceptance of a duplicate or first delivery event; neither grants
 /// authorization to start a worker, mutate GitHub or trust result contents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -221,7 +220,6 @@ impl SimulatedReplay {
         Ok(())
     }
 
-
     /// Validate a fixture-supplied principal, request ID and exact assignment.
     /// The trusted test harness injects identity; no client JSON can authenticate
     /// itself by invoking this helper in a real execution context.
@@ -249,7 +247,10 @@ impl SimulatedReplay {
         }
         let key = (principal_id, principal_generation, request_id.to_owned());
         // Do not expose another principal's receipt in denial diagnostics.
-        let recorded = self.requests.get(&key).ok_or(DeliveryError::UnknownRequest)?;
+        let recorded = self
+            .requests
+            .get(&key)
+            .ok_or(DeliveryError::UnknownRequest)?;
         if recorded.task_id != task_id
             || recorded.receipt.assignment_generation != assignment_generation
         {
@@ -326,9 +327,7 @@ impl SimulatedReplay {
             return Err(DeliveryError::MissingAcknowledgement);
         }
         if let Some((saved_assignment, saved_digest)) = self.results.get(&key) {
-            return if *saved_assignment == assignment_generation
-                && saved_digest == payload_digest
-            {
+            return if *saved_assignment == assignment_generation && saved_digest == payload_digest {
                 Ok(DeliveryOutcome::Reconciled)
             } else {
                 Err(DeliveryError::ConflictingResult)
@@ -619,27 +618,55 @@ mod tests {
     fn revoked_and_recovery_held_requests_never_accept_late_result() {
         let mut state = SimulatedReplay::new(basis()).unwrap();
         state.enroll_test_principal(1, 1).unwrap();
-        let first = state.poll(1, 1, &poll("first", 10, &[10]), &basis()).unwrap();
+        let first = state
+            .poll(1, 1, &poll("first", 10, &[10]), &basis())
+            .unwrap();
         state
             .acknowledge(1, 1, "first", 10, first.assignment_generation, &basis())
             .unwrap();
         state.revoke_test_principal(1).unwrap();
         assert_eq!(
-            state.submit_result(1, 1, "first", 10, first.assignment_generation, "digest", &basis()),
+            state.submit_result(
+                1,
+                1,
+                "first",
+                10,
+                first.assignment_generation,
+                "digest",
+                &basis()
+            ),
             Err(DeliveryError::RevokedPrincipal)
         );
         state.enroll_test_principal(1, 2).unwrap();
         assert_eq!(
-            state.submit_result(1, 1, "first", 10, first.assignment_generation, "digest", &basis()),
+            state.submit_result(
+                1,
+                1,
+                "first",
+                10,
+                first.assignment_generation,
+                "digest",
+                &basis()
+            ),
             Err(DeliveryError::StalePrincipal)
         );
-        let second = state.poll(1, 2, &poll("second", 20, &[20]), &basis()).unwrap();
+        let second = state
+            .poll(1, 2, &poll("second", 20, &[20]), &basis())
+            .unwrap();
         state
             .acknowledge(1, 2, "second", 20, second.assignment_generation, &basis())
             .unwrap();
         state.require_recovery(20).unwrap();
         assert_eq!(
-            state.submit_result(1, 2, "second", 20, second.assignment_generation, "digest", &basis()),
+            state.submit_result(
+                1,
+                2,
+                "second",
+                20,
+                second.assignment_generation,
+                "digest",
+                &basis()
+            ),
             Err(DeliveryError::RecoveryRequired)
         );
         assert_eq!(state.acknowledgement_count(), 2);
@@ -651,7 +678,9 @@ mod tests {
     fn result_controls_reject_wrong_assignment_stale_basis_and_malformed_digest() {
         let mut state = SimulatedReplay::new(basis()).unwrap();
         state.enroll_test_principal(1, 1).unwrap();
-        let receipt = state.poll(1, 1, &poll("result", 12, &[7]), &basis()).unwrap();
+        let receipt = state
+            .poll(1, 1, &poll("result", 12, &[7]), &basis())
+            .unwrap();
         let generation = receipt.assignment_generation;
         let mut moved = basis();
         moved.generation += 1;
@@ -663,7 +692,9 @@ mod tests {
             state.acknowledge(1, 1, "result", 13, generation, &basis()),
             Err(DeliveryError::AssignmentMismatch)
         );
-        state.acknowledge(1, 1, "result", 12, generation, &basis()).unwrap();
+        state
+            .acknowledge(1, 1, "result", 12, generation, &basis())
+            .unwrap();
         for digest in ["", "bad digest", "bad\nvalue"] {
             assert_eq!(
                 state.submit_result(1, 1, "result", 12, generation, digest, &basis()),
@@ -681,5 +712,4 @@ mod tests {
         assert_eq!(state.result_count(), 0);
         assert_eq!(state.acknowledgement_count(), 1);
     }
-
 }
