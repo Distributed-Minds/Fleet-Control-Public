@@ -482,13 +482,13 @@ mod tests {
         let row = "1\tcreate_comment\tgithub-rest\tUNKNOWN\tUNSUPPORTED\tUNSUPPORTED\tUNKNOWN\tnone";
         let unknown_transport = row.replace("github-rest", "unknown-provider");
         assert_eq!(
-            parse_manifest(&format!("{MANIFEST_HEADER}\\n{unknown_transport}\\n")),
+            parse_manifest(&format!("{MANIFEST_HEADER}\n{unknown_transport}\n")),
             Err(ManifestError::InvalidRow(2))
         );
         let unregistered_pair = row.replace("create_comment", "contents_update")
             .replace("github-rest", "github-connected-chat");
         assert_eq!(
-            parse_manifest(&format!("{MANIFEST_HEADER}\\n{unregistered_pair}\\n")),
+            parse_manifest(&format!("{MANIFEST_HEADER}\n{unregistered_pair}\n")),
             Err(ManifestError::InvalidRow(2))
         );
     }
@@ -497,12 +497,12 @@ mod tests {
     fn m1_manifest_rejects_unverified_proof_roots_even_without_support_claim() {
         let row = "1\tcreate_comment\tgithub-rest\tUNKNOWN\tUNSUPPORTED\tUNSUPPORTED\tUNKNOWN\tsearch-matched-id";
         assert_eq!(
-            parse_manifest(&format!("{MANIFEST_HEADER}\\n{row}\\n")),
+            parse_manifest(&format!("{MANIFEST_HEADER}\n{row}\n")),
             Err(ManifestError::UnverifiedProofRoot(2))
         );
         let unsafe_positive = row.replace("UNSUPPORTED", "SUPPORTED_CONDITIONALLY");
         assert_eq!(
-            parse_manifest(&format!("{MANIFEST_HEADER}\\n{unsafe_positive}\\n")),
+            parse_manifest(&format!("{MANIFEST_HEADER}\n{unsafe_positive}\n")),
             Err(ManifestError::UnverifiedProofRoot(2))
         );
     }
@@ -517,7 +517,7 @@ mod tests {
             .lines()
             .filter(|line| !line.starts_with("1\tcreate_issue\t"))
             .collect::<Vec<_>>()
-            .join("\\n");
+            .join("\n");
         assert_eq!(
             parse_manifest(&omitted),
             Err(ManifestError::IncompleteMatrix)
@@ -527,8 +527,8 @@ mod tests {
     #[test]
     fn m1_manifest_rejects_blank_data_rows_instead_of_skipping_them() {
         let malformed = EMBEDDED_MANIFEST.replacen(
-            "\\n1\tcreate_issue\t",
-            "\\n\\n1\tcreate_issue\t",
+            "\n1\tcreate_issue\t",
+            "\n\n1\tcreate_issue\t",
             1,
         );
         assert_eq!(
