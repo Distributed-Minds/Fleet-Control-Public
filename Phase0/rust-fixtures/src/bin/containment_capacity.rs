@@ -6,7 +6,8 @@ use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::process;
 
 const REQUIRED_DECISION_IDS: &[&str] = &[
@@ -190,6 +191,30 @@ fn simulate(c: &Workload) -> Result<Value, String> {
         || c.arrivals.iter().any(|n| *n < 0)
     {
         return Err("negative arrivals, backlog, or restoration work".to_owned());
+    }
+
+    // A supplied trace is evidence even when this workload does not select it.
+    // Do not accept malformed negative/short traces merely because an inactive
+    // capacity mode or an already-restored fast path never reads that field.
+    for (field, input) in [
+        ("service_capacity", &c.service_capacity),
+        ("adjudication_capacity", &c.adjudication_capacity),
+        ("restoration_capacity", &c.restoration_capacity),
+    ] {
+        match input {
+            Some(Capacity::Constant(value)) if *value < 0 => {
+                return Err(format!("negative service capacity ({field})"));
+            }
+            Some(Capacity::PerTick(values)) if values.len() != ticks => {
+                return Err(format!(
+                    "{field}: capacity trace length does not match arrivals"
+                ));
+            }
+            Some(Capacity::PerTick(values)) if values.iter().any(|value| *value < 0) => {
+                return Err(format!("negative service capacity ({field})"));
+            }
+            _ => {}
+        }
     }
 
     let mut backlog = c.initial_adjudication_backlog;
@@ -520,6 +545,90 @@ fn validate(f: &Fixture) -> Result<usize, Vec<String>> {
     }
 }
 
+// An offline fixture must never read an unbounded or blocking caller-controlled path.
+// The open descriptor is rechecked, and the read limit also covers growing files.
+const MAX_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
+
+fn read_fixture_with_metadata(path: &Path, before: &fs::Metadata) -> Result<String, String> {
+    if !before.file_type().is_file() {
+        return Err("containment-capacity fixture must be a regular, non-symlink file".to_owned());
+    }
+    if before.len() > MAX_FIXTURE_BYTES {
+        return Err("containment-capacity fixture exceeds 8 MiB limit".to_owned());
+    }
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // A replaced FIFO must not block at open; a replaced symlink must fail.
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let file = options
+        .open(path)
+        .map_err(|error| format!("cannot open {path:?}: {error}"))?;
+    let opened = file
+        .metadata()
+        .map_err(|error| format!("cannot stat {path:?}: {error}"))?;
+    if !opened.file_type().is_file() {
+        return Err("opened containment-capacity fixture is not a regular file".to_owned());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if before.dev() != opened.dev() || before.ino() != opened.ino() {
+            return Err("containment-capacity fixture changed before open".to_owned());
+        }
+    }
+    if opened.len() > MAX_FIXTURE_BYTES {
+        return Err("containment-capacity fixture exceeds 8 MiB limit".to_owned());
+    }
+    let mut bytes = Vec::new();
+    file.take(MAX_FIXTURE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("cannot read {path:?}: {error}"))?;
+    if bytes.len() as u64 > MAX_FIXTURE_BYTES {
+        return Err("containment-capacity fixture exceeds 8 MiB limit".to_owned());
+    }
+    String::from_utf8(bytes).map_err(|_| "containment-capacity fixture must be UTF-8".to_owned())
+}
+
+// O_NOFOLLOW on a leaf does not reject symbolic links in parent directories.
+// This is a static input-path admission check, not an atomic defense against
+// concurrent parent-directory replacement or a directory-handle sandbox.
+fn reject_symlinked_ancestors(path: &Path) -> Result<(), String> {
+    let mut prefix = PathBuf::new();
+    let mut components = path.components().peekable();
+    while let Some(component) = components.next() {
+        prefix.push(component.as_os_str());
+        if components.peek().is_none() || !matches!(component, std::path::Component::Normal(_)) {
+            continue;
+        }
+        let observed = fs::symlink_metadata(&prefix)
+            .map_err(|error| format!("cannot stat fixture ancestor {prefix:?}: {error}"))?;
+        if observed.file_type().is_symlink() {
+            return Err(format!(
+                "containment-capacity fixture has symbolic-link ancestor {prefix:?}"
+            ));
+        }
+        if !observed.is_dir() {
+            return Err(format!(
+                "containment-capacity fixture ancestor is not a directory {prefix:?}"
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn read_fixture_bounded(path: &Path) -> Result<String, String> {
+    reject_symlinked_ancestors(path)?;
+    let before =
+        fs::symlink_metadata(path).map_err(|error| format!("cannot stat {path:?}: {error}"))?;
+    read_fixture_with_metadata(path, &before)
+}
+
 fn run() -> Result<(), String> {
     let mut args = env::args_os().skip(1);
     let path = args
@@ -529,10 +638,9 @@ fn run() -> Result<(), String> {
     if args.next().is_some() {
         return Err("usage: containment_capacity [fixture.json]".to_owned());
     }
-    let source = fs::read_to_string(&path)
-        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    let source = read_fixture_bounded(&path)?;
     let fixture: Fixture = serde_json::from_str(&source)
-        .map_err(|error| format!("invalid fixture {}: {error}", path.display()))?;
+        .map_err(|error| format!("invalid fixture {path:?}: {error}"))?;
     match validate(&fixture) {
         Ok(count) => {
             println!("containment-capacity fixtures (Rust): {count} passed");
@@ -553,6 +661,50 @@ fn main() {
 mod tests {
     use super::*;
     const BASELINE: &str = include_str!("../../../fixtures/containment-capacity-spec2.json");
+
+    #[test]
+    fn caller_fixture_bounded_regular_open_and_historical_success() {
+        let scratch = env::temp_dir().join(format!(
+            "free-energy-containment-capacity-input-{}",
+            process::id()
+        ));
+        fs::create_dir_all(&scratch).unwrap();
+        let input = scratch.join("baseline.json");
+        fs::write(&input, BASELINE).unwrap();
+        let parsed: Fixture = serde_json::from_str(&read_fixture_bounded(&input).unwrap()).unwrap();
+        assert_eq!(validate(&parsed), Ok(17));
+        assert!(read_fixture_bounded(&scratch).is_err());
+
+        let large = scratch.join("large.json");
+        fs::File::create(&large)
+            .unwrap()
+            .set_len(MAX_FIXTURE_BYTES + 1)
+            .unwrap();
+        assert!(read_fixture_bounded(&large).unwrap_err().contains("8 MiB"));
+
+        let bad_utf8 = scratch.join("bad-utf8.json");
+        fs::write(&bad_utf8, [0xff_u8, 0xfe_u8]).unwrap();
+        assert!(read_fixture_bounded(&bad_utf8)
+            .unwrap_err()
+            .contains("UTF-8"));
+
+        #[cfg(unix)]
+        {
+            let link = scratch.join("symlink.json");
+            std::os::unix::fs::symlink(&input, &link).unwrap();
+            assert!(read_fixture_bounded(&link).is_err());
+
+            // A same-path file swap after preflight cannot substitute evidence.
+            let stale = fs::symlink_metadata(&input).unwrap();
+            let replacement = scratch.join("replacement.json");
+            fs::write(&replacement, BASELINE).unwrap();
+            fs::rename(&replacement, &input).unwrap();
+            assert!(read_fixture_with_metadata(&input, &stale)
+                .unwrap_err()
+                .contains("changed before open"));
+        }
+        fs::remove_dir_all(&scratch).unwrap();
+    }
 
     fn original() -> Value {
         serde_json::from_str(BASELINE).expect("valid legacy fixture")
@@ -712,6 +864,46 @@ mod tests {
         assert!(mutated(arrival).is_err());
     }
     #[test]
+    fn inactive_capacity_fields_still_require_valid_traces() {
+        let mut case = original()["workload_cases"][0].clone();
+        case["authority_current"] = json!(false);
+        case["effect_active"] = json!(false);
+        case["restoration_debt"] = json!(false);
+        case["initial_adjudication_backlog"] = json!(0);
+        case["initial_restoration_work"] = json!(0);
+        case["arrivals"] = json!([0, 0]);
+        case["capacity_mode"] = json!("separate");
+        case["service_capacity"] = json!([0, 0]);
+        case["adjudication_capacity"] = json!([0, 0]);
+        case["restoration_capacity"] = json!([0, 0]);
+        let clean: Workload = serde_json::from_value(case.clone()).unwrap();
+        assert_eq!(
+            simulate(&clean),
+            Ok(json!({"disposition": "RESTORED", "final_adjudication_backlog": 0}))
+        );
+
+        for (field, malformed) in [
+            ("service_capacity", json!([-1, 0])),
+            ("service_capacity", json!([0])),
+            ("restoration_capacity", json!([0, -1])),
+            ("restoration_capacity", json!([0])),
+        ] {
+            let mut changed = case.clone();
+            changed[field] = malformed;
+            let workload: Workload = serde_json::from_value(changed).unwrap();
+            let error = simulate(&workload).expect_err("invalid unused capacity must fail");
+            assert!(error.contains(field), "{field}: {error}");
+        }
+
+        // The shared-mode fast path cannot ignore a malformed separate-mode
+        // field either. Legitimate, complete unused traces remain permitted.
+        case["capacity_mode"] = json!("shared");
+        case["adjudication_capacity"] = json!([0, -1]);
+        let workload: Workload = serde_json::from_value(case).unwrap();
+        assert!(simulate(&workload).is_err());
+    }
+
+    #[test]
     fn already_restored_separate_capacity_uses_adjudication_not_shared_service() {
         let mut case = original()["workload_cases"][0].clone();
         case["authority_current"] = json!(false);
@@ -746,6 +938,9 @@ mod tests {
         let scenario: Workload = serde_json::from_value(case.clone()).unwrap();
         assert!(simulate(&scenario).is_err());
 
+        // Restore the deliberately-invalid capacity before testing the
+        // legitimate shared mode. Even inactive evidence is now validated.
+        case["adjudication_capacity"] = json!([1, 1]);
         case["capacity_mode"] = json!("shared");
         case["service_capacity"] = json!([1, 1]);
         let scenario: Workload = serde_json::from_value(case).unwrap();

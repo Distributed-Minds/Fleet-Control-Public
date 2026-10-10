@@ -1,12 +1,83 @@
 //! Independent Rust evaluator for the historical authority-closure spec-2 fixtures.
 //! This is an inert fixture oracle, NOT permission to revoke any real authority.
 
-use serde::Deserialize;
+use serde::de::{self, MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer};
 use serde_json::{Map, Value};
 use std::collections::HashSet;
 use std::env;
+use std::fmt;
 use std::fs;
+use std::io::Read;
 use std::process;
+
+// Reject conflicting raw object members before serde_json's normal struct
+// decoding. JSON object membership is checked at *every* depth, including
+// escaped spellings of the same decoded key. This is input admission only,
+// not a claim that the fixture is an independent capability oracle.
+struct UniqueJsonMemberCheck;
+
+impl<'de> Deserialize<'de> for UniqueJsonMemberCheck {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(UniqueJsonMemberVisitor)
+    }
+}
+
+struct UniqueJsonMemberVisitor;
+
+impl<'de> Visitor<'de> for UniqueJsonMemberVisitor {
+    type Value = UniqueJsonMemberCheck;
+
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("a JSON value with no duplicate object keys")
+    }
+
+    fn visit_bool<E: de::Error>(self, _: bool) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_i64<E: de::Error>(self, _: i64) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_u64<E: de::Error>(self, _: u64) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_f64<E: de::Error>(self, _: f64) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_str<E: de::Error>(self, _: &str) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_string<E: de::Error>(self, _: String) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+        while seq.next_element::<UniqueJsonMemberCheck>()?.is_some() {}
+        Ok(UniqueJsonMemberCheck)
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+        let mut seen = HashSet::new();
+        while let Some(key) = map.next_key::<String>()? {
+            if !seen.insert(key.clone()) {
+                return Err(de::Error::custom(format!(
+                    "duplicate JSON object key: {key:?}"
+                )));
+            }
+            map.next_value::<UniqueJsonMemberCheck>()?;
+        }
+        Ok(UniqueJsonMemberCheck)
+    }
+}
 
 const REQUIRED: [&str; 26] = [
     "child-after-cutoff-denied",
@@ -212,6 +283,12 @@ fn composition(case: &Map<String, Value>) -> Result<Option<(String, Value)>, Str
 fn evaluate(case: &Map<String, Value>) -> Result<(String, Value), String> {
     validate_inputs(case)?;
     require_necessary_witnesses(case)?;
+    // A separate denial can short-circuit composition evaluation. Validate
+    // supplied root-count evidence regardless of which outcome wins, rather
+    // than silently accepting impossible/missing declared-root witnesses.
+    if case.contains_key("composition") {
+        composition(case)?;
+    }
 
     // Compatibility, inventory, and durable closure evidence are gates.
     if no(case, "lineage_protocol_compatible") && yes(case, "mutation_requested") {
@@ -338,6 +415,9 @@ fn evaluate(case: &Map<String, Value>) -> Result<(String, Value), String> {
 }
 
 fn validate_fixture(source: &str) -> Result<usize, String> {
+    // Validate raw member multiplicity before serde_json's Map/struct decoding
+    // erases duplicate semantic and expectation keys, including escaped aliases.
+    let _: UniqueJsonMemberCheck = serde_json::from_str(source).map_err(|e| e.to_string())?;
     let fixture: Fixture = serde_json::from_str(source).map_err(|e| e.to_string())?;
     if fixture.spec != 2 {
         return Err(format!(
@@ -383,15 +463,66 @@ fn validate_fixture(source: &str) -> Result<usize, String> {
     Ok(seen.len())
 }
 
+// The historical fixture is small. A caller-controlled file must not be able to
+// exhaust the verification runner before the typed semantic checks execute.
+// This is local input hygiene, not proof of repository or provider authority.
+const MAX_AUTHORITY_FIXTURE_BYTES: u64 = 8 * 1024 * 1024;
+
+fn read_fixture_file_checked(path: &str, before: &fs::Metadata) -> Result<String, String> {
+    if !before.file_type().is_file() {
+        return Err("authority fixture must be a regular non-symlink file".to_owned());
+    }
+    if before.len() > MAX_AUTHORITY_FIXTURE_BYTES {
+        return Err("authority fixture exceeds 8 MiB input limit".to_owned());
+    }
+
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // Refuse a symlink or FIFO substituted between lstat and open.
+        const O_NONBLOCK: i32 = 0o4000;
+        const O_NOFOLLOW: i32 = 0o400000;
+        options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+    }
+    let file = options.open(path).map_err(|error| error.to_string())?;
+    let opened = file.metadata().map_err(|error| error.to_string())?;
+    if !opened.file_type().is_file() {
+        return Err("opened authority fixture is not a regular file".to_owned());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if before.dev() != opened.dev() || before.ino() != opened.ino() {
+            return Err("authority fixture changed between metadata check and open".to_owned());
+        }
+    }
+    if opened.len() > MAX_AUTHORITY_FIXTURE_BYTES {
+        return Err("authority fixture exceeds 8 MiB input limit".to_owned());
+    }
+    let mut source = String::new();
+    file.take(MAX_AUTHORITY_FIXTURE_BYTES + 1)
+        .read_to_string(&mut source)
+        .map_err(|error| error.to_string())?;
+    if source.len() as u64 > MAX_AUTHORITY_FIXTURE_BYTES {
+        return Err("authority fixture exceeds 8 MiB input limit".to_owned());
+    }
+    Ok(source)
+}
+
+fn read_fixture_file(path: &str) -> Result<String, String> {
+    let before = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+    read_fixture_file_checked(path, &before)
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
         eprintln!("Usage: authority_closure <Phase0/fixtures/authority-closure-spec2.json>");
         process::exit(2);
     }
-    let outcome = fs::read_to_string(&args[1])
-        .map_err(|e| e.to_string())
-        .and_then(|source| validate_fixture(&source));
+    let outcome = read_fixture_file(&args[1]).and_then(|source| validate_fixture(&source));
     match outcome {
         Ok(count) => println!("authority closure Rust semantic fixtures: {count} cases passed"),
         Err(reason) => {
@@ -405,6 +536,28 @@ fn main() {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[cfg(unix)]
+    #[test]
+    fn authority_fixture_rejects_identical_bytes_after_inode_replacement() {
+        let scratch = env::temp_dir().join(format!(
+            "free-energy-authority-inode-swap-{}",
+            process::id()
+        ));
+        fs::create_dir_all(&scratch).expect("create isolated fixture directory");
+        let path = scratch.join("source.json");
+        let replacement = scratch.join("replacement.json");
+        let historical = include_str!("../../../fixtures/authority-closure-spec2.json");
+        fs::write(&path, historical).expect("write original fixture");
+        fs::write(&replacement, historical).expect("write identical replacement");
+        let before = fs::symlink_metadata(&path).expect("capture original file identity");
+        fs::rename(&replacement, &path).expect("replace file after preflight");
+        assert_eq!(
+            read_fixture_file_checked(path.to_str().unwrap(), &before).unwrap_err(),
+            "authority fixture changed between metadata check and open"
+        );
+        fs::remove_dir_all(&scratch).expect("remove fixture directory");
+    }
 
     fn input(value: Value) -> Map<String, Value> {
         value.as_object().unwrap().clone()
@@ -680,6 +833,32 @@ mod tests {
     }
 
     #[test]
+    fn invalid_declared_roots_cannot_hide_behind_unrelated_denial() {
+        for invalid in [
+            json!({"composition":"ALL_REQUIRED"}),
+            json!({"composition":"ANY_OF_DECLARED","surviving_roots":0,"required_roots":0}),
+            json!({"composition":"ALL_REQUIRED","surviving_roots":3,"required_roots":2}),
+        ] {
+            let mut case = input(invalid.clone());
+            case.insert("provider_access".to_owned(), json!("ERROR"));
+            assert!(
+                evaluate(&case).is_err(),
+                "invalid root evidence bypassed by provider denial: {invalid}"
+            );
+        }
+
+        // Validation does not elevate a valid composition over a stronger
+        // provider denial; preserve the historical decision precedence.
+        let mut valid =
+            input(json!({"composition":"ALL_REQUIRED","surviving_roots":1,"required_roots":2}));
+        valid.insert("provider_access".to_owned(), json!("ERROR"));
+        assert_eq!(
+            evaluate(&valid).unwrap(),
+            result("expected_closure", "ERROR")
+        );
+    }
+
+    #[test]
     fn multi_root_composition_does_not_mint_authority_from_absent_roots() {
         for rule in ["ALL_REQUIRED", "ANY_OF_DECLARED"] {
             for bad in [
@@ -728,6 +907,33 @@ mod tests {
         check(
             json!({"handoff_independent":true,"retained_scope_exact":true}),
             "PRESERVE_BOUNDED",
+        );
+    }
+
+    #[test]
+    fn duplicate_json_members_fail_before_expected_or_authority_interpretation() {
+        // Duplicate decoded names are invalid at every nesting depth, even
+        // when serde_json::Value would otherwise keep only the last member.
+        for source in [
+            r#"{"spec":2,"spec":2}"#,
+            r#"{"cases":[{"fleet_authority_revoked":true,"fleet_authority_revoked":false}]}"#,
+            r#"{"cases":[{"fleet_authority_revoked":true,"\u0066leet_authority_revoked":false}]}"#,
+            r#"{"cases":[{"nested":[{"expected":"DENY","expected":"BOUNDED_AUTHORITY"}]}]}"#,
+            r#"{"cases":[{"name":"a","expected":"DENY","expected":"DENY"}]}"#,
+        ] {
+            let error = validate_fixture(source).expect_err("duplicate member must fail closed");
+            assert!(
+                error.contains("duplicate JSON object key"),
+                "duplicate admission failed unexpectedly: {error}"
+            );
+        }
+
+        // The unmodified tracked 26-case fixture remains accepted.
+        assert_eq!(
+            validate_fixture(include_str!(
+                "../../../fixtures/authority-closure-spec2.json"
+            )),
+            Ok(26)
         );
     }
 }
