@@ -6,6 +6,8 @@
 //! provider-side admission receipt. Production needs separately trusted
 //! currentness, predecessor, registration and effect-authority adapters.
 
+use std::collections::BTreeSet;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
     Plan,
@@ -162,8 +164,10 @@ fn member_index(top: &Topology, principal: &str) -> Result<usize, Rejection> {
     {
         return Err(Rejection::TopologyUnknown);
     }
-    for (idx, p) in top.principals.iter().enumerate() {
-        if top.principals[..idx].contains(p) {
+    // Preserve principal ordering while checking each identity only once.
+    let mut seen = BTreeSet::new();
+    for p in &top.principals {
+        if !seen.insert(p.as_str()) {
             return Err(Rejection::TopologyUnknown);
         }
     }
@@ -456,6 +460,29 @@ pub fn predict(input: &Input) -> Result<Candidate, Rejection> {
 #[cfg(test)]
 mod historical_state_validation_tests {
     use super::*;
+
+    #[test]
+    fn large_unique_topology_preserves_indexes_and_rejects_late_duplicates() {
+        let principals: Vec<String> = (0..2_048).map(|i| format!("agent-{i:04}")).collect();
+        let top = Topology {
+            id: "large-synthetic".into(),
+            generation: 1,
+            state_machine: StateMachine::PermanentPredictorV2,
+            declared_size: principals.len(),
+            principals: principals.clone(),
+            evidence: Evidence::SyntheticCoherent,
+        };
+        assert_eq!(member_index(&top, &principals[0]), Ok(1));
+        assert_eq!(member_index(&top, &principals[1_023]), Ok(1_024));
+        assert_eq!(member_index(&top, &principals[2_047]), Ok(2_048));
+
+        let mut duplicate = top.clone();
+        duplicate.principals[2_047] = principals[1_023].clone();
+        assert_eq!(
+            member_index(&duplicate, &principals[0]),
+            Err(Rejection::TopologyUnknown)
+        );
+    }
 
     fn prior(phase: Phase, mode: Mode, index: usize, noop_streak: u32) -> Prior {
         Prior {
