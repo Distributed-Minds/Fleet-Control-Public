@@ -771,6 +771,25 @@ mod tests {
             ),
         ));
 
+        // Elements such as paragraph and division terminate HTML <head>
+        // implicitly. A later literal <title> is in the body, regardless
+        // of a closing </head> appearing later in the source.
+        for (name, before_title) in [
+            ("implicit-head-paragraph", "<p>early body</p>"),
+            ("implicit-head-division", "<div>early body</div>"),
+            ("implicit-head-heading", "<h1>early body</h1>"),
+            ("implicit-head-table", "<table></table>"),
+            ("implicit-head-list", "<ul></ul>"),
+        ] {
+            let html = original.replacen(
+                "<title>FREE ENERGY — Remasters Everything</title>",
+                &format!("{before_title}<title>FREE ENERGY — Remasters Everything</title>"),
+                1,
+            );
+            assert_ne!(html, original, "{name} must mutate the real page");
+            negatives.push((name, html));
+        }
+
         for (name, html) in negatives {
             fs::write(docs.join("index.html"), html).expect("write title negative");
             let errors = validate(&root);
